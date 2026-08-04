@@ -1,14 +1,14 @@
-// §12 Onboarding — Firestore-driven welcome slides (app_onboarding-settings).
-// Shows EVERY TIME when user is NOT logged in. If collection is empty, shows
-// "SEED DEMO DATA" button. Once seeded, displays animated slides with dynamic
-// background color transitions, smooth dot indicators, and hybrid image loading.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+// §12 Onboarding — 4 hardcoded welcome slides always shown from code.
+// Shows EVERY TIME when user is NOT logged in. First slide has a small
+// "Seed Test" button to upload 1 document to Firestore for DB verification.
+// UI inspired by reference: Image top, Title center, Dots, Continue button bottom.
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
@@ -22,118 +22,114 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   interpolateColor,
-  FadeIn,
-  FadeInUp,
-  SlideInRight,
+  interpolate,
+  Extrapolation,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
-import {
-  fetchOnboardingSlides,
-  seedOnboardingSlides,
-  isOnboardingCollectionEmpty,
-  getRemoteImageUrls,
-  type OnboardingSlide,
-} from '@/src/core/firebase/services/onboarding';
+import { seedSingleTestSlide } from '@/src/core/firebase/services/onboarding';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
-import { OnboardingSlideView } from '@/src/components/onboarding/OnboardingSlide';
-import { DotIndicator } from '@/src/components/onboarding/DotIndicator';
-import { SeedDataButton } from '@/src/components/onboarding/SeedDataButton';
 
-const FALLBACK_BACKGROUND = '#0B1746';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// ====================================================================
+// 4 HARDCODED SLIDES — always show from code, no Firestore dependency
+// ====================================================================
+interface LocalSlide {
+  id: string;
+  title: string;
+  description: string;
+  imageSource: any; // require() for local, { uri: string } for network
+  backgroundColor: string;
+}
+
+const SLIDES: LocalSlide[] = [
+  {
+    id: 'slide-1',
+    title: 'Weekly Mock Tests',
+    description: 'Challenge yourself with timed mock tests every week and track your improvement over time.',
+    imageSource: require('../assets/images/ws-weeklytest.png'),
+    backgroundColor: '#3F51B5',
+  },
+  {
+    id: 'slide-2',
+    title: 'Leaderboard & Analytics',
+    description: 'Track your progress, compete with thousands of students across Nepal, and rise to the top.',
+    imageSource: require('../assets/images/ws-leaderboard_analytics.png'),
+    backgroundColor: '#009688',
+  },
+  {
+    id: 'slide-3',
+    title: 'Daily Practice',
+    description: 'Strengthen your preparation with fresh daily questions covering all Loksewa subjects.',
+    imageSource: { uri: 'https://i.ibb.co/hN8gtSc/dailytest-wlc.png' },
+    backgroundColor: '#FF5722',
+  },
+  {
+    id: 'slide-4',
+    title: 'Discussion Forum',
+    description: 'Connect with fellow aspirants, discuss tricky questions, and learn together as a community.',
+    imageSource: { uri: 'https://i.ibb.co/9HYXh3nr/discussion-wlc.png' },
+    backgroundColor: '#673AB7',
+  },
+];
+
+// ====================================================================
+// MAIN COMPONENT
+// ====================================================================
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // --- State ---
-  const [slides, setSlides] = useState<OnboardingSlide[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
-  const [collectionEmpty, setCollectionEmpty] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [slideWidth, setSlideWidth] = useState(SCREEN_WIDTH);
+  const [seeding, setSeeding] = useState(false);
+  const slideWidth = SCREEN_WIDTH;
 
-  // --- Reanimated ---
   const scrollX = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
-  // --- Data Loading ---
-  const loadSlides = useCallback(async () => {
-    if (!isFirebaseConfigured) {
-      setSlides([]);
-      setCollectionEmpty(true);
-      setLoading(false);
-      return;
-    }
-    try {
-      // Check if collection is empty first
-      const isEmpty = await isOnboardingCollectionEmpty();
-      setCollectionEmpty(isEmpty);
-
-      if (!isEmpty) {
-        const data = await fetchOnboardingSlides();
-        setSlides(data);
-        // Pre-cache network images for offline-first experience
-        const remoteUrls = data.filter((s) => !s.isLocal).map((s) => s.imageLink);
-        if (remoteUrls.length) Image.prefetch(remoteUrls);
-      }
-    } catch (err) {
-      console.warn('[Onboarding] Failed to load slides:', err);
-      setSlides([]);
-      setCollectionEmpty(true);
-    } finally {
-      setLoading(false);
+  // Pre-cache network images on mount
+  useEffect(() => {
+    const networkUrls = SLIDES
+      .filter((s) => s.imageSource?.uri)
+      .map((s) => s.imageSource.uri);
+    if (networkUrls.length > 0) {
+      Image.prefetch(networkUrls).catch(() => {});
     }
   }, []);
 
-  useEffect(() => {
-    loadSlides();
-  }, [loadSlides]);
-
-  // --- Handlers ---
-  const handleSeed = async () => {
-    if (!isFirebaseConfigured) {
-      showToast('Firebase not configured. Check your .env file.', 'warning');
-      return;
-    }
-    setSeeding(true);
-    try {
-      await seedOnboardingSlides();
-      showToast('Demo data seeded successfully! 🎉', 'success');
-      // Reload slides after seeding
-      setCollectionEmpty(false);
-      const data = await fetchOnboardingSlides();
-      setSlides(data);
-      // Pre-cache remote images
-      const remoteUrls = data.filter((s) => !s.isLocal).map((s) => s.imageLink);
-      if (remoteUrls.length) Image.prefetch(remoteUrls);
-    } catch (err) {
-      console.warn('[Onboarding] Seed failed:', err);
-      showToast('Failed to seed data. Please try again.', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
+  // --- Navigation ---
   const navigateToLogin = () => {
     router.replace('/(auth)/login');
   };
 
   const goNext = () => {
-    if (currentIndex < slides.length - 1) {
+    if (currentIndex < SLIDES.length - 1) {
       const nextIndex = currentIndex + 1;
       scrollRef.current?.scrollTo({ x: nextIndex * slideWidth, animated: true });
       setCurrentIndex(nextIndex);
     } else {
-      // Last slide → go to login
       navigateToLogin();
     }
   };
 
-  const goSkip = () => {
-    navigateToLogin();
+  // --- Seed 1 document for testing Firebase connection ---
+  const handleSeedTest = async () => {
+    if (!isFirebaseConfigured) {
+      showToast('Firebase not configured. Check .env file.', 'warning');
+      return;
+    }
+    setSeeding(true);
+    try {
+      await seedSingleTestSlide();
+      showToast('✅ 1 document seeded! Check Firestore.', 'success');
+    } catch (err: any) {
+      console.warn('[Onboarding] Seed failed:', err);
+      showToast(`Seed failed: ${err?.message ?? 'Unknown error'}`, 'error');
+    } finally {
+      setSeeding(false);
+    }
   };
 
   // --- Scroll handlers ---
@@ -144,274 +140,273 @@ export default function OnboardingScreen() {
   });
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!slideWidth) return;
     const newIndex = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
     setCurrentIndex(newIndex);
   };
 
-  // --- Animated background color based on scroll position ---
+  // --- Animated background color ---
   const backgroundStyle = useAnimatedStyle(() => {
-    if (slides.length < 2 || !slideWidth) {
-      return { backgroundColor: slides[0]?.backgroundColor ?? FALLBACK_BACKGROUND };
-    }
     return {
       backgroundColor: interpolateColor(
         scrollX.value,
-        slides.map((_, i) => i * slideWidth),
-        slides.map((s) => s.backgroundColor)
+        SLIDES.map((_, i) => i * slideWidth),
+        SLIDES.map((s) => s.backgroundColor)
       ),
     };
   });
 
-  // ============ LOADING STATE ============
-  if (loading) {
-    return (
-      <View style={[styles.fullCenter, { backgroundColor: FALLBACK_BACKGROUND }]}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text variant="body" style={styles.loadingText}>
-          Loading onboarding...
-        </Text>
-      </View>
-    );
-  }
-
-  // ============ EMPTY STATE — SEED DATA BUTTON ============
-  if (collectionEmpty && slides.length === 0) {
-    return (
-      <View style={[styles.fullCenter, { backgroundColor: FALLBACK_BACKGROUND, paddingTop: insets.top }]}>
-        <StatusBar style="light" />
-
-        <Animated.View entering={FadeInUp.delay(200).duration(600)} style={styles.emptyHeader}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="school" size={48} color="#3F51B5" />
-          </View>
-          <Text variant="h1" weight="bold" style={styles.appTitle}>
-            Loksewa's Solution
-          </Text>
-          <Text variant="body" style={styles.appSubtitle}>
-            Your complete Loksewa preparation companion
-          </Text>
-        </Animated.View>
-
-        <Animated.View entering={FadeIn.delay(500).duration(500)} style={{ width: '100%' }}>
-          <SeedDataButton onSeed={handleSeed} loading={seeding} />
-        </Animated.View>
-
-        <View style={styles.skipContainer}>
-          <Pressable onPress={navigateToLogin} style={styles.skipButton}>
-            <Text variant="body" weight="semiBold" style={styles.skipText}>
-              Skip to Login
-            </Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-          </Pressable>
-        </View>
-
-        {/* Footer */}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <Text variant="bodySmall" style={styles.footerText}>
-            Made for Nepali Students 🇳🇵 | by{' '}
-            <Text variant="bodySmall" weight="bold" style={{ color: '#00D4FF' }}>
-              Kishan Raut
-            </Text>
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // ============ SLIDES VIEW ============
   return (
-    <Animated.View
-      style={[styles.flex1, backgroundStyle]}
-      onLayout={(e) => setSlideWidth(e.nativeEvent.layout.width)}
-    >
+    <Animated.View style={[styles.container, backgroundStyle]}>
       <StatusBar style="light" />
 
-      {slideWidth > 0 && (
-        <>
-          {/* Slides ScrollView */}
-          <Animated.ScrollView
-            ref={scrollRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={onScroll}
-            onMomentumScrollEnd={onMomentumScrollEnd}
-            scrollEventThrottle={16}
-            bounces={false}
-            style={styles.flex1}
-          >
-            {slides.map((slide, idx) => (
-              <OnboardingSlideView
-                key={slide.id}
-                slide={slide}
-                slideWidth={slideWidth}
-                isActive={idx === currentIndex}
-              />
-            ))}
-          </Animated.ScrollView>
+      {/* ===== SLIDES ===== */}
+      <Animated.ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        scrollEventThrottle={16}
+        bounces={false}
+        style={styles.flex1}
+        contentContainerStyle={{ alignItems: 'center' }}
+      >
+        {SLIDES.map((slide, idx) => (
+          <View key={slide.id} style={[styles.slideContainer, { width: slideWidth }]}>
+            {/* Image */}
+            <View style={styles.imageSection}>
+              <View style={styles.imageCircleBg}>
+                <Image
+                  source={slide.imageSource}
+                  style={styles.slideImage}
+                  contentFit="contain"
+                  cachePolicy="disk"
+                  transition={300}
+                />
+              </View>
+            </View>
 
-          {/* Dot Indicators */}
-          <DotIndicator
-            count={slides.length}
-            scrollX={scrollX}
-            slideWidth={slideWidth}
-          />
-
-          {/* Bottom Controls: Skip + Next/Get Started */}
-          <Animated.View
-            entering={SlideInRight.delay(300).duration(400)}
-            style={[styles.controls, { paddingBottom: insets.bottom + 8 }]}
-          >
-            {/* Skip Button */}
-            <Pressable
-              onPress={goSkip}
-              style={({ pressed }) => [styles.controlBtn, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <Text variant="body" weight="semiBold" style={styles.controlText}>
-                Skip
+            {/* Title & Description */}
+            <View style={styles.textSection}>
+              <Text variant="h1" weight="bold" style={styles.slideTitle}>
+                {slide.title}
               </Text>
-            </Pressable>
-
-            {/* Next / Get Started Button */}
-            <Pressable
-              onPress={goNext}
-              style={({ pressed }) => [
-                styles.nextButton,
-                { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
-              ]}
-            >
-              <Text variant="body" weight="bold" style={styles.nextButtonText}>
-                {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
+              <Text variant="body" style={styles.slideDescription}>
+                {slide.description}
               </Text>
-              <Ionicons
-                name={currentIndex === slides.length - 1 ? 'checkmark-circle' : 'arrow-forward-circle'}
-                size={22}
-                color="#FFFFFF"
-              />
-            </Pressable>
-          </Animated.View>
+            </View>
 
-          {/* Footer */}
-          <View style={[styles.footerSlider, { paddingBottom: insets.bottom + 4 }]}>
-            <Text variant="bodySmall" style={styles.footerText}>
-              Made for Nepali Students 🇳🇵 | by{' '}
-              <Text variant="bodySmall" weight="bold" style={{ color: '#00D4FF' }}>
-                Kishan Raut
-              </Text>
-            </Text>
+            {/* Seed Test Button — only on first slide */}
+            {idx === 0 && (
+              <View style={styles.seedContainer}>
+                <Pressable
+                  onPress={handleSeedTest}
+                  disabled={seeding}
+                  style={({ pressed }) => [
+                    styles.seedButton,
+                    { opacity: pressed || seeding ? 0.6 : 1 },
+                  ]}
+                >
+                  {seeding ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={14} color="#FFFFFF" />
+                      <Text variant="bodySmall" weight="semiBold" style={styles.seedText}>
+                        Seed Test (1 doc)
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            )}
           </View>
-        </>
-      )}
+        ))}
+      </Animated.ScrollView>
+
+      {/* ===== DOT INDICATORS ===== */}
+      <View style={styles.dotsRow}>
+        {SLIDES.map((_, i) => (
+          <AnimatedDot key={i} index={i} scrollX={scrollX} slideWidth={slideWidth} />
+        ))}
+      </View>
+
+      {/* ===== CONTINUE / GET STARTED BUTTON ===== */}
+      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}>
+        <Pressable
+          onPress={goNext}
+          style={({ pressed }) => [
+            styles.continueButton,
+            { transform: [{ scale: pressed ? 0.96 : 1 }] },
+          ]}
+        >
+          <Text variant="body" weight="bold" style={styles.continueText}>
+            {currentIndex === SLIDES.length - 1 ? 'Get Started' : 'Continue'}
+          </Text>
+        </Pressable>
+
+        {/* Skip link */}
+        {currentIndex < SLIDES.length - 1 && (
+          <Pressable onPress={navigateToLogin} style={styles.skipBtn}>
+            <Text variant="bodySmall" style={styles.skipText}>
+              Skip
+            </Text>
+          </Pressable>
+        )}
+      </View>
     </Animated.View>
   );
 }
 
+// ====================================================================
+// ANIMATED DOT COMPONENT
+// ====================================================================
+function AnimatedDot({
+  index,
+  scrollX,
+  slideWidth,
+}: {
+  index: number;
+  scrollX: SharedValue<number>;
+  slideWidth: number;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const inputRange = [
+      (index - 1) * slideWidth,
+      index * slideWidth,
+      (index + 1) * slideWidth,
+    ];
+    return {
+      width: interpolate(scrollX.value, inputRange, [8, 24, 8], Extrapolation.CLAMP),
+      opacity: interpolate(scrollX.value, inputRange, [0.4, 1, 0.4], Extrapolation.CLAMP),
+    };
+  });
+
+  return <Animated.View style={[styles.dot, animatedStyle]} />;
+}
+
+// ====================================================================
+// STYLES
+// ====================================================================
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   flex1: {
     flex: 1,
   },
-  fullCenter: {
+  // --- Slide ---
+  slideContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
-  loadingText: {
-    color: '#FFFFFF',
-    opacity: 0.7,
-    marginTop: 12,
-  },
-  // --- Empty state (seed) ---
-  emptyHeader: {
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 32,
-  },
-  logoCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#FFFFFF',
+  imageSection: {
+    flex: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-    shadowColor: '#3F51B5',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    width: '100%',
   },
-  appTitle: {
+  imageCircleBg: {
+    width: SCREEN_WIDTH * 0.65,
+    height: SCREEN_WIDTH * 0.65,
+    borderRadius: SCREEN_WIDTH * 0.325,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  slideImage: {
+    width: '85%',
+    height: '85%',
+  },
+  textSection: {
+    flex: 3,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 20,
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  slideTitle: {
     color: '#FFFFFF',
     textAlign: 'center',
-    fontSize: 28,
+    fontSize: 26,
+    letterSpacing: 0.3,
   },
-  appSubtitle: {
+  slideDescription: {
     color: '#FFFFFF',
-    opacity: 0.8,
     textAlign: 'center',
+    opacity: 0.85,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  skipContainer: {
-    marginTop: 16,
+  // --- Seed button (small, first slide only) ---
+  seedContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
   },
-  skipButton: {
+  seedButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  seedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+  },
+  // --- Dots ---
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 4,
+  },
+  // --- Bottom ---
+  bottomSection: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  continueButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 200, 120, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  continueText: {
+    color: '#1A1A2E',
+    fontSize: 17,
+    letterSpacing: 0.3,
+  },
+  skipBtn: {
+    paddingVertical: 8,
   },
   skipText: {
     color: '#FFFFFF',
-    opacity: 0.8,
-  },
-  // --- Slider controls ---
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-  },
-  controlBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  controlText: {
-    color: '#FFFFFF',
-    opacity: 0.8,
-    fontSize: 16,
-  },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-  // --- Footer ---
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    alignItems: 'center',
-    width: '100%',
-  },
-  footerSlider: {
-    alignItems: 'center',
-  },
-  footerText: {
-    color: '#FFFFFF',
     opacity: 0.7,
+    fontSize: 14,
   },
 });
