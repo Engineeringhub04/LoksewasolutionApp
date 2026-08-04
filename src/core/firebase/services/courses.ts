@@ -85,3 +85,38 @@ export async function hasUserCourseSetup(uid: string): Promise<boolean> {
   const doc = await getDocument(`users/${uid}`);
   return doc?.courseSetupComplete === true;
 }
+
+export interface UserCourseInfo {
+  courseId: string | null;
+  subcourseId: string | null;
+  courseName: string | null;
+  subcourseName: string | null;
+}
+
+/** Fetches the user's selected course + subcourse names (for display on Home). */
+export async function fetchUserCourseInfo(uid: string): Promise<UserCourseInfo> {
+  const userDoc = await getDocument(`users/${uid}`);
+  const courseId = (userDoc?.courseId as string | undefined) ?? null;
+  const subcourseId = (userDoc?.subcourseId as string | undefined) ?? null;
+
+  if (!courseId) return { courseId: null, subcourseId: null, courseName: null, subcourseName: null };
+
+  let courseName: string | null = null;
+  let subcourseName: string | null = null;
+  try {
+    const courseDoc = await getDocument(`${COURSES_COLLECTION}/${courseId}`);
+    courseName = (courseDoc?.name as string | undefined) ?? null;
+  } catch {
+    // ignore — course may have been removed
+  }
+  if (subcourseId) {
+    try {
+      const subDoc = await getDocument(`${COURSES_COLLECTION}/${courseId}/subcourses/${subcourseId}`);
+      subcourseName = (subDoc?.name as string | undefined) ?? null;
+    } catch {
+      // ignore
+    }
+  }
+
+  return { courseId, subcourseId, courseName, subcourseName };
+}

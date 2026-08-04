@@ -1,16 +1,16 @@
 // §41 Achievements — badge grid, earned vs locked.
 import React, { useState } from 'react';
-import { View, FlatList } from 'react-native';
+import { View, FlatList, RefreshControl } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchAchievements, type AchievementStatus } from '@/src/core/firebase/services/achievements';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { SkeletonCard } from '@/src/components/feedback/Skeleton';
 import { BottomSheet } from '@/src/components/feedback/BottomSheet';
 
@@ -20,20 +20,20 @@ export default function AchievementsScreen() {
   const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState<AchievementStatus | null>(null);
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
     return fetchAchievements(user.uid);
   }, [user?.uid]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar title={t('achievements.title')} />
+      <SubpageHeader title={t('achievements.title')} />
       {loading ? (
         <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
           <SkeletonCard /><SkeletonCard />
         </View>
       ) : error ? (
-        <ErrorState onRetry={refetch} />
+        <DataNotFound onRetry={refetch} />
       ) : (
         <FlatList
           data={data ?? []}
@@ -41,6 +41,7 @@ export default function AchievementsScreen() {
           numColumns={3}
           columnWrapperStyle={{ gap: spacing.sm, paddingHorizontal: spacing.screenPadding }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Card onPress={() => setSelected(item)} style={{ flex: 1, alignItems: 'center', gap: spacing.xs, opacity: item.unlocked ? 1 : 0.5 }}>
               <View

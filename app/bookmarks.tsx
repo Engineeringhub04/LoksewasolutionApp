@@ -1,6 +1,6 @@
 // §34 Bookmarks
 import React, { useState } from 'react';
-import { View, FlatList, Pressable } from 'react-native';
+import { View, FlatList, Pressable, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -9,12 +9,12 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchBookmarks, removeBookmark, type BookmarkType } from '@/src/core/firebase/services/bookmarks';
 import { showToast } from '@/src/core/store/toastStore';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { TabBar } from '@/src/components/nav/TabBar';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 
 export default function BookmarksScreen() {
@@ -24,7 +24,7 @@ export default function BookmarksScreen() {
   const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState<BookmarkType>('note');
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
     return fetchBookmarks(user.uid);
   }, [user?.uid]);
@@ -43,7 +43,7 @@ export default function BookmarksScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar title={t('bookmarks.title')} />
+      <SubpageHeader title={t('bookmarks.title')} />
       <View style={{ paddingHorizontal: spacing.screenPadding }}>
         <TabBar
           items={[
@@ -62,7 +62,7 @@ export default function BookmarksScreen() {
           <Skeleton height={56} /><Skeleton height={56} />
         </View>
       ) : error ? (
-        <ErrorState onRetry={refetch} />
+        <DataNotFound onRetry={refetch} />
       ) : filtered.length === 0 ? (
         <EmptyState title={t('bookmarks.empty')} ctaLabel={t('bookmarks.browseSubjects')} onCtaPress={() => router.push('/subjects')} />
       ) : (
@@ -70,6 +70,7 @@ export default function BookmarksScreen() {
           data={filtered}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

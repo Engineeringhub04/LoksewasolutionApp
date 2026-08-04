@@ -1,17 +1,19 @@
-// §36 Downloads
+// §36 Downloads — fixed reference page: proper error handling (DataNotFound
+// instead of silently showing empty state on failure) + pull-to-refresh.
 import React, { useState } from 'react';
-import { View, FlatList, Pressable } from 'react-native';
+import { View, FlatList, Pressable, RefreshControl } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { loadDownloads, removeDownload, clearAllDownloads, totalStorageUsed, formatBytes } from '@/src/core/firebase/services/downloads';
 import { showToast } from '@/src/core/store/toastStore';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 
@@ -20,7 +22,7 @@ const iconFor = { pdf: 'document-text-outline', note: 'create-outline', other: '
 export default function DownloadsScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
-  const { data, loading, refetch } = useAsyncData(() => loadDownloads(), []);
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadDownloads(), []);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const items = data ?? [];
@@ -40,8 +42,8 @@ export default function DownloadsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar title={t('downloads.title')} />
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.screenPadding, marginBottom: spacing.sm }}>
+      <SubpageHeader title={t('downloads.title')} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.screenPadding, marginTop: spacing.sm, marginBottom: spacing.sm }}>
         <Text variant="body" secondary>{t('downloads.storageUsed')}: {formatBytes(total)}</Text>
         {items.length > 0 ? (
           <Button label={t('downloads.clearAll')} variant="text" onPress={() => setShowClearConfirm(true)} fullWidth={false} />
@@ -52,6 +54,8 @@ export default function DownloadsScreen() {
         <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
           <Skeleton height={56} /><Skeleton height={56} />
         </View>
+      ) : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState title={t('downloads.empty')} />
       ) : (
@@ -59,6 +63,7 @@ export default function DownloadsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
