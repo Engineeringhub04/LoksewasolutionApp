@@ -1,0 +1,145 @@
+// Firebase Identity Toolkit REST API wrapper. Replaces firebase/auth SDK calls with
+// hand-rolled fetch() requests. Exported function signatures match the original
+// SDK-based auth.ts exactly, so no call site outside this file needs to change.
+import { firebaseEnv } from './env';
+import { setSession, clearSession, updateSessionUser, getValidIdToken, subscribeToAuthChanges as subscribeToSessionChanges, type AppUser } from './session';
+import { setDocument, serverTimestamp } from './firestoreRest';
+import { Collections } from './collections';
+
+const IDENTITY_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
+
+// Identity Toolkit returns a message string (e.g. "EMAIL_EXISTS") instead of the SDK's
+// `auth/*` error codes. This map keeps that `.code` shape so existing UI checks
+// (e.g. signup.tsx's `code === 'auth/email-already-in-use'`) keep working unmodified.
+const ERROR_CODE_MAP: Record<string, string> = {
+  EMAIL_EXISTS: 'auth/email-already-in-use',
+  EMAIL_NOT_FOUND: 'auth/invalid-credential',
+  INVALID_PASSWORD: 'auth/invalid-credential',
+  INVALID_LOGIN_CREDENTIALS: 'auth/invalid-credential',
+  USER_DISABLED: 'auth/user-disabled',
+  WEAK_PASSWORD: 'auth/weak-password',
+  TOO_MANY_ATTEMPTS_TRY_LATER: 'auth/too-many-requests',
+  INVALID_EMAIL: 'auth/invalid-email',
+};
+
+class AuthError extends Error {
+  code: string;
+  constructor(rawMessage: string) {
+    const code = ERROR_CODE_MAP[rawMessage] ?? 'auth/unknown-error';
+    super(code);
+    this.code = code;
+  }
+}
+
+async function identityRequest<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${IDENTITY_URL}:${endpoint}?key=${firebaseEnv.apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new AuthError(data?.error?.message ?? 'UNKNOWN_ERROR');
+  return data as T;
+}
+
+interface IdentityAuthResponse {
+  idToken: string;
+  refreshToken: string;
+  expiresIn: string;
+  localId: string;
+  email?: string;
+  displayName?: string;
+  photoUrl?: string;
+}
+
+function toAppUser(res: IdentityAuthResponse): AppUser {
+  return {
+    uid: res.localId,
+    email: res.email ?? null,
+    displayName: res.displayName ?? null,
+    photoURL: res.photoUrl ?? null,
+  };
+}
+
+async function storeSession(res: IdentityAuthResponse): Promise<AppUser> {
+  const user = toAppUser(res);
+  await setSession({ idToken: res.idToken, refreshToken: res.refreshToken, expiresInSeconds: Number(res.expiresIn), user });
+  return user;
+}
+
+async function ensureUserDoc(user: AppUser, extra?: Record<string, unknown>) {
+  await setDocument(
+    `${Collections.users}/${user.uid}`,
+    {
+      uid: user.uid,
+      name: user.displayName ?? extra?.name ?? '',
+      email: user.email,
+      photoURL: user.photoURL ?? null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ...extra,
+    },
+    { merge: true }
+  );
+}
+
+export function subscribeToAuthChanges(callback: (user: AppUser | null) => void) {
+  return subscribeToSessionChanges(callback);
+}
+
+export async function registerWithEmail(name: string, email: string, password: string): Promise<AppUser> {
+  const res = await identityRequest<IdentityAuthResponse>('signUp', { email, password, returnSecureToken: true });
+  await identityRequest('update', { idToken: res.idToken, displayName: name, returnSecureToken: false });
+  const user = await storeSession({ ...res, displayName: name });
+  await ensureUserDoc(user, { name });
+  return user;
+}
+
+export async function loginWithEmail(email: string, password: string): Promise<AppUser> {
+  const res = await identityRequest<IdentityAuthResponse>('signInWithPassword', { email, password, returnSecureToken: true });
+  return storeSession(res);
+}
+
+export async function logout(): Promise<void> {
+  await clearSession();
+}
+
+export async function sendResetPasswordEmail(email: string): Promise<void> {
+  await identityRequest('sendOobCode', { requestType: 'PASSWORD_RESET', email });
+}
+
+export async function deleteCurrentAccount(): Promise<void> {
+  const idToken = await getValidIdToken();
+  if (!idToken) return;
+  await identityRequest('delete', { idToken });
+  await clearSession();
+}
+
+/** Exchanges a Google ID token (from expo-auth-session) for a Firebase session. */
+export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser> {
+  const res = await identityRequest<IdentityAuthResponse>('signInWithIdp', {
+    postBody: `id_token=${idToken}&providerId=google.com`,
+    requestUri: 'http://localhost',
+    returnSecureToken: true,
+    returnIdpCredential: true,
+  });
+  const user = await storeSession(res);
+  await ensureUserDoc(user);
+  return user;
+}
+
+/** Updates the signed-in user's profile. Replaces firebase/auth's updateProfile(). */
+export async function updateCurrentUserProfile(patch: { displayName?: string; photoURL?: string | null }): Promise<void> {
+  const idToken = await getValidIdToken();
+  if (!idToken) return;
+  await identityRequest('update', {
+    idToken,
+    ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
+    ...(patch.photoURL !== undefined ? { photoUrl: patch.photoURL } : {}),
+    returnSecureToken: false,
+  });
+  await updateSessionUser({
+    ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
+    ...(patch.photoURL !== undefined ? { photoURL: patch.photoURL } : {}),
+  });
+}

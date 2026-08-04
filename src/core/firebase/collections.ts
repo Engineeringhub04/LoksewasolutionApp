@@ -1,0 +1,26 @@
+// Firestore collection name constants (PRD §47 capabilities → inferred schema).
+// Never hardcode a collection path string outside this file.
+export const Collections = {
+  users: 'users',
+  subjects: 'subjects',
+  chapters: (subjectId: string) => `subjects/${subjectId}/chapters`,
+  topics: (subjectId: string, chapterId: string) => `subjects/${subjectId}/chapters/${chapterId}/topics`,
+  questions: 'questions',
+  mockTests: 'mockTests',
+  liveExams: 'liveExams',
+  attempts: 'attempts',
+  currentAffairs: 'currentAffairs',
+  gorkhapatra: 'gorkhapatra',
+  notices: 'notices',
+  discussions: 'discussions',
+  comments: (discussionId: string) => `discussions/${discussionId}/comments`,
+  bookmarks: 'bookmarks',
+  notes: 'notes',
+  achievements: 'achievements',
+  leaderboard: 'leaderboard',
+  reports: 'reports',
+  contactMessages: 'contactMessages',
+  notifications: 'notifications',
+  meta: 'meta',
+  appOnboardingSettings: 'app_onboarding-settings',
+} as const;

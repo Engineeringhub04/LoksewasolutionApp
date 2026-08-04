@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.loksewasolutionnp.hub"
     },
     "android": {
+      "package": "com.loksewasolutionnp.hub",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +21,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -33,10 +36,19 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0B1330",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0B1330"
           }
+        }
+      ],
+      "expo-video",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Loksewa Solution to access your photos to set a profile picture or attach images to posts.",
+          "cameraPermission": "Allow Loksewa Solution to access your camera to take a profile picture or attach photos to posts."
         }
       ]
     ],

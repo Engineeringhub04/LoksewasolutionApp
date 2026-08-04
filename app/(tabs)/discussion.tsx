@@ -1,0 +1,78 @@
+// §31 Discussion Feed
+import React, { useState } from 'react';
+import { View, FlatList, RefreshControl } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/src/core/theme';
+import { useTranslation } from '@/src/core/i18n';
+import { useAuthStore } from '@/src/core/store/authStore';
+import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { fetchDiscussions, toggleLikeDiscussion } from '@/src/core/firebase/services/discussions';
+import { Text } from '@/src/components/misc/Text';
+import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
+import { FAB } from '@/src/components/buttons/FAB';
+import { EmptyState } from '@/src/components/feedback/EmptyState';
+import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { SkeletonCard } from '@/src/components/feedback/Skeleton';
+
+export default function DiscussionFeedScreen() {
+  const { colors, spacing } = useTheme();
+  const { t } = useTranslation();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const user = useAuthStore((s) => s.user);
+  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchDiscussions(), []);
+  const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
+
+  const handleToggleLike = async (id: string) => {
+    const nowLiked = !likedIds[id];
+    setLikedIds((prev) => ({ ...prev, [id]: nowLiked }));
+    try {
+      await toggleLikeDiscussion(id, nowLiked);
+    } catch {
+      setLikedIds((prev) => ({ ...prev, [id]: !nowLiked }));
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.screenPadding, paddingBottom: spacing.sm }}>
+        <Text variant="display" weight="bold">{t('discussion.title')}</Text>
+      </View>
+
+      {loading ? (
+        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
+          <SkeletonCard /><SkeletonCard />
+        </View>
+      ) : error ? (
+        <ErrorState onRetry={refetch} />
+      ) : !data || data.length === 0 ? (
+        <EmptyState title={t('discussion.empty')} ctaLabel={t('discussion.createFirst')} onCtaPress={() => router.push('/discussion/create')} />
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm, paddingBottom: 96 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          renderItem={({ item }) => (
+            <DiscussionPostCard
+              authorName={item.authorName}
+              authorPhoto={item.authorPhoto}
+              timestamp={item.createdAt?.toDate().toLocaleDateString() ?? ''}
+              title={item.title}
+              preview={item.body}
+              category={item.category}
+              likeCount={item.likeCount + (likedIds[item.id] ? 1 : 0)}
+              commentCount={item.commentCount}
+              liked={!!likedIds[item.id]}
+              onPress={() => router.push(`/discussion/${item.id}`)}
+              onToggleLike={() => handleToggleLike(item.id)}
+            />
+          )}
+        />
+      )}
+
+      {user ? <FAB icon="add" accessibilityLabel={t('discussion.createPost')} onPress={() => router.push('/discussion/create')} /> : null}
+    </View>
+  );
+}
