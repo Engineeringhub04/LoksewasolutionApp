@@ -1,7 +1,9 @@
 // Big curved blue header for Home: profile photo + name + greeting on the left,
-// theme toggle + notification bell on the right, and a Course Info card below.
+// theme toggle + notification bell on the right, a search box, and a Course
+// Info card below.
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -44,6 +46,7 @@ export function HomeHeader({
   subcourseName,
   onCoursePress,
 }: HomeHeaderProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const firstName = displayName?.split(' ')[0] ?? 'there';
 
@@ -71,7 +74,13 @@ export function HomeHeader({
         </View>
       </Animated.View>
 
-      <View style={{ marginTop: 16 }}>
+      {/* Search box — opens the full search screen */}
+      <Pressable onPress={() => router.push('/search')} style={styles.searchBox}>
+        <Ionicons name="search" size={18} color="rgba(255,255,255,0.75)" />
+        <Text variant="body" style={styles.searchPlaceholder}>Search subjects, notes, exams...</Text>
+      </Pressable>
+
+      <View style={{ marginTop: 12 }}>
         <CourseInfoCard courseName={courseName} subcourseName={subcourseName} onPress={onCoursePress} />
       </View>
     </LinearGradient>
@@ -87,4 +96,17 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBox: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   badgeWrap: { position: 'absolute', top: -4, right: -4 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  searchPlaceholder: { color: 'rgba(255,255,255,0.75)' },
 });

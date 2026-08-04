@@ -1,7 +1,7 @@
-// §16 Home — central hub after login. Fully redesigned:
-// curved header (profile, theme toggle, notifications, course card),
-// auto-sliding banner, Question of the Day, Subjects, Quick Links,
-// Additional Features, Recent Notices, App Guide, About Developer.
+// §16 Home — central hub after login. Header (profile, theme toggle,
+// notifications, search box, course card), auto-sliding banner, Question of
+// the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
+// App Guide (3x3), About Developer.
 import React, { useMemo } from 'react';
 import { ScrollView, View, RefreshControl, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -9,27 +9,23 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchNotices } from '@/src/core/firebase/services/content';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
 import { fetchDevelopers } from '@/src/core/firebase/services/developer';
 import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
+import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
-import { NoticeCard } from '@/src/components/cards/NoticeCard';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 import { HomeHeader } from '@/src/components/home/HomeHeader';
 import { BannerCarousel } from '@/src/components/home/BannerCarousel';
 import { QuestionOfDayCard } from '@/src/components/home/QuestionOfDayCard';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { QuickLinkButton } from '@/src/components/home/QuickLinkButton';
-import { FeatureTile } from '@/src/components/home/FeatureTile';
+import { GridButton } from '@/src/components/home/GridButton';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { demoSubjectsForCourse } from '@/src/components/home/demoSubjects';
-import { DEMO_NOTICES } from '@/src/components/home/demoNotices';
-import { DevSeedPanel } from '@/src/components/home/DevSeedPanel';
 
 interface LinkItem {
   key: string;
@@ -39,7 +35,7 @@ interface LinkItem {
   color?: string;
 }
 
-// §16.12 Quick Links
+// Quick Links
 const quickLinks: LinkItem[] = [
   { key: 'daily-test', icon: 'timer', label: 'Daily Test', route: '/question-of-the-day', color: '#1D4ED8' },
   { key: 'current-affairs', icon: 'newspaper', label: 'Current Affairs', route: '/current-affairs', color: '#059669' },
@@ -47,8 +43,8 @@ const quickLinks: LinkItem[] = [
   { key: 'gorkhapatra', icon: 'reader', label: 'Gorkhapatra', route: '/gorkhapatra', color: '#7C3AED' },
 ];
 
-// §16.13 Additional Features — links to real pages where they exist, otherwise
-// to the Under Construction placeholder (no dead links, no deleted files).
+// Additional Feature — 3x3 grid. Links to real pages where they exist,
+// otherwise to the Under Construction placeholder (no dead links).
 const additionalFeatures: LinkItem[] = [
   { key: 'historical-question', icon: 'time', label: 'Historical Questions', route: '/exam-history' },
   { key: 'constitution', icon: 'library', label: 'Nepal Constitution', route: '/under-construction?page=Nepal Constitution' },
@@ -61,6 +57,7 @@ const additionalFeatures: LinkItem[] = [
   { key: 'others', icon: 'apps', label: 'Others', route: '/under-construction?page=Others' },
 ];
 
+// App Guide — also a 3x3 grid, same GridButton but a distinct accent color.
 const appGuide: LinkItem[] = [
   { key: 'download', icon: 'download-outline', label: 'Downloads', route: '/downloads' },
   { key: 'report', icon: 'flag-outline', label: 'Report Problem', route: '/settings/report-problem' },
@@ -68,7 +65,13 @@ const appGuide: LinkItem[] = [
   { key: 'bookmark', icon: 'bookmark-outline', label: 'Bookmarks', route: '/bookmarks' },
   { key: 'achievements', icon: 'ribbon-outline', label: 'Achievements', route: '/achievements' },
   { key: 'help', icon: 'help-buoy-outline', label: 'Help Center', route: '/settings/help-center' },
+  { key: 'notifications', icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
+  { key: 'settings', icon: 'settings-outline', label: 'Settings', route: '/settings' },
+  { key: 'about', icon: 'information-circle-outline', label: 'About App', route: '/about' },
 ];
+
+const FEATURE_ACCENT = '#7C3AED';
+const GUIDE_ACCENT = '#059669';
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -81,7 +84,6 @@ export default function HomeScreen() {
   }, [user?.uid]);
 
   const banners = useAsyncData(() => fetchHomeBanners(), []);
-  const notices = useAsyncData(() => fetchNotices(3), []);
   const developers = useAsyncData(() => fetchDevelopers(), []);
   const notifications = useAsyncData(async () => {
     if (!user) return [];
@@ -92,10 +94,9 @@ export default function HomeScreen() {
     return hasAnsweredQotdToday(user.uid, courseInfo.data?.courseId ?? null);
   }, [user?.uid, courseInfo.data?.courseId]);
 
-  const refreshing = banners.refreshing || notices.refreshing || courseInfo.refreshing || developers.refreshing || notifications.refreshing;
+  const refreshing = banners.refreshing || courseInfo.refreshing || developers.refreshing || notifications.refreshing;
   const onRefresh = () => {
     banners.refresh();
-    notices.refresh();
     courseInfo.refresh();
     developers.refresh();
     notifications.refresh();
@@ -104,6 +105,7 @@ export default function HomeScreen() {
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
   const demoSubjects = useMemo(() => demoSubjectsForCourse(courseInfo.data?.courseId ?? null), [courseInfo.data?.courseId]);
+  const recentNotices = useMemo(() => APP_NOTICES.slice(0, 3), []);
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
@@ -126,12 +128,6 @@ export default function HomeScreen() {
         subcourseName={courseInfo.data?.subcourseName ?? null}
         onCoursePress={() => router.push('/course-setup?mode=update')}
       />
-
-      {/* Dev-only: seed Home banners / developer profile — auto-hides once both exist */}
-      {(!banners.loading && (!banners.data || banners.data.length === 0)) ||
-      (!developers.loading && (!developers.data || developers.data.length === 0)) ? (
-        <DevSeedPanel onSeeded={onRefresh} />
-      ) : null}
 
       {/* Banner Carousel */}
       <View style={{ marginTop: spacing.md }}>
@@ -180,12 +176,12 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Additional Features */}
+      {/* Additional Feature — 3x3 */}
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>Additional Feature</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <View style={styles.grid3}>
           {additionalFeatures.map((item) => (
-            <FeatureTile key={item.key} label={item.label} icon={item.icon} onPress={() => router.push(item.route as never)} />
+            <GridButton key={item.key} label={item.label} icon={item.icon} accentColor={FEATURE_ACCENT} onPress={() => router.push(item.route as never)} />
           ))}
         </View>
       </View>
@@ -194,40 +190,36 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
           <Text variant="h3" weight="bold">Recent Notices</Text>
-          <Pressable onPress={() => router.push('/notifications')}>
+          <Pressable onPress={() => router.push('/notices')}>
             <Text variant="bodySmall" style={{ color: colors.primary }}>View All</Text>
           </Pressable>
         </View>
-        {notices.loading ? (
-          <View style={{ gap: spacing.sm }}>
-            <Skeleton height={56} /><Skeleton height={56} /><Skeleton height={56} />
-          </View>
-        ) : notices.error ? (
-          <ErrorState onRetry={notices.refetch} />
-        ) : notices.data && notices.data.length > 0 ? (
-          <View style={{ gap: spacing.sm }}>
-            {notices.data.map((n) => (
-              <NoticeCard key={n.id} title={n.title} date={n.date?.toDate().toLocaleDateString() ?? ''} onPress={() => router.push('/notifications')} />
-            ))}
-          </View>
+        {recentNotices.length === 0 ? (
+          <EmptyState title="No notices yet" />
         ) : (
           <View style={{ gap: spacing.sm }}>
-            {DEMO_NOTICES.map((n) => (
-              <NoticeCard key={n.id} title={n.title} date={n.date} onPress={() => router.push('/notifications')} />
+            {recentNotices.map((n) => (
+              <Pressable key={n.id} onPress={() => router.push('/notices')} style={[styles.noticeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.noticeIcon, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodySmall" weight="semiBold" numberOfLines={1}>{n.title}</Text>
+                  <Text variant="caption" secondary>{n.date}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </Pressable>
             ))}
           </View>
         )}
       </View>
 
-      {/* App Guide */}
+      {/* App Guide — 3x3 */}
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>App Guide</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        <View style={styles.grid3}>
           {appGuide.map((item) => (
-            <Pressable key={item.key} onPress={() => router.push(item.route as never)} style={[styles.guideBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Ionicons name={item.icon} size={16} color={colors.accent} />
-              <Text variant="bodySmall" weight="medium" style={{ color: colors.textPrimary }}>{item.label}</Text>
-            </Pressable>
+            <GridButton key={item.key} label={item.label} icon={item.icon} accentColor={GUIDE_ACCENT} onPress={() => router.push(item.route as never)} />
           ))}
         </View>
       </View>
@@ -236,7 +228,7 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: spacing.screenPadding }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>About Developer</Text>
         {developers.loading ? (
-          <Skeleton height={100} radius={16} />
+          <Skeleton height={120} radius={22} />
         ) : developers.data && developers.data.length > 0 ? (
           <DeveloperCard developer={developers.data[0]} />
         ) : (
@@ -256,13 +248,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   viewAllPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  guideBtn: {
+  grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
+  noticeIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });
