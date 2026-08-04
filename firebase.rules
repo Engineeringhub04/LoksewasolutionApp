@@ -12,8 +12,16 @@ service cloud.firestore {
     }
 
     // Courses & Subcourses — read/write: true (for seeding before full auth setup)
-    match /app_courses/{docId} {
+    // Subcourses live as a SUB-COLLECTION under each course document. A rule on the
+    // parent path does NOT cascade to subcollections in Firestore — this explicit
+    // nested match is required, otherwise subcourse reads/writes get "insufficient
+    // permission" even though the parent course path is open.
+    match /app_courses/{courseId} {
       allow read, write: if true;
+
+      match /subcourses/{subcourseId} {
+        allow read, write: if true;
+      }
     }
     match /app_subcourses/{docId} {
       allow read, write: if true;
