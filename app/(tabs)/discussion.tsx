@@ -12,8 +12,8 @@ import { Text } from '@/src/components/misc/Text';
 import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { SkeletonCard } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function DiscussionFeedScreen() {
   const { colors, spacing } = useTheme();
@@ -40,12 +40,9 @@ export default function DiscussionFeedScreen() {
         <Text variant="display" weight="bold">{t('discussion.title')}</Text>
       </View>
 
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <SkeletonCard /><SkeletonCard />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Discussions..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('discussion.empty')} ctaLabel={t('discussion.createFirst')} onCtaPress={() => router.push('/discussion/create')} />
       ) : (

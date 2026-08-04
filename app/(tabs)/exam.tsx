@@ -10,8 +10,8 @@ import { fetchMockTests, fetchLiveExams } from '@/src/core/firebase/services/exa
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/cards/ExamCard';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { SkeletonCard } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function ExamHubScreen() {
   const { colors, spacing } = useTheme();
@@ -29,6 +29,7 @@ export default function ExamHubScreen() {
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxl }}
@@ -38,12 +39,11 @@ export default function ExamHubScreen() {
         <Text variant="display" weight="bold">{t('nav.exam')}</Text>
       </View>
 
-      <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
+      <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg, position: 'relative', minHeight: mockTests.loading ? 90 : undefined }}>
         <Text variant="h3" weight="semiBold" style={{ marginBottom: spacing.sm }}>{t('mockTest.instructions')}</Text>
-        {mockTests.loading ? (
-          <View style={{ gap: spacing.sm }}><SkeletonCard /><SkeletonCard /></View>
-        ) : mockTests.error ? (
-          <ErrorState onRetry={mockTests.refetch} />
+        <PageLoaderOverlay visible={mockTests.loading} label="Loading Mock Tests..." />
+        {mockTests.loading ? null : mockTests.error ? (
+          <DataNotFound onRetry={mockTests.refetch} />
         ) : !mockTests.data || mockTests.data.length === 0 ? (
           <EmptyState title={t('common.comingSoon')} />
         ) : (
@@ -61,12 +61,11 @@ export default function ExamHubScreen() {
         )}
       </View>
 
-      <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
+      <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg, position: 'relative', minHeight: liveExams.loading ? 90 : undefined }}>
         <Text variant="h3" weight="semiBold" style={{ marginBottom: spacing.sm }}>{t('liveExam.waitingRoom')}</Text>
-        {liveExams.loading ? (
-          <View style={{ gap: spacing.sm }}><SkeletonCard /></View>
-        ) : liveExams.error ? (
-          <ErrorState onRetry={liveExams.refetch} />
+        <PageLoaderOverlay visible={liveExams.loading} label="Loading Live Exams..." />
+        {liveExams.loading ? null : liveExams.error ? (
+          <DataNotFound onRetry={liveExams.refetch} />
         ) : !liveExams.data || liveExams.data.length === 0 ? (
           <EmptyState title={t('common.comingSoon')} />
         ) : (
@@ -112,5 +111,6 @@ export default function ExamHubScreen() {
         </Text>
       </View>
     </ScrollView>
+    </View>
   );
 }

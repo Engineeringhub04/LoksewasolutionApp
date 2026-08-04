@@ -12,7 +12,7 @@ import { Card } from '@/src/components/cards/Card';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function KeepNotesScreen() {
   const { colors, spacing } = useTheme();
@@ -22,12 +22,9 @@ export default function KeepNotesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={t('keepNotes.title')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={90} /><Skeleton height={90} />
-        </View>
-      ) : error ? (
+      <SubpageHeader title={t('keepNotes.title')} showThemeToggle />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Notes..." />
+      {loading ? null : error ? (
         <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('keepNotes.empty')} />

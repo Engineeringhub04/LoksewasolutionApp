@@ -103,6 +103,9 @@ export default function CourseSetupScreen() {
             </View>
           )}
           <Text variant="h2" weight="bold" style={styles.headerTitle}>{isUpdateMode ? 'Update Your Course' : 'Setup Your Course'}</Text>
+          {/* Theme toggle intentionally kept here (not delegated to SubpageHeader) since
+              this screen has its own hand-rolled gradient header layout with custom
+              left-side content (school icon / back button) that SubpageHeader doesn't support. */}
           <ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} />
         </Animated.View>
       </LinearGradient>

@@ -45,6 +45,19 @@ function greeting(): string {
 // attached to the gesture rather than "catching up" after the fact.
 const COLLAPSE_DISTANCE = 150;
 
+// Height (excluding safe-area inset) of the header in its expanded/collapsed
+// states — exported so the Home screen can reserve exactly this much space
+// at the top of its ScrollView content (via paddingTop), since the header
+// itself is now rendered as a fixed overlay OUTSIDE the ScrollView rather
+// than as its first child.
+export const HOME_HEADER_EXPANDED_HEIGHT_BASE = 232;
+export const HOME_HEADER_COLLAPSED_HEIGHT_BASE = 64;
+
+/** Call with insets.top to get the actual on-screen expanded header height. */
+export function getHomeHeaderExpandedHeight(safeAreaTop: number): number {
+  return safeAreaTop + HOME_HEADER_EXPANDED_HEIGHT_BASE;
+}
+
 interface HomeHeaderProps {
   scrollY: SharedValue<number>;
   displayName: string | null;
@@ -77,8 +90,8 @@ export function HomeHeader({
   const firstName = displayName?.split(' ')[0] ?? 'there';
   const courseLabel = courseName ? (subcourseName ? `${courseName} \u2022 ${subcourseName}` : courseName) : 'Select your course';
 
-  const EXPANDED_HEIGHT = insets.top + 232;
-  const COLLAPSED_HEIGHT = insets.top + 64;
+  const EXPANDED_HEIGHT = insets.top + HOME_HEADER_EXPANDED_HEIGHT_BASE;
+  const COLLAPSED_HEIGHT = insets.top + HOME_HEADER_COLLAPSED_HEIGHT_BASE;
 
   // Only flips (rarely) once the header crosses the halfway point — used to
   // toggle pointerEvents on the two content layers so the invisible one never
@@ -121,7 +134,7 @@ export function HomeHeader({
   });
 
   return (
-    <Animated.View style={[styles.header, containerStyle]}>
+    <Animated.View style={[styles.header, styles.fixedOverlay, containerStyle]}>
       <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={StyleSheet.absoluteFillObject} />
 
       {/* ===== EXPANDED (at rest) ===== */}
@@ -199,6 +212,16 @@ export function HomeHeader({
 const styles = StyleSheet.create({
   header: {
     overflow: 'hidden',
+  },
+  // Rendered as a sibling of the ScrollView (not its child), pinned to the
+  // top of the screen — this is what makes it truly fixed: it never scrolls
+  // away with the content, it only changes its own height/shape in place.
+  fixedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
   },
   // Expanded
   expandedContent: {

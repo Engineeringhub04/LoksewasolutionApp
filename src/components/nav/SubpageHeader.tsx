@@ -28,7 +28,11 @@ export function SubpageHeader({
   showBack = true,
   onBackPress,
   rightSlot,
-  showThemeToggle = false,
+  // Defaults to true so every screen gets a working theme toggle out of the
+  // box without needing to remember to opt in — this was the root cause of
+  // several subpages missing it. Pass showThemeToggle={false} explicitly
+  // (or provide a custom rightSlot) to opt out.
+  showThemeToggle = true,
   gradientColors = ['#1D4ED8', '#2563EB', '#3B82F6'],
 }: SubpageHeaderProps) {
   const router = useRouter();
@@ -67,5 +71,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFF', fontSize: 18, flex: 1, textAlign: 'center' },
-  rightSlot: { alignItems: 'flex-end' },
+  // flexDirection:'row' is the fix here — Gorkhapatra passes TWO icon buttons
+  // (prev/next chevrons) as its rightSlot; without an explicit row direction
+  // they stacked vertically (View's default flexDirection is 'column'),
+  // breaking that page's header layout specifically.
+  rightSlot: { flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'flex-end' },
 });

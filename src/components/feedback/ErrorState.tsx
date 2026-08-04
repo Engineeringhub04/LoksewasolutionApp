@@ -1,10 +1,12 @@
-// Global Error State (PRD §9.3): clear localized message + Retry, never raw technical text.
+// Global Error State (PRD §9.3). Internally renders the same DataNotFound
+// look used everywhere else in the app (icon, "Data Not Found" title,
+// consistent description, small centered retry pill) instead of a separate
+// generic "Something went wrong" message — so every screen still using
+// ErrorState (Exam, Live Exam, Mock Test Attempt, Question of the Day,
+// Discussion, Current Affairs, Exam History, Gorkhapatra, etc.) automatically
+// shows the same branded empty/error state without editing each file.
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTheme } from '@/src/core/theme';
-import { useTranslation } from '@/src/core/i18n';
-import { Text } from '@/src/components/misc/Text';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 
 export interface ErrorStateProps {
   message?: string;
@@ -12,33 +14,5 @@ export interface ErrorStateProps {
 }
 
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
-  const { colors, spacing } = useTheme();
-  const { t } = useTranslation();
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm }}>
-      <Ionicons name="alert-circle-outline" size={56} color={colors.error} />
-      <Text variant="h3" weight="semiBold" style={{ textAlign: 'center', marginTop: spacing.sm }}>
-        {message ?? t('common.somethingWentWrong')}
-      </Text>
-      {onRetry ? (
-        <Pressable onPress={onRetry} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
-          <Ionicons name="refresh" size={15} color={colors.onPrimary} />
-          <Text variant="bodySmall" weight="bold" style={{ color: colors.onPrimary }}>{t('common.retry')}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
+  return <DataNotFound description={message} onRetry={onRetry} />;
 }
-
-const styles = StyleSheet.create({
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 999,
-    marginTop: 12,
-  },
-});

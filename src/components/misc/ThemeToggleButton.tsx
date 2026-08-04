@@ -1,7 +1,7 @@
-// Animated theme toggle button. The icon shows the theme you'll SWITCH TO
-// (moon while in light mode = tap to go dark; sun while in dark mode = tap to
-// go light) — the standard convention most apps use. Transitions with a
-// slower, smoother rotate + fade + scale for a more premium feel.
+// Animated theme toggle button. Shows the icon for the CURRENT theme mode
+// (sun while in light mode, moon while in dark mode) — per explicit user
+// feedback that the "destination theme" convention looked backwards here.
+// Transitions with a slower, smoother rotate + fade + scale for a premium feel.
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,8 +52,8 @@ export function ThemeToggleButton({
       accessibilityLabel={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
     >
       <Animated.View style={animatedStyle}>
-        {/* Icon shows the destination theme: sun while dark (tap for light), moon while light (tap for dark) */}
-        <Ionicons name={isDark ? 'sunny' : 'moon'} size={size * 0.55} color={iconColor} />
+        {/* Icon shows the CURRENT theme: sun while light, moon while dark */}
+        <Ionicons name={isDark ? 'moon' : 'sunny'} size={size * 0.55} color={iconColor} />
       </Animated.View>
     </Pressable>
   );

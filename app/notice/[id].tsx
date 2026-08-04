@@ -17,7 +17,7 @@ export default function NoticeDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title="Notice" />
+      <SubpageHeader title="Notice" showThemeToggle />
       {!notice ? (
         <DataNotFound title="Notice Not Found" description="This notice may have been removed." />
       ) : (
