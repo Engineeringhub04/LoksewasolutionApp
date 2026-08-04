@@ -6,6 +6,7 @@ import React, { useMemo } from 'react';
 import { ScrollView, View, RefreshControl, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -111,15 +112,29 @@ export default function HomeScreen() {
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
+  // Drives the header's collapse animation entirely on the UI thread — this
+  // scroll handler is a Reanimated worklet, so updating scrollY.value here
+  // never crosses the JS bridge per-frame, which is what keeps the header
+  // collapse perfectly smooth (no flicker/jutter) on both Android and iOS.
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-    <ScrollView
+    <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
     >
       {/* Header */}
       <HomeHeader
+        scrollY={scrollY}
         displayName={user?.displayName ?? null}
         photoURL={user?.photoURL}
         notificationCount={unreadCount}
@@ -229,7 +244,7 @@ export default function HomeScreen() {
           <EmptyState icon="person-circle-outline" title="Developer info coming soon" />
         )}
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
     <RefreshOverlay visible={refreshing} />
     </View>
   );
