@@ -9,7 +9,7 @@ export const AppConfig = {
     buildNumber: 1,
     tagline: 'Prepare Smarter, Score Higher',
     logoAsset: require('../../../assets/images/logo.png'),
-    splashAsset: require('../../../assets/images/splash-icon.png'),
+    splashAsset: require('../../../assets/images/logo.png'),
   },
   api: {
     baseUrl: 'https://api.loksewasolution.com.np/v1',
@@ -71,7 +71,7 @@ export const AppConfig = {
   },
   notifications: {
     defaultTopic: 'all-users',
-    iconAsset: require('../../../assets/images/icon.png'),
+    iconAsset: require('../../../assets/images/logo.png'),
     sound: 'default',
   },
   localization: {

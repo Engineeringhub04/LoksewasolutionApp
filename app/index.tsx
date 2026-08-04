@@ -1,6 +1,7 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
-// Pre-caches onboarding network images in background for offline-first experience.
-import React, { useEffect, useRef } from 'react';
+// Logo shows IMMEDIATELY (no animation delay). Waits for onboarding images
+// to finish pre-caching before navigating to ensure smooth experience.
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Image, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -16,7 +17,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
 import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
 
-const MAX_SPLASH_MS = 4000;
+const MAX_SPLASH_MS = 6000;
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -25,22 +26,25 @@ export default function SplashScreen() {
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
+  const [imagesCached, setImagesCached] = useState(false);
 
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.85);
+  // Logo animation — starts IMMEDIATELY with full opacity, slight bounce scale
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(0.9);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
-    scale.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.2)) });
-  }, [opacity, scale]);
+    // Quick scale bounce — logo visible from frame 1
+    scale.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.back(1.5)) });
+  }, [scale]);
 
-  // Pre-cache onboarding network images in background for seamless experience
+  // Pre-cache onboarding network images — splash stays until done
   useEffect(() => {
     const remoteUrls = getRemoteImageUrls();
     if (remoteUrls.length > 0) {
-      ExpoImage.prefetch(remoteUrls).catch(() => {
-        // Silent fail — images will load on demand if pre-cache fails
-      });
+      Promise.all(remoteUrls.map((url) => ExpoImage.prefetch(url).catch(() => {})))
+        .finally(() => setImagesCached(true));
+    } else {
+      setImagesCached(true);
     }
   }, []);
 
@@ -50,8 +54,12 @@ export default function SplashScreen() {
 
   useEffect(() => {
     if (routedRef.current) return;
+    // Wait for: auth hydrated + settings hydrated + images cached
+    if (initializing || !hydrated || !imagesCached) return;
 
     const decide = async () => {
+      if (routedRef.current) return;
+
       const config = await fetchRemoteConfig();
 
       if (routedRef.current) return;
@@ -73,22 +81,27 @@ export default function SplashScreen() {
         router.replace('/(tabs)');
         return;
       }
-      // Always show onboarding when not logged in (not just first time)
+      // Always show onboarding when not logged in
       router.replace('/onboarding');
     };
 
-    // Wait for auth + settings hydration, but never block longer than MAX_SPLASH_MS.
-    const boundedTimeout = setTimeout(() => {
-      if (!routedRef.current) decide();
+    decide();
+  }, [initializing, hydrated, imagesCached, isOnline, user, router]);
+
+  // Safety timeout — never block longer than MAX_SPLASH_MS
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!routedRef.current) {
+        routedRef.current = true;
+        if (user) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/onboarding');
+        }
+      }
     }, MAX_SPLASH_MS);
-
-    if (!initializing && hydrated) {
-      clearTimeout(boundedTimeout);
-      decide();
-    }
-
-    return () => clearTimeout(boundedTimeout);
-  }, [initializing, hydrated, isOnline, user, router]);
+    return () => clearTimeout(timeout);
+  }, [user, router]);
 
   const insets = useSafeAreaInsets();
 
@@ -131,7 +144,7 @@ export default function SplashScreen() {
 
       <View style={{ position: 'absolute', bottom: insets.bottom + spacing.lg, alignItems: 'center' }}>
         <Text variant="bodySmall" style={{ color: '#FFFFFF', opacity: 0.75 }}>
-          Made for Nepali Student 🇳🇵 | by <Text variant="bodySmall" weight="semiBold" style={{ color: '#00C8FF' }}>Kishan Raut</Text>
+          Made for Nepali Students 🇳🇵 | by <Text variant="bodySmall" weight="semiBold" style={{ color: '#00C8FF' }}>Kishan Raut</Text>
         </Text>
       </View>
     </LinearGradient>

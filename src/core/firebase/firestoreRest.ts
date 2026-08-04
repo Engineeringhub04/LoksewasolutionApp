@@ -8,6 +8,10 @@ import { getValidIdToken } from './session';
 
 const DOCUMENTS_URL = `https://firestore.googleapis.com/v1/projects/${firebaseEnv.projectId}/databases/(default)/documents`;
 
+// Resource name path (without https:// prefix) — Firestore commit API expects
+// document name in format: projects/{project}/databases/(default)/documents/...
+const RESOURCE_PATH = `projects/${firebaseEnv.projectId}/databases/(default)/documents`;
+
 type FirestoreValue = Record<string, unknown>;
 
 /** Replaces firebase/firestore's `Timestamp` for read values. */
@@ -248,7 +252,7 @@ export function setWrite(path: string, data: Record<string, unknown>, opts?: { m
 
 function buildWrite(spec: WriteSpec): Record<string, unknown> {
   if (spec.type === 'delete') {
-    return { delete: `${DOCUMENTS_URL}/${spec.path}` };
+    return { delete: `${RESOURCE_PATH}/${spec.path}` };
   }
 
   const data = spec.data ?? {};
@@ -269,7 +273,7 @@ function buildWrite(spec: WriteSpec): Record<string, unknown> {
   }
 
   const write: Record<string, unknown> = {
-    update: { name: `${DOCUMENTS_URL}/${spec.path}`, fields: toFirestoreFields(plainEntries) },
+    update: { name: `${RESOURCE_PATH}/${spec.path}`, fields: toFirestoreFields(plainEntries) },
   };
   if (spec.type === 'merge') {
     write.updateMask = { fieldPaths: Object.keys(plainEntries) };

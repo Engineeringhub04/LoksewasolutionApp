@@ -1,6 +1,6 @@
-// §12 Onboarding Service — Fetches, checks, and seeds the app_onboarding-settings collection.
-// Supports hybrid image logic: local bundled assets + remote URLs with caching.
-import { runQuery, commitWrites, setWrite, listDocuments } from '@/src/core/firebase/firestoreRest';
+// §12 Onboarding Service — Fetches slides from Firestore + seeds test data.
+// Slides in Firestore are shown dynamically; hardcoded fallback in onboarding.tsx.
+import { runQuery, commitWrites, setWrite } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 
 export interface OnboardingSlide {
@@ -13,56 +13,9 @@ export interface OnboardingSlide {
   isLocal: boolean;
 }
 
-// --- Seed data matching user requirements exactly ---
-const SEED_SLIDES: { id: string; data: Omit<OnboardingSlide, 'id'> }[] = [
-  {
-    id: 'slide-weekly-test',
-    data: {
-      order: 1,
-      title: 'Weekly Mock Tests',
-      description: 'Challenge yourself with timed mock tests every week and track your improvement over time.',
-      imageLink: 'assets/images/ws-weeklytest.png',
-      backgroundColor: '#3F51B5',
-      isLocal: true,
-    },
-  },
-  {
-    id: 'slide-leaderboard-analytics',
-    data: {
-      order: 2,
-      title: 'Leaderboard & Analytics',
-      description: 'Track your progress, compete with thousands of students across Nepal, and rise to the top.',
-      imageLink: 'assets/images/ws-leaderboard_analytics.png',
-      backgroundColor: '#009688',
-      isLocal: true,
-    },
-  },
-  {
-    id: 'slide-daily-practice',
-    data: {
-      order: 3,
-      title: 'Daily Practice',
-      description: 'Strengthen your preparation with fresh daily questions covering all Loksewa subjects.',
-      imageLink: 'https://i.ibb.co/hN8gtSc/dailytest-wlc.png',
-      backgroundColor: '#FF5722',
-      isLocal: false,
-    },
-  },
-  {
-    id: 'slide-discussion-forum',
-    data: {
-      order: 4,
-      title: 'Discussion Forum',
-      description: 'Connect with fellow aspirants, discuss tricky questions, and learn together as a community.',
-      imageLink: 'https://i.ibb.co/9HYXh3nr/discussion-wlc.png',
-      backgroundColor: '#673AB7',
-      isLocal: false,
-    },
-  },
-];
-
 /**
  * Fetches all onboarding slides from Firestore, ordered by `order` field.
+ * Returns empty array if collection has no documents.
  */
 export async function fetchOnboardingSlides(): Promise<OnboardingSlide[]> {
   const docs = await runQuery(Collections.appOnboardingSettings, {
@@ -72,28 +25,88 @@ export async function fetchOnboardingSlides(): Promise<OnboardingSlide[]> {
 }
 
 /**
- * Checks if the app_onboarding-settings collection is empty (no documents).
- * Returns true if empty → means we should show the SEED button.
+ * Seeds a SINGLE test document to app_onboarding-settings collection.
+ * Purpose: Verify that Firestore connection and security rules are working.
  */
-export async function isOnboardingCollectionEmpty(): Promise<boolean> {
-  const docs = await runQuery(Collections.appOnboardingSettings, { limit: 1 });
-  return docs.length === 0;
+export async function seedSingleTestSlide(): Promise<void> {
+  const testDoc = {
+    order: 1,
+    title: 'Weekly Mock Tests',
+    description: 'Challenge yourself with timed mock tests every week.',
+    imageLink: 'assets/images/ws-weeklytest.png',
+    backgroundColor: '#1A237E',
+    isLocal: true,
+    seededAt: new Date().toISOString(),
+  };
+
+  await commitWrites([
+    setWrite(`${Collections.appOnboardingSettings}/test-seed-slide`, testDoc),
+  ]);
 }
 
 /**
- * Seeds the 4 default onboarding slides into Firestore.
- * Uses batch commit for atomic write.
+ * Seeds all 4 onboarding slides to Firestore.
  */
-export async function seedOnboardingSlides(): Promise<void> {
-  const writes = SEED_SLIDES.map((slide) =>
-    setWrite(`${Collections.appOnboardingSettings}/${slide.id}`, slide.data)
+export async function seedAllOnboardingSlides(): Promise<void> {
+  const slides = [
+    {
+      id: 'slide-weekly-test',
+      data: {
+        order: 1,
+        title: 'Weekly Mock Tests',
+        description: 'Challenge yourself with timed mock tests every week and track your improvement over time.',
+        imageLink: 'assets/images/ws-weeklytest.png',
+        backgroundColor: '#1A237E',
+        isLocal: true,
+      },
+    },
+    {
+      id: 'slide-leaderboard-analytics',
+      data: {
+        order: 2,
+        title: 'Leaderboard & Analytics',
+        description: 'Track your progress, compete with thousands of students across Nepal, and rise to the top.',
+        imageLink: 'assets/images/ws-leaderboard_analytics.png',
+        backgroundColor: '#004D40',
+        isLocal: true,
+      },
+    },
+    {
+      id: 'slide-daily-practice',
+      data: {
+        order: 3,
+        title: 'Daily Practice',
+        description: 'Strengthen your preparation with fresh daily questions covering all Loksewa subjects.',
+        imageLink: 'https://i.ibb.co/hN8gtSc/dailytest-wlc.png',
+        backgroundColor: '#BF360C',
+        isLocal: false,
+      },
+    },
+    {
+      id: 'slide-discussion-forum',
+      data: {
+        order: 4,
+        title: 'Discussion Forum',
+        description: 'Connect with fellow aspirants, discuss tricky questions, and learn together as a community.',
+        imageLink: 'https://i.ibb.co/9HYXh3nr/discussion-wlc.png',
+        backgroundColor: '#4A148C',
+        isLocal: false,
+      },
+    },
+  ];
+
+  const writes = slides.map((s) =>
+    setWrite(`${Collections.appOnboardingSettings}/${s.id}`, s.data)
   );
   await commitWrites(writes);
 }
 
 /**
- * Returns the list of remote image URLs from seed data (for pre-caching on app start).
+ * Returns the list of remote image URLs (for pre-caching on app start).
  */
 export function getRemoteImageUrls(): string[] {
-  return SEED_SLIDES.filter((s) => !s.data.isLocal).map((s) => s.data.imageLink);
+  return [
+    'https://i.ibb.co/hN8gtSc/dailytest-wlc.png',
+    'https://i.ibb.co/9HYXh3nr/discussion-wlc.png',
+  ];
 }
