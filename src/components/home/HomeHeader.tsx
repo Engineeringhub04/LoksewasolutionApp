@@ -74,7 +74,7 @@ export function HomeHeader({
         </View>
       </Animated.View>
 
-      {/* Search box — opens the full search screen */}
+      {/* Search box on top, Course Info card below (in that order) */}
       <Pressable onPress={() => router.push('/search')} style={styles.searchBox}>
         <Ionicons name="search" size={18} color="rgba(255,255,255,0.75)" />
         <Text variant="body" style={styles.searchPlaceholder}>Search subjects, notes, exams...</Text>
