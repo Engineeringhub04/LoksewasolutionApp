@@ -1,6 +1,8 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
+// Pre-caches onboarding network images in background for offline-first experience.
 import React, { useEffect, useRef } from 'react';
 import { View, Image, ActivityIndicator } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +14,7 @@ import { fetchRemoteConfig, isVersionBelow } from '@/src/core/config/remoteConfi
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
+import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
 
 const MAX_SPLASH_MS = 4000;
 
@@ -20,7 +23,7 @@ export default function SplashScreen() {
   const { gradients, spacing } = useTheme();
   const { isOnline } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
-  const { onboardingSeen, hydrated, hydrate } = useSettingsStore();
+  const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
 
   const opacity = useSharedValue(0);
@@ -30,6 +33,16 @@ export default function SplashScreen() {
     opacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
     scale.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.2)) });
   }, [opacity, scale]);
+
+  // Pre-cache onboarding network images in background for seamless experience
+  useEffect(() => {
+    const remoteUrls = getRemoteImageUrls();
+    if (remoteUrls.length > 0) {
+      ExpoImage.prefetch(remoteUrls).catch(() => {
+        // Silent fail — images will load on demand if pre-cache fails
+      });
+    }
+  }, []);
 
   useEffect(() => {
     hydrate();
@@ -60,11 +73,8 @@ export default function SplashScreen() {
         router.replace('/(tabs)');
         return;
       }
-      if (!onboardingSeen) {
-        router.replace('/onboarding');
-        return;
-      }
-      router.replace('/(auth)/login');
+      // Always show onboarding when not logged in (not just first time)
+      router.replace('/onboarding');
     };
 
     // Wait for auth + settings hydration, but never block longer than MAX_SPLASH_MS.
@@ -78,7 +88,7 @@ export default function SplashScreen() {
     }
 
     return () => clearTimeout(boundedTimeout);
-  }, [initializing, hydrated, isOnline, user, onboardingSeen, router]);
+  }, [initializing, hydrated, isOnline, user, router]);
 
   const insets = useSafeAreaInsets();
 
