@@ -1,8 +1,8 @@
-// Course & Subcourse service — seeds course data to Firestore and provides query helpers.
-import { commitWrites, setWrite, runQuery, getDocument, setDocument } from '@/src/core/firebase/firestoreRest';
+// Course & Subcourse service — subcourses are stored as SUB-COLLECTIONS under each course.
+// Path: app_courses/{courseId}/subcourses/{subcourseId}
+import { commitWrites, setWrite, runQuery, getDocument, setDocument, listDocuments } from '@/src/core/firebase/firestoreRest';
 
 const COURSES_COLLECTION = 'app_courses';
-const SUBCOURSES_COLLECTION = 'app_subcourses';
 
 export interface Course {
   id: string;
@@ -12,7 +12,6 @@ export interface Course {
 
 export interface Subcourse {
   id: string;
-  courseId: string;
   name: string;
   level: string;
   order: number;
@@ -20,34 +19,30 @@ export interface Subcourse {
 
 /**
  * Seeds all course and subcourse data to Firestore.
- * Courses: Civil Engineering, Geometric Engineering, Electrical Engineering
- * Subcourses: 3 subcourses per course with levels (4th, 5th, 7th)
+ * Courses go to: app_courses/{id}
+ * Subcourses go to: app_courses/{courseId}/subcourses/{subcourseId}
  */
 export async function seedCourseData(): Promise<void> {
-  const courses = [
-    { id: 'civil-engineering', data: { name: 'Civil Engineering', order: 1 } },
-    { id: 'geometric-engineering', data: { name: 'Geometric Engineering', order: 2 } },
-    { id: 'electrical-engineering', data: { name: 'Electrical Engineering', order: 3 } },
-  ];
-
-  const subcourses = [
-    // Civil
-    { id: 'civil-assistant-sub-engineer', data: { courseId: 'civil-engineering', name: 'Civil Assistance Sub Engineer', level: '4th level', order: 1 } },
-    { id: 'civil-sub-engineer', data: { courseId: 'civil-engineering', name: 'Civil Sub Engineer', level: '5th level', order: 2 } },
-    { id: 'civil-engineering-7th', data: { courseId: 'civil-engineering', name: 'Civil Engineering', level: '7th level', order: 3 } },
-    // Geometric
-    { id: 'amin', data: { courseId: 'geometric-engineering', name: 'Amin', level: '4th level', order: 1 } },
-    { id: 'surveyor', data: { courseId: 'geometric-engineering', name: 'Surveyor', level: '5th level', order: 2 } },
-    { id: 'geometric-engineering-7th', data: { courseId: 'geometric-engineering', name: 'Geometric Engineering', level: '7th level', order: 3 } },
-    // Electrical
-    { id: 'electrical-assistant-engineer', data: { courseId: 'electrical-engineering', name: 'Electrical Assistance Engineer', level: '4th level', order: 1 } },
-    { id: 'sub-electrical-engineer', data: { courseId: 'electrical-engineering', name: 'Sub Electrical Engineer', level: '5th level', order: 2 } },
-    { id: 'electrical-engineering-7th', data: { courseId: 'electrical-engineering', name: 'Electrical Engineering', level: '7th level', order: 3 } },
-  ];
-
   const writes = [
-    ...courses.map((c) => setWrite(`${COURSES_COLLECTION}/${c.id}`, c.data)),
-    ...subcourses.map((s) => setWrite(`${SUBCOURSES_COLLECTION}/${s.id}`, s.data)),
+    // --- Courses ---
+    setWrite(`${COURSES_COLLECTION}/civil-engineering`, { name: 'Civil Engineering', order: 1 }),
+    setWrite(`${COURSES_COLLECTION}/geometric-engineering`, { name: 'Geometric Engineering', order: 2 }),
+    setWrite(`${COURSES_COLLECTION}/electrical-engineering`, { name: 'Electrical Engineering', order: 3 }),
+
+    // --- Civil Engineering subcourses ---
+    setWrite(`${COURSES_COLLECTION}/civil-engineering/subcourses/civil-assistant-sub-engineer`, { name: 'Civil Assistance Sub Engineer', level: '4th level', order: 1 }),
+    setWrite(`${COURSES_COLLECTION}/civil-engineering/subcourses/civil-sub-engineer`, { name: 'Civil Sub Engineer', level: '5th level', order: 2 }),
+    setWrite(`${COURSES_COLLECTION}/civil-engineering/subcourses/civil-engineering-7th`, { name: 'Civil Engineering', level: '7th level', order: 3 }),
+
+    // --- Geometric Engineering subcourses ---
+    setWrite(`${COURSES_COLLECTION}/geometric-engineering/subcourses/amin`, { name: 'Amin', level: '4th level', order: 1 }),
+    setWrite(`${COURSES_COLLECTION}/geometric-engineering/subcourses/surveyor`, { name: 'Surveyor', level: '5th level', order: 2 }),
+    setWrite(`${COURSES_COLLECTION}/geometric-engineering/subcourses/geometric-engineering-7th`, { name: 'Geometric Engineering', level: '7th level', order: 3 }),
+
+    // --- Electrical Engineering subcourses ---
+    setWrite(`${COURSES_COLLECTION}/electrical-engineering/subcourses/electrical-assistant-engineer`, { name: 'Electrical Assistance Engineer', level: '4th level', order: 1 }),
+    setWrite(`${COURSES_COLLECTION}/electrical-engineering/subcourses/sub-electrical-engineer`, { name: 'Sub Electrical Engineer', level: '5th level', order: 2 }),
+    setWrite(`${COURSES_COLLECTION}/electrical-engineering/subcourses/electrical-engineering-7th`, { name: 'Electrical Engineering', level: '7th level', order: 3 }),
   ];
 
   await commitWrites(writes);
@@ -62,14 +57,14 @@ export async function fetchCourses(): Promise<Course[]> {
 }
 
 /**
- * Fetch subcourses for a given courseId, ordered by `order` field.
+ * Fetch subcourses for a given courseId from sub-collection.
+ * Path: app_courses/{courseId}/subcourses
  */
 export async function fetchSubcourses(courseId: string): Promise<Subcourse[]> {
-  const docs = await runQuery(SUBCOURSES_COLLECTION, {
-    where: [{ field: 'courseId', op: '==', value: courseId }],
-    orderBy: [{ field: 'order', direction: 'asc' }],
-  });
-  return docs as unknown as Subcourse[];
+  const path = `${COURSES_COLLECTION}/${courseId}/subcourses`;
+  const docs = await listDocuments(path);
+  // Sort by order field
+  return (docs as unknown as Subcourse[]).sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 /**

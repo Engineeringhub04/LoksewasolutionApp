@@ -11,6 +11,10 @@ export const firebaseEnv = {
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? PLACEHOLDER,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? PLACEHOLDER,
   googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? PLACEHOLDER,
+  // Optional — required for Google Sign-In in a Development Build / standalone app
+  // (Expo Go cannot reliably complete native Google OAuth). See README "Google Sign-In Setup".
+  googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
+  googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '',
 };
 
 export const isFirebaseConfigured = firebaseEnv.apiKey !== PLACEHOLDER && firebaseEnv.projectId !== PLACEHOLDER;
