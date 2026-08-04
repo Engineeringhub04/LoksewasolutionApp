@@ -31,7 +31,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
 import { fetchOnboardingSlides, type OnboardingSlide } from '@/src/core/firebase/services/onboarding';
-import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -130,7 +129,7 @@ function FloatingBubble({ size, left, delay, duration }: { size: number; left: n
       style={[
         {
           position: 'absolute',
-          left: `${left}%` as any,
+          left: (left / 100) * SCREEN_WIDTH,
           width: size,
           height: size,
           borderRadius: size / 2,
@@ -227,14 +226,14 @@ export default function OnboardingScreen() {
   };
 
   // --- Animated background ---
+  // Extract colors array outside worklet (React state can't be read in worklets)
+  const bgColors = slides.map((s) => s.backgroundColor);
+  const bgInputRange = slides.map((_, i) => i * slideWidth);
+
   const backgroundStyle = useAnimatedStyle(() => {
-    if (slides.length < 2) return { backgroundColor: slides[0]?.backgroundColor ?? '#0B1330' };
+    if (bgColors.length < 2) return { backgroundColor: bgColors[0] ?? '#0B1330' };
     return {
-      backgroundColor: interpolateColor(
-        scrollX.value,
-        slides.map((_, i) => i * slideWidth),
-        slides.map((s) => s.backgroundColor)
-      ),
+      backgroundColor: interpolateColor(scrollX.value, bgInputRange, bgColors),
     };
   });
 
