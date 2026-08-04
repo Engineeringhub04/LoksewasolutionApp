@@ -1,6 +1,7 @@
 // Shared "button" style tile for 3x3 grids (Additional Feature, App Guide).
-// Both sections use this same component but pass a different accent color so
-// they still look visually distinct from each other.
+// Rendered as an actual solid-tinted button (not a bordered card) so it reads
+// clearly as a tappable action — icon on a soft chip + label, filled
+// background using the section's accent color at low opacity.
 import React from 'react';
 import { Pressable, View, StyleSheet, Dimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,19 +22,19 @@ export interface GridButtonProps {
 }
 
 export function GridButton({ label, icon, accentColor, onPress }: GridButtonProps) {
-  const { colors, radius } = useTheme();
+  const { radius } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { width: TILE_WIDTH, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, opacity: pressed ? 0.85 : 1 },
+        { width: TILE_WIDTH, backgroundColor: `${accentColor}17`, borderRadius: radius.md, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
       ]}
     >
-      <View style={[styles.iconBox, { backgroundColor: `${accentColor}1F`, borderRadius: radius.sm }]}>
-        <Ionicons name={icon} size={22} color={accentColor} />
+      <View style={[styles.iconBox, { backgroundColor: accentColor, borderRadius: radius.pill }]}>
+        <Ionicons name={icon} size={20} color="#FFF" />
       </View>
-      <Text variant="caption" weight="semiBold" style={{ color: colors.textPrimary, textAlign: 'center' }} numberOfLines={2}>
+      <Text variant="caption" weight="semiBold" style={{ color: accentColor, textAlign: 'center' }} numberOfLines={2}>
         {label}
       </Text>
     </Pressable>
@@ -49,12 +50,16 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 6,
-    borderWidth: 1,
+  },
+  iconBox: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    elevation: 2,
   },
-  iconBox: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

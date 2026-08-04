@@ -25,6 +25,8 @@ import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { QuickLinkButton } from '@/src/components/home/QuickLinkButton';
 import { GridButton } from '@/src/components/home/GridButton';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
+import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
+import { RefreshOverlay } from '@/src/components/home/RefreshOverlay';
 import { demoSubjectsForCourse } from '@/src/components/home/demoSubjects';
 
 interface LinkItem {
@@ -110,6 +112,7 @@ export default function HomeScreen() {
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
@@ -199,16 +202,7 @@ export default function HomeScreen() {
         ) : (
           <View style={{ gap: spacing.sm }}>
             {recentNotices.map((n) => (
-              <Pressable key={n.id} onPress={() => router.push('/notices')} style={[styles.noticeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.noticeIcon, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodySmall" weight="semiBold" numberOfLines={1}>{n.title}</Text>
-                  <Text variant="caption" secondary>{n.date}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-              </Pressable>
+              <PremiumNoticeCard key={n.id} title={n.title} date={n.date} onPress={() => router.push(`/notice/${n.id}`)} />
             ))}
           </View>
         )}
@@ -236,6 +230,8 @@ export default function HomeScreen() {
         )}
       </View>
     </ScrollView>
+    <RefreshOverlay visible={refreshing} />
+    </View>
   );
 }
 
@@ -249,13 +245,4 @@ const styles = StyleSheet.create({
   },
   viewAllPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  noticeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  noticeIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

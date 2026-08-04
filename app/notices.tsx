@@ -1,16 +1,18 @@
 // Dedicated Notices page — full list. Content is hardcoded for now (see
 // src/core/data/notices.ts); Home's "Recent Notices" shows the first 3 from
-// the same source so both stay in sync.
+// the same source so both stay in sync. Tapping a notice opens its own
+// detail page.
 import React, { useState } from 'react';
 import { View, FlatList, RefreshControl } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
-import { Text } from '@/src/components/misc/Text';
-import { Card } from '@/src/components/cards/Card';
+import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 
 export default function NoticesScreen() {
   const { colors, spacing } = useTheme();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = () => {
@@ -27,15 +29,7 @@ export default function NoticesScreen() {
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         renderItem={({ item }) => (
-          <Card>
-            <View style={{ gap: 4 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text variant="body" weight="bold" style={{ flex: 1 }}>{item.title}</Text>
-                <Text variant="caption" secondary>{item.date}</Text>
-              </View>
-              <Text variant="bodySmall" secondary>{item.description}</Text>
-            </View>
-          </Card>
+          <PremiumNoticeCard title={item.title} date={item.date} onPress={() => router.push(`/notice/${item.id}`)} />
         )}
       />
     </View>

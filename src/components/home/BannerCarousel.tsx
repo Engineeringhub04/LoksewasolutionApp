@@ -10,6 +10,9 @@ import type { HomeBanner } from '@/src/core/firebase/services/banners';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDE_WIDTH = SCREEN_WIDTH; // full-width paging slot; the card itself has inner margin for the peek/gap look
+const SLIDE_HORIZONTAL_MARGIN = 16;
+const CARD_WIDTH = SLIDE_WIDTH - SLIDE_HORIZONTAL_MARGIN * 2;
+const CARD_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio
 const AUTOPLAY_MS = 3500;
 const RESUME_AFTER_TOUCH_MS = 3000;
 
@@ -115,10 +118,10 @@ function Dot({ index, scrollX, slideWidth, active }: { index: number; scrollX: S
 const styles = StyleSheet.create({
   container: { marginBottom: 8 },
   slide: {
-    height: 150,
+    height: CARD_HEIGHT,
     borderRadius: 18,
     overflow: 'hidden',
-    marginHorizontal: 16,
+    marginHorizontal: SLIDE_HORIZONTAL_MARGIN,
   },
   slideImage: { width: '100%', height: '100%' },
   textOnlyContent: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 6 },

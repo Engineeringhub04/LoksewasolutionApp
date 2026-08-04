@@ -40,7 +40,7 @@ export default function UnderConstructionScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={pageName} showBack={false} showThemeToggle />
+      <SubpageHeader title={pageName} showBack showThemeToggle />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
