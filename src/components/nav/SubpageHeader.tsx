@@ -10,11 +10,16 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
 
+import { useTheme } from '@/src/core/theme';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
+
 export interface SubpageHeaderProps {
   title: string;
   showBack?: boolean;
   onBackPress?: () => void;
   rightSlot?: React.ReactNode;
+  /** Shows a working theme toggle on the right (ignored if rightSlot is provided). */
+  showThemeToggle?: boolean;
   gradientColors?: readonly [string, string, ...string[]];
 }
 
@@ -23,10 +28,20 @@ export function SubpageHeader({
   showBack = true,
   onBackPress,
   rightSlot,
+  showThemeToggle = false,
   gradientColors = ['#1D4ED8', '#2563EB', '#3B82F6'],
 }: SubpageHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { effective, setMode } = useTheme();
+
+  const resolvedRightSlot =
+    rightSlot ??
+    (showThemeToggle ? (
+      <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={36} />
+    ) : (
+      <View style={styles.iconBox} />
+    ));
 
   return (
     <LinearGradient colors={gradientColors} style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -41,7 +56,7 @@ export function SubpageHeader({
         <Text variant="h2" weight="bold" style={styles.title} numberOfLines={1}>
           {title}
         </Text>
-        <View style={styles.rightSlot}>{rightSlot ?? <View style={styles.iconBox} />}</View>
+        <View style={styles.rightSlot}>{resolvedRightSlot}</View>
       </Animated.View>
     </LinearGradient>
   );

@@ -31,17 +31,23 @@ function RootStack() {
   return (
     <>
       <OfflineBanner />
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="course-setup" options={{ headerShown: false }} />
-        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-        <Stack.Screen name="under-construction" options={{ headerShown: false }} />
-        <Stack.Screen name="blocking/update-required" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="blocking/no-internet" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="blocking/maintenance" options={{ headerShown: false, gestureEnabled: false }} />
+      {/*
+        Global default: EVERY screen manages its own header (TopAppBar,
+        SubpageHeader, or a custom hand-rolled header) — none of them should
+        ever get Expo Router / React Navigation's native stack header on top
+        of that. Previously only a handful of routes explicitly set
+        headerShown:false, so every OTHER screen (notifications, downloads,
+        achievements, analytics, notes, gorkhapatra, leaderboard, search,
+        settings, subjects, quiz, mock-test, discussion, etc.) silently fell
+        back to the native header, producing a double-header on top of our
+        own custom header component. Setting headerShown:false as the Stack's
+        default screenOptions fixes this for every current AND future route
+        in one place, instead of needing to remember to list each one.
+      */}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="blocking/update-required" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>
       <ToastHost />
       <StatusBar style={effective === 'dark' ? 'light' : 'dark'} />

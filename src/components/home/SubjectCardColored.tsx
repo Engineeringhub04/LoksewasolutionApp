@@ -28,16 +28,16 @@ export function SubjectCardColored({ name, icon = 'bookmark', backgroundColor, o
 
 const styles = StyleSheet.create({
   card: {
-    width: 160,
-    height: 190,
-    borderRadius: 20,
-    padding: 16,
+    width: 150,
+    height: 130,
+    borderRadius: 18,
+    padding: 14,
     justifyContent: 'space-between',
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
