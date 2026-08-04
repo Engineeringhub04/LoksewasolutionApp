@@ -1,7 +1,6 @@
-// §12 Onboarding — 4 hardcoded welcome slides always shown from code.
-// Shows EVERY TIME when user is NOT logged in. First slide has a small
-// "Seed Test" button to upload 1 document to Firestore for DB verification.
-// UI: Image top (circular bg), Title center, Dots, Continue button bottom.
+// §12 Premium Onboarding — Fetches slides from Firestore + 4 hardcoded fallbacks.
+// Shows EVERY TIME when user is NOT logged in. Premium UI with floating bubbles,
+// dark backgrounds, slide animations, Back/Next nav, Get Started on last slide.
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -24,55 +23,137 @@ import Animated, {
   interpolateColor,
   interpolate,
   Extrapolation,
+  withRepeat,
+  withTiming,
+  withDelay,
+  withSequence,
+  FadeInUp,
   type SharedValue,
 } from 'react-native-reanimated';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
-import { seedSingleTestSlide } from '@/src/core/firebase/services/onboarding';
+import { seedSingleTestSlide, fetchOnboardingSlides, type OnboardingSlide } from '@/src/core/firebase/services/onboarding';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ====================================================================
-// 4 HARDCODED SLIDES — always show from code, no Firestore dependency
+// LOCAL SLIDE DATA (fallback when Firestore has no data)
 // ====================================================================
-interface LocalSlide {
+interface SlideData {
   id: string;
   title: string;
   description: string;
-  imageSource: any; // require() for local, { uri: string } for network
+  imageSource: any;
   backgroundColor: string;
+  tag?: string;
 }
 
-const SLIDES: LocalSlide[] = [
+const LOCAL_IMAGE_MAP: Record<string, any> = {
+  'assets/images/ws-weeklytest.png': require('../assets/images/ws-weeklytest.png'),
+  'assets/images/ws-leaderboard_analytics.png': require('../assets/images/ws-leaderboard_analytics.png'),
+};
+
+const HARDCODED_SLIDES: SlideData[] = [
   {
     id: 'slide-1',
     title: 'Weekly Mock Tests',
     description: 'Challenge yourself with timed mock tests every week and track your improvement over time.',
     imageSource: require('../assets/images/ws-weeklytest.png'),
-    backgroundColor: '#3F51B5',
+    backgroundColor: '#1A237E',
+    tag: 'Practice',
   },
   {
     id: 'slide-2',
     title: 'Leaderboard & Analytics',
     description: 'Track your progress, compete with thousands of students across Nepal, and rise to the top.',
     imageSource: require('../assets/images/ws-leaderboard_analytics.png'),
-    backgroundColor: '#009688',
+    backgroundColor: '#004D40',
+    tag: 'Compete',
   },
   {
     id: 'slide-3',
     title: 'Daily Practice',
     description: 'Strengthen your preparation with fresh daily questions covering all Loksewa subjects.',
     imageSource: { uri: 'https://i.ibb.co/hN8gtSc/dailytest-wlc.png' },
-    backgroundColor: '#FF5722',
+    backgroundColor: '#BF360C',
+    tag: 'Daily',
   },
   {
     id: 'slide-4',
     title: 'Discussion Forum',
     description: 'Connect with fellow aspirants, discuss tricky questions, and learn together as a community.',
     imageSource: { uri: 'https://i.ibb.co/9HYXh3nr/discussion-wlc.png' },
-    backgroundColor: '#673AB7',
+    backgroundColor: '#4A148C',
+    tag: 'Community',
   },
+];
+
+function firestoreToSlide(doc: OnboardingSlide): SlideData {
+  const imageSource = doc.isLocal && LOCAL_IMAGE_MAP[doc.imageLink]
+    ? LOCAL_IMAGE_MAP[doc.imageLink]
+    : { uri: doc.imageLink };
+  return {
+    id: doc.id,
+    title: doc.title,
+    description: doc.description,
+    imageSource,
+    backgroundColor: doc.backgroundColor,
+  };
+}
+
+// ====================================================================
+// FLOATING BUBBLE COMPONENT
+// ====================================================================
+function FloatingBubble({ size, left, delay, duration }: { size: number; left: number; delay: number; duration: number }) {
+  const translateY = useSharedValue(SCREEN_HEIGHT + size);
+
+  useEffect(() => {
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(-size, { duration }),
+          withTiming(SCREEN_HEIGHT + size, { duration: 0 })
+        ),
+        -1,
+        false
+      )
+    );
+  }, [translateY, delay, duration, size]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: `${left}%` as any,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+const BUBBLES = [
+  { size: 60, left: 5, delay: 0, duration: 8000 },
+  { size: 40, left: 20, delay: 2000, duration: 7000 },
+  { size: 80, left: 70, delay: 1000, duration: 9000 },
+  { size: 30, left: 85, delay: 3000, duration: 6000 },
+  { size: 50, left: 45, delay: 500, duration: 8500 },
+  { size: 35, left: 60, delay: 4000, duration: 7500 },
+  { size: 25, left: 10, delay: 1500, duration: 6500 },
+  { size: 45, left: 35, delay: 2500, duration: 9500 },
 ];
 
 // ====================================================================
@@ -82,6 +163,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [slides, setSlides] = useState<SlideData[]>(HARDCODED_SLIDES);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const slideWidth = SCREEN_WIDTH;
@@ -89,32 +171,55 @@ export default function OnboardingScreen() {
   const scrollX = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
-  // Pre-cache network images on mount
+  // Load from Firestore — if data exists, use it (overrides hardcoded)
   useEffect(() => {
-    const networkUrls = SLIDES
-      .filter((s) => s.imageSource?.uri)
-      .map((s) => s.imageSource.uri);
-    if (networkUrls.length > 0) {
-      Image.prefetch(networkUrls).catch(() => {});
-    }
+    if (!isFirebaseConfigured) return;
+    (async () => {
+      try {
+        const firestoreSlides = await fetchOnboardingSlides();
+        if (firestoreSlides.length > 0) {
+          setSlides(firestoreSlides.map(firestoreToSlide));
+        }
+      } catch {
+        // Keep hardcoded on error
+      }
+    })();
   }, []);
 
+  // Pre-cache network images
+  useEffect(() => {
+    const urls = slides.filter((s) => s.imageSource?.uri).map((s) => s.imageSource.uri);
+    if (urls.length > 0) Image.prefetch(urls).catch(() => {});
+  }, [slides]);
+
   // --- Navigation ---
-  const navigateToLogin = () => {
-    router.replace('/(auth)/login');
-  };
+  const navigateToLogin = () => router.replace('/(auth)/login');
 
   const goNext = () => {
-    if (currentIndex < SLIDES.length - 1) {
-      const nextIndex = currentIndex + 1;
-      scrollRef.current?.scrollTo({ x: nextIndex * slideWidth, animated: true });
-      setCurrentIndex(nextIndex);
+    if (currentIndex < slides.length - 1) {
+      const next = currentIndex + 1;
+      scrollRef.current?.scrollTo({ x: next * slideWidth, animated: true });
+      setCurrentIndex(next);
     } else {
       navigateToLogin();
     }
   };
 
-  // --- Seed 1 document for testing Firebase connection ---
+  const goBack = () => {
+    if (currentIndex > 0) {
+      const prev = currentIndex - 1;
+      scrollRef.current?.scrollTo({ x: prev * slideWidth, animated: true });
+      setCurrentIndex(prev);
+    }
+  };
+
+  const goToLastSlide = () => {
+    const last = slides.length - 1;
+    scrollRef.current?.scrollTo({ x: last * slideWidth, animated: true });
+    setCurrentIndex(last);
+  };
+
+  // --- Seed ---
   const handleSeedTest = async () => {
     if (!isFirebaseConfigured) {
       showToast('Firebase not configured. Check .env file.', 'warning');
@@ -125,41 +230,64 @@ export default function OnboardingScreen() {
       await seedSingleTestSlide();
       showToast('✅ 1 document seeded! Check Firestore.', 'success');
     } catch (err: any) {
-      console.warn('[Onboarding] Seed failed:', err);
       showToast(`Seed failed: ${err?.message ?? 'Unknown error'}`, 'error');
     } finally {
       setSeeding(false);
     }
   };
 
-  // --- Scroll handlers ---
+  // --- Scroll ---
   const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
-    },
+    onScroll: (event) => { scrollX.value = event.contentOffset.x; },
   });
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const newIndex = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
-    setCurrentIndex(newIndex);
+    setCurrentIndex(Math.round(e.nativeEvent.contentOffset.x / slideWidth));
   };
 
-  // --- Animated background color ---
+  // --- Animated background ---
   const backgroundStyle = useAnimatedStyle(() => {
+    if (slides.length < 2) return { backgroundColor: slides[0]?.backgroundColor ?? '#0B1330' };
     return {
       backgroundColor: interpolateColor(
         scrollX.value,
-        SLIDES.map((_, i) => i * slideWidth),
-        SLIDES.map((s) => s.backgroundColor)
+        slides.map((_, i) => i * slideWidth),
+        slides.map((s) => s.backgroundColor)
       ),
     };
   });
+
+  const isLastSlide = currentIndex === slides.length - 1;
+  const isFirstSlide = currentIndex === 0;
 
   return (
     <Animated.View style={[styles.container, backgroundStyle]}>
       <StatusBar style="light" />
 
-      {/* ===== SLIDES ===== */}
+      {/* Floating Bubbles */}
+      {BUBBLES.map((b, i) => <FloatingBubble key={i} {...b} />)}
+
+      {/* Top Bar: Skip / Seed */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+        <View style={{ width: 80 }} />
+        {!isLastSlide ? (
+          <Pressable onPress={goToLastSlide} style={({ pressed }) => [styles.topBtn, { opacity: pressed ? 0.6 : 1 }]}>
+            <Text variant="bodySmall" weight="semiBold" style={styles.topBtnText}>Skip</Text>
+            <Ionicons name="play-forward" size={14} color="rgba(255,255,255,0.8)" />
+          </Pressable>
+        ) : (
+          <Pressable onPress={handleSeedTest} disabled={seeding} style={({ pressed }) => [styles.topBtn, { opacity: pressed || seeding ? 0.5 : 1 }]}>
+            {seeding ? <ActivityIndicator color="#FFF" size="small" /> : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={14} color="rgba(255,255,255,0.8)" />
+                <Text variant="bodySmall" weight="semiBold" style={styles.topBtnText}>Seed</Text>
+              </>
+            )}
+          </Pressable>
+        )}
+      </View>
+
+      {/* Slides */}
       <Animated.ScrollView
         ref={scrollRef}
         horizontal
@@ -170,242 +298,124 @@ export default function OnboardingScreen() {
         scrollEventThrottle={16}
         bounces={false}
         style={styles.flex1}
-        contentContainerStyle={{ alignItems: 'center' }}
       >
-        {SLIDES.map((slide, idx) => (
-          <View key={slide.id} style={[styles.slideContainer, { width: slideWidth }]}>
-            {/* Image */}
-            <View style={styles.imageSection}>
-              <View style={styles.imageCircleBg}>
-                <Image
-                  source={slide.imageSource}
-                  style={styles.slideImage}
-                  contentFit="contain"
-                  cachePolicy="disk"
-                  transition={300}
-                />
-              </View>
-            </View>
-
-            {/* Title & Description */}
-            <View style={styles.textSection}>
-              <Text variant="h1" weight="bold" style={styles.slideTitle}>
-                {slide.title}
-              </Text>
-              <Text variant="body" style={styles.slideDescription}>
-                {slide.description}
-              </Text>
-            </View>
-
-            {/* Seed Test Button — only on first slide, top-right */}
-            {idx === 0 && (
-              <View style={[styles.seedContainer, { top: insets.top + 12 }]}>
-                <Pressable
-                  onPress={handleSeedTest}
-                  disabled={seeding}
-                  style={({ pressed }) => [
-                    styles.seedButton,
-                    { opacity: pressed || seeding ? 0.6 : 1 },
-                  ]}
-                >
-                  {seeding ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="cloud-upload-outline" size={14} color="#FFFFFF" />
-                      <Text variant="bodySmall" weight="semiBold" style={styles.seedText}>
-                        Seed Test
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            )}
-          </View>
+        {slides.map((slide, idx) => (
+          <SlideView key={slide.id} slide={slide} slideWidth={slideWidth} index={idx} scrollX={scrollX} />
         ))}
       </Animated.ScrollView>
 
-      {/* ===== DOT INDICATORS ===== */}
+      {/* Dots */}
       <View style={styles.dotsRow}>
-        {SLIDES.map((_, i) => (
-          <AnimatedDot key={i} index={i} scrollX={scrollX} slideWidth={slideWidth} />
-        ))}
+        {slides.map((_, i) => <AnimatedDot key={i} index={i} scrollX={scrollX} slideWidth={slideWidth} />)}
       </View>
 
-      {/* ===== CONTINUE / GET STARTED BUTTON ===== */}
-      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}>
-        <Pressable
-          onPress={goNext}
-          style={({ pressed }) => [
-            styles.continueButton,
-            { transform: [{ scale: pressed ? 0.96 : 1 }] },
-          ]}
-        >
-          <Text variant="body" weight="bold" style={styles.continueText}>
-            {currentIndex === SLIDES.length - 1 ? 'Get Started' : 'Continue'}
-          </Text>
-        </Pressable>
-
-        {/* Skip link */}
-        {currentIndex < SLIDES.length - 1 && (
-          <Pressable onPress={navigateToLogin} style={styles.skipBtn}>
-            <Text variant="bodySmall" style={styles.skipText}>
-              Skip
-            </Text>
+      {/* Bottom Navigation */}
+      <Animated.View entering={FadeInUp.delay(300).duration(500)} style={[styles.bottomSection, { paddingBottom: insets.bottom + 16 }]}>
+        {isLastSlide ? (
+          <Pressable onPress={navigateToLogin} style={({ pressed }) => [styles.getStartedBtn, { transform: [{ scale: pressed ? 0.96 : 1 }] }]}>
+            <Text variant="body" weight="bold" style={styles.getStartedText}>Get Started</Text>
+            <Ionicons name="arrow-forward" size={20} color="#0B1330" />
           </Pressable>
+        ) : (
+          <View style={styles.navRow}>
+            {!isFirstSlide ? (
+              <Pressable onPress={goBack} style={({ pressed }) => [styles.navBtn, styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}>
+                <Ionicons name="arrow-back" size={20} color="#FFF" />
+                <Text variant="body" weight="semiBold" style={styles.backText}>Back</Text>
+              </Pressable>
+            ) : <View style={{ width: 100 }} />}
+            <Pressable onPress={goNext} style={({ pressed }) => [styles.navBtn, styles.nextBtn, { transform: [{ scale: pressed ? 0.95 : 1 }] }]}>
+              <Text variant="body" weight="bold" style={styles.nextText}>Next</Text>
+              <Ionicons name="arrow-forward" size={20} color="#0B1330" />
+            </Pressable>
+          </View>
         )}
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }
 
 // ====================================================================
-// ANIMATED DOT
+// SLIDE VIEW WITH ANIMATIONS
 // ====================================================================
-function AnimatedDot({
-  index,
-  scrollX,
-  slideWidth,
-}: {
-  index: number;
-  scrollX: SharedValue<number>;
-  slideWidth: number;
-}) {
-  const animatedStyle = useAnimatedStyle(() => {
-    const inputRange = [
-      (index - 1) * slideWidth,
-      index * slideWidth,
-      (index + 1) * slideWidth,
-    ];
+function SlideView({ slide, slideWidth, index, scrollX }: { slide: SlideData; slideWidth: number; index: number; scrollX: SharedValue<number> }) {
+  const imageStyle = useAnimatedStyle(() => {
+    const input = [(index - 1) * slideWidth, index * slideWidth, (index + 1) * slideWidth];
     return {
-      width: interpolate(scrollX.value, inputRange, [8, 24, 8], Extrapolation.CLAMP),
-      opacity: interpolate(scrollX.value, inputRange, [0.4, 1, 0.4], Extrapolation.CLAMP),
+      opacity: interpolate(scrollX.value, input, [0.3, 1, 0.3], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(scrollX.value, input, [0.6, 1, 0.6], Extrapolation.CLAMP) }],
     };
   });
 
-  return <Animated.View style={[styles.dot, animatedStyle]} />;
+  const textStyle = useAnimatedStyle(() => {
+    const input = [(index - 1) * slideWidth, index * slideWidth, (index + 1) * slideWidth];
+    return {
+      opacity: interpolate(scrollX.value, input, [0, 1, 0], Extrapolation.CLAMP),
+      transform: [{ translateY: interpolate(scrollX.value, input, [30, 0, 30], Extrapolation.CLAMP) }],
+    };
+  });
+
+  return (
+    <View style={[styles.slideContainer, { width: slideWidth }]}>
+      <Animated.View style={[styles.imageSection, imageStyle]}>
+        <View style={styles.imageCircle}>
+          <Image source={slide.imageSource} style={styles.slideImage} contentFit="contain" cachePolicy="disk" transition={200} priority="high" />
+        </View>
+        {slide.tag && (
+          <View style={styles.tagBadge}>
+            <Text variant="bodySmall" weight="bold" style={styles.tagText}>{slide.tag}</Text>
+          </View>
+        )}
+      </Animated.View>
+      <Animated.View style={[styles.textSection, textStyle]}>
+        <Text variant="h1" weight="bold" style={styles.slideTitle}>{slide.title}</Text>
+        <Text variant="body" style={styles.slideDesc}>{slide.description}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ====================================================================
+// DOT INDICATOR
+// ====================================================================
+function AnimatedDot({ index, scrollX, slideWidth }: { index: number; scrollX: SharedValue<number>; slideWidth: number }) {
+  const style = useAnimatedStyle(() => {
+    const input = [(index - 1) * slideWidth, index * slideWidth, (index + 1) * slideWidth];
+    return {
+      width: interpolate(scrollX.value, input, [8, 28, 8], Extrapolation.CLAMP),
+      opacity: interpolate(scrollX.value, input, [0.3, 1, 0.3], Extrapolation.CLAMP),
+    };
+  });
+  return <Animated.View style={[styles.dot, style]} />;
 }
 
 // ====================================================================
 // STYLES
 // ====================================================================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex1: {
-    flex: 1,
-  },
-  // --- Slide ---
-  slideContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  imageSection: {
-    flex: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  imageCircleBg: {
-    width: SCREEN_WIDTH * 0.65,
-    height: SCREEN_WIDTH * 0.65,
-    borderRadius: SCREEN_WIDTH * 0.325,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  slideImage: {
-    width: '85%',
-    height: '85%',
-  },
-  textSection: {
-    flex: 3,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 20,
-    gap: 12,
-    paddingHorizontal: 16,
-  },
-  slideTitle: {
-    color: '#FFFFFF',
-    textAlign: 'center',
-    fontSize: 26,
-    letterSpacing: 0.3,
-  },
-  slideDescription: {
-    color: '#FFFFFF',
-    textAlign: 'center',
-    opacity: 0.85,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  // --- Seed button (small, first slide top-right) ---
-  seedContainer: {
-    position: 'absolute',
-    right: 16,
-  },
-  seedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  seedText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-  },
-  // --- Dots ---
-  dotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-  },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 4,
-  },
-  // --- Bottom ---
-  bottomSection: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
-  continueButton: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 200, 120, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  continueText: {
-    color: '#1A1A2E',
-    fontSize: 17,
-    letterSpacing: 0.3,
-  },
-  skipBtn: {
-    paddingVertical: 8,
-  },
-  skipText: {
-    color: '#FFFFFF',
-    opacity: 0.7,
-    fontSize: 14,
-  },
+  container: { flex: 1, overflow: 'hidden' },
+  flex1: { flex: 1 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, zIndex: 10 },
+  topBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  topBtnText: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
+  slideContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  imageSection: { flex: 5, alignItems: 'center', justifyContent: 'center', width: '100%' },
+  imageCircle: { width: SCREEN_WIDTH * 0.62, height: SCREEN_WIDTH * 0.62, borderRadius: SCREEN_WIDTH * 0.31, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', shadowColor: 'rgba(255,255,255,0.3)', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 8 },
+  slideImage: { width: '80%', height: '80%' },
+  tagBadge: { position: 'absolute', bottom: 10, right: SCREEN_WIDTH * 0.12, backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  tagText: { color: '#FFF', fontSize: 11, letterSpacing: 0.5 },
+  textSection: { flex: 3, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 24, gap: 14, paddingHorizontal: 12 },
+  slideTitle: { color: '#FFF', textAlign: 'center', fontSize: 28, letterSpacing: 0.3 },
+  slideDesc: { color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontSize: 15, lineHeight: 23 },
+  dotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  dot: { height: 8, borderRadius: 4, backgroundColor: '#FFF', marginHorizontal: 4 },
+  bottomSection: { paddingHorizontal: 24 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  navBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 28 },
+  backBtn: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  nextBtn: { backgroundColor: 'rgba(255,200,120,0.95)', shadowColor: '#FFC878', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  backText: { color: '#FFF', fontSize: 16 },
+  nextText: { color: '#0B1330', fontSize: 16 },
+  getStartedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', paddingVertical: 18, borderRadius: 30, backgroundColor: '#FFF', shadowColor: '#FFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 6 },
+  getStartedText: { color: '#0B1330', fontSize: 18, letterSpacing: 0.3 },
 });

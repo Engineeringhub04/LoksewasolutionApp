@@ -1,6 +1,6 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
-// Pre-caches onboarding network images in background for offline-first experience.
-import React, { useEffect, useRef } from 'react';
+// Logo shows IMMEDIATELY. Waits for onboarding images to pre-cache before navigating.
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Image, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -16,7 +16,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
 import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
 
-const MAX_SPLASH_MS = 4000;
+const MAX_SPLASH_MS = 6000;
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -25,113 +25,73 @@ export default function SplashScreen() {
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
+  const [imagesCached, setImagesCached] = useState(false);
 
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.85);
-
+  // Logo visible immediately — only subtle scale bounce
+  const scale = useSharedValue(0.9);
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
-    scale.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.2)) });
-  }, [opacity, scale]);
+    scale.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.back(1.5)) });
+  }, [scale]);
 
-  // Pre-cache onboarding network images in background for seamless experience
+  // Pre-cache onboarding network images — splash stays until done
   useEffect(() => {
-    const remoteUrls = getRemoteImageUrls();
-    if (remoteUrls.length > 0) {
-      ExpoImage.prefetch(remoteUrls).catch(() => {
-        // Silent fail — images will load on demand if pre-cache fails
-      });
+    const urls = getRemoteImageUrls();
+    if (urls.length > 0) {
+      Promise.all(urls.map((u) => ExpoImage.prefetch(u).catch(() => {})))
+        .finally(() => setImagesCached(true));
+    } else {
+      setImagesCached(true);
     }
   }, []);
 
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+  useEffect(() => { hydrate(); }, [hydrate]);
 
+  // Navigate once everything is ready
   useEffect(() => {
-    if (routedRef.current) return;
+    if (routedRef.current || initializing || !hydrated || !imagesCached) return;
 
     const decide = async () => {
+      if (routedRef.current) return;
       const config = await fetchRemoteConfig();
-
       if (routedRef.current) return;
       routedRef.current = true;
 
-      if (config.maintenanceMode) {
-        router.replace('/blocking/maintenance');
-        return;
-      }
-      if (isVersionBelow(AppConfig.identity.version, config.minimumVersion)) {
-        router.replace('/blocking/update-required');
-        return;
-      }
-      if (!isOnline && !user) {
-        router.replace('/blocking/no-internet');
-        return;
-      }
-      if (user) {
-        router.replace('/(tabs)');
-        return;
-      }
-      // Always show onboarding when not logged in (not just first time)
+      if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
+      if (isVersionBelow(AppConfig.identity.version, config.minimumVersion)) { router.replace('/blocking/update-required'); return; }
+      if (!isOnline && !user) { router.replace('/blocking/no-internet'); return; }
+      if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
     };
+    decide();
+  }, [initializing, hydrated, imagesCached, isOnline, user, router]);
 
-    // Wait for auth + settings hydration, but never block longer than MAX_SPLASH_MS.
-    const boundedTimeout = setTimeout(() => {
-      if (!routedRef.current) decide();
+  // Safety timeout
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!routedRef.current) {
+        routedRef.current = true;
+        router.replace(user ? '/(tabs)' : '/onboarding');
+      }
     }, MAX_SPLASH_MS);
-
-    if (!initializing && hydrated) {
-      clearTimeout(boundedTimeout);
-      decide();
-    }
-
-    return () => clearTimeout(boundedTimeout);
-  }, [initializing, hydrated, isOnline, user, router]);
+    return () => clearTimeout(t);
+  }, [user, router]);
 
   const insets = useSafeAreaInsets();
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <LinearGradient
-      colors={gradients.splash}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-    >
+    <LinearGradient colors={gradients.splash} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ alignItems: 'center', gap: spacing.sm }, animatedStyle]}>
-        <View
-          style={{
-            width: 140,
-            height: 140,
-            borderRadius: 32,
-            backgroundColor: '#FFFFFF',
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOpacity: 0.25,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 8,
-          }}
-        >
+        <View style={{ width: 140, height: 140, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>
           <Image source={AppConfig.identity.logoAsset} style={{ width: 104, height: 104 }} resizeMode="contain" />
         </View>
-        <Text variant="h1" weight="bold" style={{ color: '#FFFFFF', marginTop: spacing.md }}>
-          {AppConfig.identity.appName}
-        </Text>
-        <Text variant="body" style={{ color: '#FFFFFF', opacity: 0.8 }}>
-          {AppConfig.identity.tagline}
-        </Text>
-        <ActivityIndicator size="large" color="#FFFFFF" style={{ marginTop: spacing.lg }} />
+        <Text variant="h1" weight="bold" style={{ color: '#FFF', marginTop: spacing.md }}>{AppConfig.identity.appName}</Text>
+        <Text variant="body" style={{ color: '#FFF', opacity: 0.8 }}>{AppConfig.identity.tagline}</Text>
+        <ActivityIndicator size="large" color="#FFF" style={{ marginTop: spacing.lg }} />
       </Animated.View>
-
       <View style={{ position: 'absolute', bottom: insets.bottom + spacing.lg, alignItems: 'center' }}>
-        <Text variant="bodySmall" style={{ color: '#FFFFFF', opacity: 0.75 }}>
-          Made for Nepali Student 🇳🇵 | by <Text variant="bodySmall" weight="semiBold" style={{ color: '#00C8FF' }}>Kishan Raut</Text>
+        <Text variant="bodySmall" style={{ color: '#FFF', opacity: 0.75 }}>
+          Made for Nepali Students 🇳🇵 | by <Text variant="bodySmall" weight="semiBold" style={{ color: '#00C8FF' }}>Kishan Raut</Text>
         </Text>
       </View>
     </LinearGradient>
