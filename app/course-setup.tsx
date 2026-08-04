@@ -14,6 +14,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
 export default function CourseSetupScreen() {
   const router = useRouter();
@@ -87,9 +88,7 @@ export default function CourseSetupScreen() {
             <Ionicons name="school" size={22} color="#FFF" />
           </View>
           <Text variant="h2" weight="bold" style={styles.headerTitle}>Setup Your Course</Text>
-          <Pressable onPress={toggleTheme} style={styles.themeBtn}>
-            <Ionicons name={effective === 'dark' ? 'sunny' : 'moon'} size={20} color="#FFF" />
-          </Pressable>
+          <ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} />
         </Animated.View>
       </LinearGradient>
 
@@ -150,7 +149,7 @@ export default function CourseSetupScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={20} color="#DC2626" />
                 <Text variant="bodySmall" style={styles.errorText}>
-                  No subcourses found. Tap "Seed" on the login page to add subcourse data.
+                  No subcourses found for this course yet. Please contact support or try again later.
                 </Text>
               </Animated.View>
             ) : (
@@ -203,7 +202,6 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#FFF', fontSize: 18, flex: 1, textAlign: 'center' },
-  themeBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 100 },
   titleSection: { marginBottom: 24 },
   section: { marginBottom: 24 },
