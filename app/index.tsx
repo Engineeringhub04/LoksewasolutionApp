@@ -1,7 +1,10 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
 // Logo shows IMMEDIATELY. Waits for onboarding images to pre-cache before navigating.
+// Uses expo-image (not RN's Image) for the logo — it decodes bundled assets faster
+// and keeps them in its own memory cache, avoiding the visible delay RN's Image
+// component has on first mount even for local require()'d assets.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Image, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -83,7 +86,14 @@ export default function SplashScreen() {
     <LinearGradient colors={gradients.splash} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ alignItems: 'center', gap: spacing.sm }, animatedStyle]}>
         <View style={{ width: 140, height: 140, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>
-          <Image source={AppConfig.identity.logoAsset} style={{ width: 104, height: 104 }} resizeMode="contain" />
+          <ExpoImage
+            source={AppConfig.identity.logoAsset}
+            style={{ width: 104, height: 104 }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+          />
         </View>
         <Text variant="h1" weight="bold" style={{ color: '#FFF', marginTop: spacing.md }}>{AppConfig.identity.appName}</Text>
         <Text variant="body" style={{ color: '#FFF', opacity: 0.8 }}>{AppConfig.identity.tagline}</Text>

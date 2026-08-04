@@ -11,20 +11,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Courses & Subcourses — read/write: true (for seeding before full auth setup)
+    // Courses & Subcourses — readable by anyone signed in, writable by admin only.
     // Subcourses live as a SUB-COLLECTION under each course document. A rule on the
     // parent path does NOT cascade to subcollections in Firestore — this explicit
     // nested match is required, otherwise subcourse reads/writes get "insufficient
     // permission" even though the parent course path is open.
     match /app_courses/{courseId} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
 
       match /subcourses/{subcourseId} {
-        allow read, write: if true;
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
       }
     }
+    // Legacy flat collection (kept read-only for backward compatibility with data
+    // seeded before the sub-collection restructure).
     match /app_subcourses/{docId} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /meta/{docId} { allow read: if true; }

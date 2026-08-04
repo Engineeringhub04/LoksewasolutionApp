@@ -1,20 +1,18 @@
-// §15 Forgot Password — sends reset link via email; link opens the app's
-// reset-password screen (deep link) instead of a website.
+// §15 Forgot Password — Big curved header, scrollable, sends reset link that
+// opens the app's reset-password screen (deep link) instead of a website.
 import React, { useState } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { sendResetPasswordEmail } from '@/src/core/firebase/auth';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
+import { AuthHeader } from '@/src/components/misc/AuthHeader';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -37,15 +35,8 @@ export default function ForgotPasswordScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" bounces={false}>
-        <LinearGradient colors={['#7C3AED', '#A855F7', '#C084FC']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color="#FFF" />
-          </Pressable>
-          <Animated.View entering={FadeIn.duration(400)} style={styles.headerIconCircle}>
-            <Ionicons name="key-outline" size={26} color="#FFF" />
-          </Animated.View>
-        </LinearGradient>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <AuthHeader title="Reset Password" subtitle="Enter your email and we'll send you a secure reset link" onBack={() => router.back()} />
 
         <View style={styles.body}>
           {sent ? (
@@ -62,10 +53,7 @@ export default function ForgotPasswordScreen() {
               </Pressable>
             </Animated.View>
           ) : (
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.centeredBody}>
-              <Text variant="h1" weight="bold" style={styles.title}>Reset Password</Text>
-              <Text variant="body" style={styles.subtitle}>Enter your email and we'll send you a link to reset your password</Text>
-
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.fieldsContent}>
               <FloatingLabelField
                 label="Email Address"
                 leftIcon="mail-outline"
@@ -94,20 +82,15 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   flex1: { flex: 1, backgroundColor: '#F9FAFB' },
-  scrollContent: { flexGrow: 1 },
-  header: { paddingBottom: 24, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, alignItems: 'center' },
-  backBtn: { position: 'absolute', top: 54, left: 16, zIndex: 10, padding: 6 },
-  headerIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  body: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 },
-  centeredBody: { alignItems: 'center', paddingVertical: 12 },
-  title: { color: '#1F2937', fontSize: 26, marginBottom: 8, textAlign: 'center' },
-  subtitle: { color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  scrollContent: { flexGrow: 1, paddingBottom: 24 },
+  body: { paddingHorizontal: 24, paddingTop: 28 },
+  fieldsContent: { gap: 4 },
   fieldGap: { width: '100%', marginBottom: 16 },
   submitButton: { backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 14, alignItems: 'center', width: '100%', shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   submitButtonText: { color: '#FFF', fontSize: 16 },
   cancelBtn: { alignItems: 'center', marginTop: 16 },
   cancelText: { color: '#7C3AED' },
-  sentContainer: { alignItems: 'center', gap: 16, paddingTop: 20 },
+  sentContainer: { alignItems: 'center', gap: 16, paddingTop: 4 },
   sentIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center' },
   sentTitle: { color: '#1F2937', fontSize: 22 },
   sentDesc: { color: '#6B7280', textAlign: 'center', lineHeight: 22 },
