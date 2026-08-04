@@ -1,6 +1,6 @@
 // §37 Notifications
 import React, { useMemo } from 'react';
-import { View, SectionList } from 'react-native';
+import { View, SectionList, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
@@ -8,11 +8,11 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead, type AppNotification } from '@/src/core/firebase/services/notifications';
 import { showToast } from '@/src/core/store/toastStore';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { NotificationRow } from '@/src/components/cards/NotificationRow';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 
 function groupByDate(items: AppNotification[]) {
@@ -46,7 +46,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
     return fetchNotifications(user.uid);
   }, [user?.uid]);
@@ -69,10 +69,10 @@ export default function NotificationsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar
+      <SubpageHeader
         title={t('notifications.title')}
-        actions={
-          <Text variant="bodySmall" style={{ color: colors.primary }} onPress={handleMarkAllRead}>
+        rightSlot={
+          <Text variant="bodySmall" style={{ color: '#FFF' }} onPress={handleMarkAllRead}>
             {t('notifications.markAllRead')}
           </Text>
         }
@@ -82,13 +82,14 @@ export default function NotificationsScreen() {
           <Skeleton height={56} /><Skeleton height={56} />
         </View>
       ) : error ? (
-        <ErrorState onRetry={refetch} />
+        <DataNotFound onRetry={refetch} />
       ) : sections.length === 0 ? (
         <EmptyState title={t('notifications.empty')} />
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           renderSectionHeader={({ section }) => (
             <View style={{ paddingHorizontal: spacing.screenPadding, paddingVertical: spacing.xs, backgroundColor: colors.background }}>
               <Text variant="bodySmall" weight="semiBold" secondary>{t(`notifications.${section.title}`)}</Text>

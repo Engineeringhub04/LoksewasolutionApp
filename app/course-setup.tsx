@@ -4,7 +4,7 @@
 // No back button (mandatory step). Select Course (blue) → Subcourse (red) → Save.
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,10 @@ export default function CourseSetupScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { colors, effective, setMode } = useTheme();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  // "update" mode = opened from Home (user already has a course); shows a back
+  // button and "Update" wording instead of the mandatory first-time setup flow.
+  const isUpdateMode = params.mode === 'update';
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [subcourses, setSubcourses] = useState<Subcourse[]>([]);
@@ -71,8 +75,13 @@ export default function CourseSetupScreen() {
     try {
       await saveUserCourseSetup(user.uid, selectedCourse, selectedSubcourse);
       setSaving(false);
-      router.replace('/(tabs)');
-      showToast('Course setup complete', 'success');
+      if (isUpdateMode) {
+        router.back();
+        showToast('Course updated successfully', 'success');
+      } else {
+        router.replace('/(tabs)');
+        showToast('Course setup complete', 'success');
+      }
     } catch {
       setSaving(false);
       showToast('Failed to save. Please try again.', 'error');
@@ -84,18 +93,28 @@ export default function CourseSetupScreen() {
       {/* Blue Curved Header */}
       <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
-          <View style={styles.headerIconBox}>
-            <Ionicons name="school" size={22} color="#FFF" />
-          </View>
-          <Text variant="h2" weight="bold" style={styles.headerTitle}>Setup Your Course</Text>
+          {isUpdateMode ? (
+            <Pressable onPress={() => router.back()} style={styles.headerIconBox} accessibilityLabel="Back">
+              <Ionicons name="arrow-back" size={20} color="#FFF" />
+            </Pressable>
+          ) : (
+            <View style={styles.headerIconBox}>
+              <Ionicons name="school" size={22} color="#FFF" />
+            </View>
+          )}
+          <Text variant="h2" weight="bold" style={styles.headerTitle}>{isUpdateMode ? 'Update Your Course' : 'Setup Your Course'}</Text>
           <ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} />
         </Animated.View>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInUp.duration(400)} style={styles.titleSection}>
-          <Text variant="h1" weight="bold" style={{ color: colors.textPrimary, fontSize: 26 }}>Setup Your New Course</Text>
-          <Text variant="body" style={{ color: colors.textSecondary, marginTop: 4 }}>Choose a course to start your learning journey</Text>
+          <Text variant="h1" weight="bold" style={{ color: colors.textPrimary, fontSize: 26 }}>
+            {isUpdateMode ? 'Update Your Course' : 'Setup Your New Course'}
+          </Text>
+          <Text variant="body" style={{ color: colors.textSecondary, marginTop: 4 }}>
+            {isUpdateMode ? 'Change your selected course or subcourse anytime' : 'Choose a course to start your learning journey'}
+          </Text>
         </Animated.View>
 
         {/* Select Course */}
@@ -189,7 +208,7 @@ export default function CourseSetupScreen() {
             { opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          {saving ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.saveButtonText}>Save Course</Text>}
+          {saving ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.saveButtonText}>{isUpdateMode ? 'Update Course' : 'Save Course'}</Text>}
         </Pressable>
       </Animated.View>
     </View>

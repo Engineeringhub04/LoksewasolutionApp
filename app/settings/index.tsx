@@ -7,6 +7,9 @@ import { useTheme, type ThemeMode } from '@/src/core/theme';
 import { useTranslation, type Language } from '@/src/core/i18n';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { logout, deleteCurrentAccount } from '@/src/core/firebase/auth';
+import { isFirebaseConfigured } from '@/src/core/firebase/env';
+import { seedHomeBanners } from '@/src/core/firebase/services/banners';
+import { seedDeveloperData } from '@/src/core/firebase/services/developer';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
@@ -22,6 +25,34 @@ export default function SettingsScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [seedingBanners, setSeedingBanners] = useState(false);
+  const [seedingDeveloper, setSeedingDeveloper] = useState(false);
+
+  const handleSeedBanners = async () => {
+    if (!isFirebaseConfigured) { showToast('Firebase is not configured', 'warning'); return; }
+    setSeedingBanners(true);
+    try {
+      await seedHomeBanners();
+      showToast('Home banners seeded', 'success');
+    } catch {
+      showToast('Failed to seed banners', 'error');
+    } finally {
+      setSeedingBanners(false);
+    }
+  };
+
+  const handleSeedDeveloper = async () => {
+    if (!isFirebaseConfigured) { showToast('Firebase is not configured', 'warning'); return; }
+    setSeedingDeveloper(true);
+    try {
+      await seedDeveloperData();
+      showToast('Developer profile seeded', 'success');
+    } catch {
+      showToast('Failed to seed developer profile', 'error');
+    } finally {
+      setSeedingDeveloper(false);
+    }
+  };
 
   const handleLanguageChange = (lang: Language) => {
     setLanguage(lang);
@@ -86,6 +117,11 @@ export default function SettingsScreen() {
         <View style={{ paddingHorizontal: spacing.screenPadding, paddingVertical: spacing.sm }}>
           <Text variant="bodySmall" secondary>{t('settings.version')}: {AppConfig.identity.version}</Text>
         </View>
+
+        <Divider style={{ marginHorizontal: spacing.screenPadding }} />
+        <SectionLabel label="Data Setup (Dev)" />
+        <MenuRow icon="images-outline" label={seedingBanners ? 'Seeding Banners...' : 'Seed Home Banners'} onPress={handleSeedBanners} />
+        <MenuRow icon="person-circle-outline" label={seedingDeveloper ? 'Seeding Developer...' : 'Seed Developer Profile'} onPress={handleSeedDeveloper} />
 
         <Divider style={{ marginHorizontal: spacing.screenPadding }} />
         <SectionLabel label={t('settings.account')} />

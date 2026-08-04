@@ -1,31 +1,34 @@
 // §35 Keep Notes — personal notes, local-first, fully usable offline.
 import React from 'react';
-import { View, FlatList } from 'react-native';
+import { View, FlatList, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { loadNotes } from '@/src/core/firebase/services/notes';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 
 export default function KeepNotesScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { data, loading } = useAsyncData(() => loadNotes(), []);
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadNotes(), []);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar title={t('keepNotes.title')} />
+      <SubpageHeader title={t('keepNotes.title')} />
       {loading ? (
         <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
           <Skeleton height={90} /><Skeleton height={90} />
         </View>
+      ) : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('keepNotes.empty')} />
       ) : (
@@ -35,6 +38,7 @@ export default function KeepNotesScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.sm, paddingHorizontal: spacing.screenPadding }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md, paddingBottom: 96 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Card onPress={() => router.push(`/notes/${item.id}`)} style={{ flex: 1, backgroundColor: item.color || colors.card, gap: 4 }}>
               <Text variant="body" weight="semiBold" numberOfLines={1}>{item.title || t('keepNotes.titlePlaceholder')}</Text>

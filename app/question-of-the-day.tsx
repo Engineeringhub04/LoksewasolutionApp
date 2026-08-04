@@ -9,6 +9,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchQuestionOfTheDay, submitQotdAnswer } from '@/src/core/firebase/services/qotd';
 import { fetchRandomQuestion } from '@/src/core/firebase/services/questions';
+import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
@@ -25,10 +26,14 @@ export default function QuestionOfTheDayScreen() {
   const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
+  const [courseId, setCourseId] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
     if (!user) return null;
-    const result = await fetchQuestionOfTheDay(user.uid, fetchRandomQuestion);
+    const courseInfo = await fetchUserCourseInfo(user.uid).catch(() => null);
+    const activeCourseId = courseInfo?.courseId ?? null;
+    setCourseId(activeCourseId);
+    const result = await fetchQuestionOfTheDay(user.uid, fetchRandomQuestion, activeCourseId);
     setSelected(result.answeredIndex);
     setStreak(result.streak);
     return result;
@@ -39,7 +44,7 @@ export default function QuestionOfTheDayScreen() {
   const handleSelect = async (optionIndex: number) => {
     if (alreadyAnswered || !user || !data?.question) return;
     setSelected(optionIndex);
-    const newStreak = await submitQotdAnswer(user.uid, optionIndex, streak);
+    const newStreak = await submitQotdAnswer(user.uid, optionIndex, streak, courseId);
     setStreak(newStreak);
     showToast(t('qotd.streakUpdated', { count: newStreak }), 'success');
   };

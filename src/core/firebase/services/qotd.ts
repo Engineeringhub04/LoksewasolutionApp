@@ -13,13 +13,19 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function statePath(uid: string): string {
-  return `${Collections.users}/${uid}/qotd/state`;
+// Scoped per-course: a user can answer once per day PER course they're enrolled in.
+function statePath(uid: string, courseId?: string | null): string {
+  const suffix = courseId ? `state-${courseId}` : 'state';
+  return `${Collections.users}/${uid}/qotd/${suffix}`;
 }
 
-export async function fetchQuestionOfTheDay(uid: string, pickQuestion: () => Promise<Question | null>): Promise<QotdState> {
+export async function fetchQuestionOfTheDay(
+  uid: string,
+  pickQuestion: () => Promise<Question | null>,
+  courseId?: string | null
+): Promise<QotdState> {
   const question = await pickQuestion();
-  const data = await getDocument(statePath(uid));
+  const data = await getDocument(statePath(uid, courseId));
 
   const answeredToday = data?.lastAnsweredDate === todayKey();
   return {
@@ -29,8 +35,19 @@ export async function fetchQuestionOfTheDay(uid: string, pickQuestion: () => Pro
   };
 }
 
-export async function submitQotdAnswer(uid: string, selectedIndex: number, currentStreak: number): Promise<number> {
-  const data = await getDocument(statePath(uid));
+/** Quick check used by Home — no question fetch, just whether today's is already answered. */
+export async function hasAnsweredQotdToday(uid: string, courseId?: string | null): Promise<boolean> {
+  const data = await getDocument(statePath(uid, courseId));
+  return data?.lastAnsweredDate === todayKey();
+}
+
+export async function submitQotdAnswer(
+  uid: string,
+  selectedIndex: number,
+  currentStreak: number,
+  courseId?: string | null
+): Promise<number> {
+  const data = await getDocument(statePath(uid, courseId));
   const lastDate = data?.lastAnsweredDate as string | undefined;
 
   const yesterday = new Date();
@@ -40,7 +57,7 @@ export async function submitQotdAnswer(uid: string, selectedIndex: number, curre
   const nextStreak = wasYesterday ? currentStreak + 1 : 1;
 
   await setDocument(
-    statePath(uid),
+    statePath(uid, courseId),
     {
       lastAnsweredDate: todayKey(),
       answeredIndex: selectedIndex,

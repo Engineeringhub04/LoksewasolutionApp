@@ -23,4 +23,6 @@ export const Collections = {
   notifications: 'notifications',
   meta: 'meta',
   appOnboardingSettings: 'app_onboarding-settings',
+  homeBanners: 'app_home_banners',
+  developers: 'app_developers',
 } as const;

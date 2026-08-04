@@ -1,18 +1,18 @@
 // §28 Performance Analytics
 import React from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchAnalytics } from '@/src/core/firebase/services/analytics';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { ProgressBar } from '@/src/components/misc/ProgressBar';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 
 const MIN_ATTEMPTS_FOR_ANALYTICS = 3;
@@ -23,24 +23,27 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return null;
     return fetchAnalytics(user.uid);
   }, [user?.uid]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar title={t('analytics.title')} />
+      <SubpageHeader title={t('analytics.title')} />
       {loading ? (
         <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
           <Skeleton height={100} /><Skeleton height={100} />
         </View>
       ) : error || !data ? (
-        <ErrorState onRetry={refetch} />
+        <DataNotFound onRetry={refetch} />
       ) : data.attempts.length < MIN_ATTEMPTS_FOR_ANALYTICS ? (
         <EmptyState title={t('analytics.lowData')} ctaLabel={t('history.startMockTest')} onCtaPress={() => router.push('/(tabs)/exam')} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+        >
           <Card style={{ gap: spacing.sm }}>
             <Text variant="h3" weight="semiBold">{t('analytics.scoreTrend')}</Text>
             <Text variant="display" weight="bold" style={{ color: colors.primary }}>
