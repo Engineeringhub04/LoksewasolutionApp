@@ -15,7 +15,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function BookmarksScreen() {
   const { colors, spacing } = useTheme();
@@ -43,7 +43,7 @@ export default function BookmarksScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={t('bookmarks.title')} />
+      <SubpageHeader title={t('bookmarks.title')} showThemeToggle />
       <View style={{ paddingHorizontal: spacing.screenPadding }}>
         <TabBar
           items={[
@@ -57,11 +57,8 @@ export default function BookmarksScreen() {
         />
       </View>
 
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={56} /><Skeleton height={56} />
-        </View>
-      ) : error ? (
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Bookmarks..." />
+      {loading ? null : error ? (
         <DataNotFound onRetry={refetch} />
       ) : filtered.length === 0 ? (
         <EmptyState title={t('bookmarks.empty')} ctaLabel={t('bookmarks.browseSubjects')} onCtaPress={() => router.push('/subjects')} />

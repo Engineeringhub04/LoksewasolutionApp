@@ -14,8 +14,8 @@ import { Button } from '@/src/components/buttons/Button';
 import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
 
 const iconFor = { pdf: 'document-text-outline', note: 'create-outline', other: 'file-tray-outline' } as const;
 
@@ -42,7 +42,7 @@ export default function DownloadsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={t('downloads.title')} />
+      <SubpageHeader title={t('downloads.title')} showThemeToggle />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.screenPadding, marginTop: spacing.sm, marginBottom: spacing.sm }}>
         <Text variant="body" secondary>{t('downloads.storageUsed')}: {formatBytes(total)}</Text>
         {items.length > 0 ? (
@@ -50,11 +50,8 @@ export default function DownloadsScreen() {
         ) : null}
       </View>
 
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={56} /><Skeleton height={56} />
-        </View>
-      ) : error ? (
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Downloads..." />
+      {loading ? null : error ? (
         <DataNotFound onRetry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState title={t('downloads.empty')} />

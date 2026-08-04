@@ -19,7 +19,8 @@ import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
-import { HomeHeader } from '@/src/components/home/HomeHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HomeHeader, getHomeHeaderExpandedHeight } from '@/src/components/home/HomeHeader';
 import { BannerCarousel } from '@/src/components/home/BannerCarousel';
 import { QuestionOfDayCard } from '@/src/components/home/QuestionOfDayCard';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
@@ -80,6 +81,8 @@ export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const insets = useSafeAreaInsets();
+  const HOME_HEADER_MAX_HEIGHT = getHomeHeaderExpandedHeight(insets.top);
 
   const courseInfo = useAsyncData(async () => {
     if (!user) return null;
@@ -125,28 +128,31 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+    {/* Header — a FIXED overlay, NOT a child of the ScrollView. It never
+        scrolls away; only its own height/content morphs based on scrollY.
+        The ScrollView below is pushed down by headerSpacerHeight so content
+        starts right underneath it and scrolls normally from there. */}
+    <HomeHeader
+      scrollY={scrollY}
+      displayName={user?.displayName ?? null}
+      photoURL={user?.photoURL}
+      notificationCount={unreadCount}
+      isDark={effective === 'dark'}
+      onToggleTheme={toggleTheme}
+      onNotificationsPress={() => router.push('/notifications')}
+      onProfilePress={() => router.push('/profile')}
+      courseName={courseInfo.data?.courseName ?? null}
+      subcourseName={courseInfo.data?.subcourseName ?? null}
+      onCoursePress={() => router.push('/course-setup?mode=update')}
+    />
+
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      contentContainerStyle={{ paddingTop: HOME_HEADER_MAX_HEIGHT, paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       onScroll={onScroll}
       scrollEventThrottle={16}
     >
-      {/* Header */}
-      <HomeHeader
-        scrollY={scrollY}
-        displayName={user?.displayName ?? null}
-        photoURL={user?.photoURL}
-        notificationCount={unreadCount}
-        isDark={effective === 'dark'}
-        onToggleTheme={toggleTheme}
-        onNotificationsPress={() => router.push('/notifications')}
-        onProfilePress={() => router.push('/profile')}
-        courseName={courseInfo.data?.courseName ?? null}
-        subcourseName={courseInfo.data?.subcourseName ?? null}
-        onCoursePress={() => router.push('/course-setup?mode=update')}
-      />
-
       {/* Banner Carousel */}
       <View style={{ marginTop: spacing.md }}>
         {banners.loading ? (

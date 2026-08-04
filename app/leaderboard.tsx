@@ -10,8 +10,8 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { TabBar } from '@/src/components/nav/TabBar';
 import { LeaderboardRow } from '@/src/components/cards/LeaderboardRow';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 type Scope = 'allTime' | 'weekly';
 
@@ -35,12 +35,9 @@ export default function LeaderboardScreen() {
           onChange={setScope}
         />
       </View>
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={52} /><Skeleton height={52} /><Skeleton height={52} />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Leaderboard..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('leaderboard.empty')} />
       ) : (

@@ -13,7 +13,7 @@ import { Text } from '@/src/components/misc/Text';
 import { NotificationRow } from '@/src/components/cards/NotificationRow';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 function groupByDate(items: AppNotification[]) {
   const today: AppNotification[] = [];
@@ -77,11 +77,8 @@ export default function NotificationsScreen() {
           </Text>
         }
       />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={56} /><Skeleton height={56} />
-        </View>
-      ) : error ? (
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Notifications..." />
+      {loading ? null : error ? (
         <DataNotFound onRetry={refetch} />
       ) : sections.length === 0 ? (
         <EmptyState title={t('notifications.empty')} />

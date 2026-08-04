@@ -1,6 +1,6 @@
 // §22 Daily Gorkhapatra
 import React, { useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -9,14 +9,14 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { IconButton } from '@/src/components/buttons/IconButton';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { Card } from '@/src/components/cards/Card';
 
 export default function GorkhapatraScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
-  const { data, loading, error, refetch } = useAsyncData(() => fetchGorkhapatraEditions(), []);
+  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchGorkhapatraEditions(), []);
   const [index, setIndex] = useState(0);
 
   const editions = data ?? [];
@@ -43,16 +43,16 @@ export default function GorkhapatraScreen() {
           </>
         }
       />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={100} /><Skeleton height={100} />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Gorkhapatra..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !current ? (
         <EmptyState title={t('gorkhapatra.empty')} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+        >
           <Text variant="bodySmall" secondary>{current.date?.toDate().toLocaleDateString() ?? ''}</Text>
           {current.sections.map((section, i) => (
             <Card key={i}>

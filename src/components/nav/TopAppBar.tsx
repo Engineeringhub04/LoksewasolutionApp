@@ -18,7 +18,12 @@ export function TopAppBar({ title, showBack = true, onBackPress, actions }: TopA
       title={title ?? ''}
       showBack={showBack}
       onBackPress={onBackPress}
+      // If the screen provided its own actions (e.g. Gorkhapatra's prev/next
+      // buttons, Notifications' "mark all read"), show those instead of the
+      // theme toggle — SubpageHeader's rightSlot always wins over
+      // showThemeToggle when both would apply.
       rightSlot={actions}
+      showThemeToggle={!actions}
     />
   );
 }

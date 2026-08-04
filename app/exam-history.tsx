@@ -10,8 +10,8 @@ import { fetchAttemptHistory } from '@/src/core/firebase/services/exams';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ResultCard } from '@/src/components/cards/ResultCard';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function ExamHistoryScreen() {
   const { colors, spacing } = useTheme();
@@ -27,12 +27,9 @@ export default function ExamHistoryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('history.title')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={64} /><Skeleton height={64} /><Skeleton height={64} />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Exam History..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('history.empty')} ctaLabel={t('history.startMockTest')} onCtaPress={() => router.push('/(tabs)/exam')} />
       ) : (

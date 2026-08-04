@@ -11,7 +11,7 @@ import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { SkeletonCard } from '@/src/components/feedback/Skeleton';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { BottomSheet } from '@/src/components/feedback/BottomSheet';
 
 export default function AchievementsScreen() {
@@ -27,12 +27,9 @@ export default function AchievementsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={t('achievements.title')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <SkeletonCard /><SkeletonCard />
-        </View>
-      ) : error ? (
+      <SubpageHeader title={t('achievements.title')} showThemeToggle />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Achievements..." />
+      {loading ? null : error ? (
         <DataNotFound onRetry={refetch} />
       ) : (
         <FlatList

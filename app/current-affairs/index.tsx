@@ -9,8 +9,8 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { Chip } from '@/src/components/misc/Chip';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { Card } from '@/src/components/cards/Card';
 
 export default function CurrentAffairsScreen() {
@@ -21,12 +21,9 @@ export default function CurrentAffairsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('currentAffairs.title')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={80} /><Skeleton height={80} /><Skeleton height={80} />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Current Affairs..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('currentAffairs.empty')} />
       ) : (

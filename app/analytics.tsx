@@ -13,7 +13,7 @@ import { Card } from '@/src/components/cards/Card';
 import { ProgressBar } from '@/src/components/misc/ProgressBar';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 const MIN_ATTEMPTS_FOR_ANALYTICS = 3;
 
@@ -30,12 +30,9 @@ export default function AnalyticsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={t('analytics.title')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={100} /><Skeleton height={100} />
-        </View>
-      ) : error || !data ? (
+      <SubpageHeader title={t('analytics.title')} showThemeToggle />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Analytics..." />
+      {loading ? null : error || !data ? (
         <DataNotFound onRetry={refetch} />
       ) : data.attempts.length < MIN_ATTEMPTS_FOR_ANALYTICS ? (
         <EmptyState title={t('analytics.lowData')} ctaLabel={t('history.startMockTest')} onCtaPress={() => router.push('/(tabs)/exam')} />

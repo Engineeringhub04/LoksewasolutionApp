@@ -1,6 +1,6 @@
 // §23 Question of the Day
 import React, { useState } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -14,8 +14,8 @@ import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { Badge } from '@/src/components/misc/Badge';
 
 export default function QuestionOfTheDayScreen() {
@@ -28,7 +28,7 @@ export default function QuestionOfTheDayScreen() {
   const [streak, setStreak] = useState(0);
   const [courseId, setCourseId] = useState<string | null>(null);
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return null;
     const courseInfo = await fetchUserCourseInfo(user.uid).catch(() => null);
     const activeCourseId = courseInfo?.courseId ?? null;
@@ -60,17 +60,16 @@ export default function QuestionOfTheDayScreen() {
           </View>
         }
       />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={24} width="80%" />
-          <Skeleton height={48} /><Skeleton height={48} /><Skeleton height={48} />
-        </View>
-      ) : error ? (
-        <ErrorState onRetry={refetch} />
+      <PageLoaderOverlay visible={loading || refreshing} label="Loading Daily Test..." />
+      {loading ? null : error ? (
+        <DataNotFound onRetry={refetch} />
       ) : !data?.question ? (
-        <ErrorState message={t('common.comingSoon')} />
+        <DataNotFound title="No Question Available" description="Check back tomorrow for a new question." onRetry={refetch} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+        >
           {alreadyAnswered ? (
             <View style={{ alignSelf: 'flex-start' }}>
               <Badge label={t('qotd.alreadyAnswered')} color={colors.info} />
