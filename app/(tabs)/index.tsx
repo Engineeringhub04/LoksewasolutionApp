@@ -29,6 +29,7 @@ import { FeatureTile } from '@/src/components/home/FeatureTile';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { demoSubjectsForCourse } from '@/src/components/home/demoSubjects';
 import { DEMO_NOTICES } from '@/src/components/home/demoNotices';
+import { DevSeedPanel } from '@/src/components/home/DevSeedPanel';
 
 interface LinkItem {
   key: string;
@@ -125,6 +126,12 @@ export default function HomeScreen() {
         subcourseName={courseInfo.data?.subcourseName ?? null}
         onCoursePress={() => router.push('/course-setup?mode=update')}
       />
+
+      {/* Dev-only: seed Home banners / developer profile — auto-hides once both exist */}
+      {(!banners.loading && (!banners.data || banners.data.length === 0)) ||
+      (!developers.loading && (!developers.data || developers.data.length === 0)) ? (
+        <DevSeedPanel onSeeded={onRefresh} />
+      ) : null}
 
       {/* Banner Carousel */}
       <View style={{ marginTop: spacing.md }}>

@@ -59,6 +59,19 @@ service cloud.firestore {
     match /app_notes/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
     match /app_notifications/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
 
+    // Home banners & About Developer — TEMPORARY: write:true so seeding works
+    // before any admin account exists. TODO: once an admin user is set up,
+    // change `allow write: if true` to `allow write: if isAdmin();` below
+    // (same pattern as app_courses above) to lock this down.
+    match /app_home_banners/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /app_developers/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Default deny-all
     match /{document=**} { allow read, write: if false; }
   }
