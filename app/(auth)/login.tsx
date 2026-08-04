@@ -1,8 +1,7 @@
-// §13 Login — Big curved purple header (logo + title + description inside it).
-// Continue with Email fades fields in/out. Scrollable with natural bounce
-// (same ScrollView behavior as course-setup, not center-locked).
+// §13 Login — Fixed curved header (logo + title + description), scrollable body
+// slides underneath it. Continue with Email fades fields in/out.
 import React, { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, withTiming, withSequence, useAnimatedStyle, FadeIn, FadeOut } from 'react-native-reanimated';
@@ -14,7 +13,7 @@ import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { GoogleIcon } from '@/src/components/misc/GoogleIcon';
-import { AuthHeader } from '@/src/components/misc/AuthHeader';
+import { AuthScreenLayout } from '@/src/components/misc/AuthScreenLayout';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -75,10 +74,8 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <AuthHeader title="Welcome Back" subtitle="Sign in to continue your Loksewa preparation journey" />
-
-        <Animated.View style={[styles.body, shakeStyle]}>
+      <AuthScreenLayout title="Welcome Back" subtitle="Sign in to continue your Loksewa preparation journey">
+        <Animated.View style={shakeStyle}>
           {!showEmailFields ? (
             <Animated.View key="collapsed" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.collapsedContent}>
               <Pressable onPress={handleGoogleSignIn} disabled={googleLoading} style={({ pressed }) => [styles.googleButton, { opacity: pressed ? 0.85 : 1 }]}>
@@ -152,16 +149,14 @@ export default function LoginScreen() {
             </Animated.View>
           )}
         </Animated.View>
-      </ScrollView>
+      </AuthScreenLayout>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex1: { flex: 1, backgroundColor: '#F9FAFB' },
-  scrollContent: { flexGrow: 1, paddingBottom: 24 },
-  body: { paddingHorizontal: 24, paddingTop: 28 },
-  collapsedContent: { gap: 4 },
+  flex1: { flex: 1 },
+  collapsedContent: { gap: 4, marginTop: 24 },
   expandedContent: { gap: 4 },
   collapseBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16, alignSelf: 'flex-start' },
   expandedTitle: { color: '#1F2937', fontSize: 22, marginBottom: 20 },
