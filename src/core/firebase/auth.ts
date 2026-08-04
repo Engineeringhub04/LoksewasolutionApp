@@ -104,8 +104,30 @@ export async function logout(): Promise<void> {
   await clearSession();
 }
 
+/**
+ * Sends the password reset email. `canHandleCodeInApp` + the continue params make the
+ * link open directly in this app (deep link to /reset-password) instead of a browser
+ * page, PROVIDED that Firebase Console → Authentication → Templates → Password reset →
+ * "Customize action URL" is NOT set, and "Handle these actions in my app" toggle in the
+ * same template's Action mode is switched on with a valid Dynamic Link / App Link config.
+ * Without that console configuration, the email link falls back to Firebase's hosted page.
+ */
 export async function sendResetPasswordEmail(email: string): Promise<void> {
-  await identityRequest('sendOobCode', { requestType: 'PASSWORD_RESET', email });
+  await identityRequest('sendOobCode', {
+    requestType: 'PASSWORD_RESET',
+    email,
+    canHandleCodeInApp: true,
+    continueUrl: `https://${firebaseEnv.authDomain}/reset-password`,
+    androidPackageName: 'com.loksewasolutionnp.hub',
+    androidInstallApp: true,
+    androidMinimumVersion: '1',
+    iOSBundleId: 'com.loksewasolutionnp.hub',
+  });
+}
+
+/** Completes a password reset using the oobCode from the email link. */
+export async function confirmPasswordReset(oobCode: string, newPassword: string): Promise<void> {
+  await identityRequest('resetPassword', { oobCode, newPassword });
 }
 
 export async function deleteCurrentAccount(): Promise<void> {

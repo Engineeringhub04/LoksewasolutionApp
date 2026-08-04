@@ -1,6 +1,7 @@
 // Course Setup — shown after login/signup if user hasn't selected a course yet.
-// Blue curved header with theme toggle. No back button (mandatory step).
-// Select Course (blue chips) → Select Subcourse (red chips) → Save.
+// Blue curved header with a WORKING theme toggle (colors are theme-aware, unlike
+// the previous version which used hardcoded hex values that never changed).
+// No back button (mandatory step). Select Course (blue) → Subcourse (red) → Save.
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ export default function CourseSetupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { mode, effective, setMode } = useTheme();
+  const { colors, effective, setMode } = useTheme();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [subcourses, setSubcourses] = useState<Subcourse[]>([]);
@@ -68,17 +69,17 @@ export default function CourseSetupScreen() {
     setSaving(true);
     try {
       await saveUserCourseSetup(user.uid, selectedCourse, selectedSubcourse);
-      showToast('Course setup complete! 🎉', 'success');
-      router.replace('/(tabs)');
-    } catch {
-      showToast('Failed to save. Try again.', 'error');
-    } finally {
       setSaving(false);
+      router.replace('/(tabs)');
+      showToast('Course setup complete', 'success');
+    } catch {
+      setSaving(false);
+      showToast('Failed to save. Please try again.', 'error');
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Blue Curved Header */}
       <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
@@ -93,19 +94,18 @@ export default function CourseSetupScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Title Section */}
         <Animated.View entering={FadeInUp.duration(400)} style={styles.titleSection}>
-          <Text variant="h1" weight="bold" style={styles.mainTitle}>Setup Your New Course</Text>
-          <Text variant="body" style={styles.subtitle}>Choose a course to start your learning journey</Text>
+          <Text variant="h1" weight="bold" style={{ color: colors.textPrimary, fontSize: 26 }}>Setup Your New Course</Text>
+          <Text variant="body" style={{ color: colors.textSecondary, marginTop: 4 }}>Choose a course to start your learning journey</Text>
         </Animated.View>
 
         {/* Select Course */}
         <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={[styles.sectionIcon, { backgroundColor: '#EFF6FF' }]}>
+            <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="school" size={18} color="#2563EB" />
             </View>
-            <Text variant="h2" weight="bold" style={styles.sectionTitle}>Select Course</Text>
+            <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, fontSize: 18 }}>Select Course</Text>
           </View>
 
           {loadingCourses ? (
@@ -116,10 +116,15 @@ export default function CourseSetupScreen() {
                 <Animated.View key={course.id} entering={FadeInDown.delay(250 + i * 80).duration(350)}>
                   <Pressable
                     onPress={() => setSelectedCourse(course.id)}
-                    style={[styles.chip, selectedCourse === course.id ? styles.chipActiveBlue : styles.chipInactive]}
+                    style={[
+                      styles.chip,
+                      selectedCourse === course.id
+                        ? styles.chipActiveBlue
+                        : { backgroundColor: colors.surface, borderColor: colors.border },
+                    ]}
                   >
                     {selectedCourse === course.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
-                    <Text variant="body" weight={selectedCourse === course.id ? 'bold' : 'medium'} style={{ color: selectedCourse === course.id ? '#FFF' : '#374151' }}>
+                    <Text variant="body" weight={selectedCourse === course.id ? 'bold' : 'medium'} style={{ color: selectedCourse === course.id ? '#FFF' : colors.textPrimary }}>
                       {course.name}
                     </Text>
                   </Pressable>
@@ -133,10 +138,10 @@ export default function CourseSetupScreen() {
         {selectedCourse && (
           <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIcon, { backgroundColor: '#FEF2F2' }]}>
+              <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <Ionicons name="book" size={18} color="#DC2626" />
               </View>
-              <Text variant="h2" weight="bold" style={styles.sectionTitle}>Select Subcourse</Text>
+              <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, fontSize: 18 }}>Select Subcourse</Text>
             </View>
 
             {loadingSub ? (
@@ -154,10 +159,15 @@ export default function CourseSetupScreen() {
                   <Animated.View key={sub.id} entering={FadeInDown.delay(i * 80).duration(350)}>
                     <Pressable
                       onPress={() => setSelectedSubcourse(sub.id)}
-                      style={[styles.chip, selectedSubcourse === sub.id ? styles.chipActiveRed : styles.chipInactive]}
+                      style={[
+                        styles.chip,
+                        selectedSubcourse === sub.id
+                          ? styles.chipActiveRed
+                          : { backgroundColor: colors.surface, borderColor: colors.border },
+                      ]}
                     >
                       {selectedSubcourse === sub.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
-                      <Text variant="body" weight={selectedSubcourse === sub.id ? 'bold' : 'medium'} style={{ color: selectedSubcourse === sub.id ? '#FFF' : '#374151' }}>
+                      <Text variant="body" weight={selectedSubcourse === sub.id ? 'bold' : 'medium'} style={{ color: selectedSubcourse === sub.id ? '#FFF' : colors.textPrimary }}>
                         {sub.name} ({sub.level})
                       </Text>
                     </Pressable>
@@ -170,14 +180,14 @@ export default function CourseSetupScreen() {
       </ScrollView>
 
       {/* Save Button */}
-      <Animated.View entering={FadeInUp.duration(400)} style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+      <Animated.View entering={FadeInUp.duration(400)} style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.divider, paddingBottom: insets.bottom + 16 }]}>
         <Pressable
           onPress={handleSave}
           disabled={!selectedCourse || !selectedSubcourse || saving}
           style={({ pressed }) => [
             styles.saveButton,
             (!selectedCourse || !selectedSubcourse) && styles.saveButtonDisabled,
-            { opacity: pressed ? 0.8 : 1 },
+            { opacity: pressed ? 0.85 : 1 },
           ]}
         >
           {saving ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.saveButtonText}>Save Course</Text>}
@@ -188,7 +198,7 @@ export default function CourseSetupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1 },
   header: { paddingBottom: 20, borderBottomLeftRadius: 26, borderBottomRightRadius: 26 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   headerIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
@@ -196,20 +206,16 @@ const styles = StyleSheet.create({
   themeBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 100 },
   titleSection: { marginBottom: 24 },
-  mainTitle: { color: '#1F2937', fontSize: 26 },
-  subtitle: { color: '#6B7280', marginTop: 4 },
   section: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   sectionIcon: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { color: '#1F2937', fontSize: 18 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12, borderWidth: 1.5 },
-  chipInactive: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
   chipActiveBlue: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   chipActiveRed: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA' },
   errorText: { color: '#991B1B', flex: 1, lineHeight: 18 },
-  bottomBar: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  bottomBar: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1 },
   saveButton: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   saveButtonDisabled: { backgroundColor: '#9CA3AF', shadowOpacity: 0 },
   saveButtonText: { color: '#FFF', fontSize: 16 },
