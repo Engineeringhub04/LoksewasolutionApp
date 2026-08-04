@@ -5,10 +5,17 @@ service cloud.firestore {
     function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
 
-    // --- NEW RULE FOR ONBOARDING ---
-    // Allow read/write: if true (seeding happens BEFORE login)
-    // TODO: Tighten this rule later — restrict write to admin only
+    // Onboarding — read only (admin can write)
     match /app_onboarding-settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Courses & Subcourses — read/write: true (for seeding before full auth setup)
+    match /app_courses/{docId} {
+      allow read, write: if true;
+    }
+    match /app_subcourses/{docId} {
       allow read, write: if true;
     }
 
@@ -39,7 +46,7 @@ service cloud.firestore {
     match /app_notes/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
     match /app_notifications/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
 
-    // Default deny-all for any unmatched collections
+    // Default deny-all
     match /{document=**} { allow read, write: if false; }
   }
 }

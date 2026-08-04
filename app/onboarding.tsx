@@ -7,7 +7,6 @@ import {
   Pressable,
   StyleSheet,
   Dimensions,
-  ActivityIndicator,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
@@ -31,7 +30,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
-import { seedSingleTestSlide, fetchOnboardingSlides, type OnboardingSlide } from '@/src/core/firebase/services/onboarding';
+import { fetchOnboardingSlides, type OnboardingSlide } from '@/src/core/firebase/services/onboarding';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 
@@ -165,19 +164,18 @@ export default function OnboardingScreen() {
 
   const [slides, setSlides] = useState<SlideData[]>(HARDCODED_SLIDES);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [seeding, setSeeding] = useState(false);
   const slideWidth = SCREEN_WIDTH;
 
   const scrollX = useSharedValue(0);
   const scrollRef = useRef<any>(null);
 
-  // Load from Firestore — if data exists, use it (overrides hardcoded)
+  // Only override hardcoded slides if Firestore has 4+ slides (full data set)
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     (async () => {
       try {
         const firestoreSlides = await fetchOnboardingSlides();
-        if (firestoreSlides.length > 0) {
+        if (firestoreSlides.length >= 4) {
           setSlides(firestoreSlides.map(firestoreToSlide));
         }
       } catch {
@@ -219,23 +217,6 @@ export default function OnboardingScreen() {
     setCurrentIndex(last);
   };
 
-  // --- Seed ---
-  const handleSeedTest = async () => {
-    if (!isFirebaseConfigured) {
-      showToast('Firebase not configured. Check .env file.', 'warning');
-      return;
-    }
-    setSeeding(true);
-    try {
-      await seedSingleTestSlide();
-      showToast('✅ 1 document seeded! Check Firestore.', 'success');
-    } catch (err: any) {
-      showToast(`Seed failed: ${err?.message ?? 'Unknown error'}`, 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   // --- Scroll ---
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => { scrollX.value = event.contentOffset.x; },
@@ -267,22 +248,13 @@ export default function OnboardingScreen() {
       {/* Floating Bubbles */}
       {BUBBLES.map((b, i) => <FloatingBubble key={i} {...b} />)}
 
-      {/* Top Bar: Skip / Seed */}
+      {/* Top Bar: Skip */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <View style={{ width: 80 }} />
-        {!isLastSlide ? (
+        {!isLastSlide && (
           <Pressable onPress={goToLastSlide} style={({ pressed }) => [styles.topBtn, { opacity: pressed ? 0.6 : 1 }]}>
             <Text variant="bodySmall" weight="semiBold" style={styles.topBtnText}>Skip</Text>
             <Ionicons name="play-forward" size={14} color="rgba(255,255,255,0.8)" />
-          </Pressable>
-        ) : (
-          <Pressable onPress={handleSeedTest} disabled={seeding} style={({ pressed }) => [styles.topBtn, { opacity: pressed || seeding ? 0.5 : 1 }]}>
-            {seeding ? <ActivityIndicator color="#FFF" size="small" /> : (
-              <>
-                <Ionicons name="cloud-upload-outline" size={14} color="rgba(255,255,255,0.8)" />
-                <Text variant="bodySmall" weight="semiBold" style={styles.topBtnText}>Seed</Text>
-              </>
-            )}
           </Pressable>
         )}
       </View>

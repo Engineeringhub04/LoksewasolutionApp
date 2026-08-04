@@ -36,6 +36,7 @@ function RootStack() {
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="course-setup" options={{ headerShown: false }} />
         <Stack.Screen name="blocking/update-required" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="blocking/no-internet" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ headerShown: false, gestureEnabled: false }} />
