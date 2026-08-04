@@ -1,20 +1,24 @@
-// Course Setup — shown after login if user hasn't selected a course yet.
-// Select Course (blue buttons) → Select Subcourse (red buttons) → Save.
+// Course Setup — shown after login/signup if user hasn't selected a course yet.
+// Blue curved header with theme toggle. No back button (mandatory step).
+// Select Course (blue chips) → Select Subcourse (red chips) → Save.
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 import { fetchCourses, fetchSubcourses, saveUserCourseSetup, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
+import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 
 export default function CourseSetupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const { mode, effective, setMode } = useTheme();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [subcourses, setSubcourses] = useState<Subcourse[]>([]);
@@ -22,9 +26,11 @@ export default function CourseSetupScreen() {
   const [selectedSubcourse, setSelectedSubcourse] = useState<string | null>(null);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loadingSub, setLoadingSub] = useState(false);
+  const [subcourseError, setSubcourseError] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Load courses on mount
+  const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
+
   useEffect(() => {
     (async () => {
       try {
@@ -38,16 +44,18 @@ export default function CourseSetupScreen() {
     })();
   }, []);
 
-  // Load subcourses when course is selected
   useEffect(() => {
     if (!selectedCourse) { setSubcourses([]); return; }
     setLoadingSub(true);
+    setSubcourseError(false);
     setSelectedSubcourse(null);
     (async () => {
       try {
         const data = await fetchSubcourses(selectedCourse);
         setSubcourses(data);
+        if (data.length === 0) setSubcourseError(true);
       } catch {
+        setSubcourseError(true);
         showToast('Failed to load subcourses', 'error');
       } finally {
         setLoadingSub(false);
@@ -70,15 +78,19 @@ export default function CourseSetupScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
-        </Pressable>
-        <Text variant="body" weight="bold" style={styles.headerTitle}>Setup Your Course</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={styles.container}>
+      {/* Blue Curved Header */}
+      <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
+          <View style={styles.headerIconBox}>
+            <Ionicons name="school" size={22} color="#FFF" />
+          </View>
+          <Text variant="h2" weight="bold" style={styles.headerTitle}>Setup Your Course</Text>
+          <Pressable onPress={toggleTheme} style={styles.themeBtn}>
+            <Ionicons name={effective === 'dark' ? 'sunny' : 'moon'} size={20} color="#FFF" />
+          </Pressable>
+        </Animated.View>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Title Section */}
@@ -100,32 +112,26 @@ export default function CourseSetupScreen() {
             <ActivityIndicator color="#2563EB" style={{ marginVertical: 20 }} />
           ) : (
             <View style={styles.chipsRow}>
-              {courses.map((course) => (
-                <Pressable
-                  key={course.id}
-                  onPress={() => setSelectedCourse(course.id)}
-                  style={[
-                    styles.chip,
-                    selectedCourse === course.id ? styles.chipActiveBlue : styles.chipInactive,
-                  ]}
-                >
-                  {selectedCourse === course.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
-                  <Text
-                    variant="body"
-                    weight={selectedCourse === course.id ? 'bold' : 'medium'}
-                    style={{ color: selectedCourse === course.id ? '#FFF' : '#374151' }}
+              {courses.map((course, i) => (
+                <Animated.View key={course.id} entering={FadeInDown.delay(250 + i * 80).duration(350)}>
+                  <Pressable
+                    onPress={() => setSelectedCourse(course.id)}
+                    style={[styles.chip, selectedCourse === course.id ? styles.chipActiveBlue : styles.chipInactive]}
                   >
-                    {course.name}
-                  </Text>
-                </Pressable>
+                    {selectedCourse === course.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
+                    <Text variant="body" weight={selectedCourse === course.id ? 'bold' : 'medium'} style={{ color: selectedCourse === course.id ? '#FFF' : '#374151' }}>
+                      {course.name}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
               ))}
             </View>
           )}
         </Animated.View>
 
-        {/* Select Subcourse — only shows when course is selected */}
+        {/* Select Subcourse */}
         {selectedCourse && (
-          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.section}>
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={[styles.sectionIcon, { backgroundColor: '#FEF2F2' }]}>
                 <Ionicons name="book" size={18} color="#DC2626" />
@@ -135,26 +141,27 @@ export default function CourseSetupScreen() {
 
             {loadingSub ? (
               <ActivityIndicator color="#DC2626" style={{ marginVertical: 20 }} />
+            ) : subcourseError ? (
+              <Animated.View entering={FadeIn.duration(300)} style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={20} color="#DC2626" />
+                <Text variant="bodySmall" style={styles.errorText}>
+                  No subcourses found. Tap "Seed" on the login page to add subcourse data.
+                </Text>
+              </Animated.View>
             ) : (
               <View style={styles.chipsRow}>
-                {subcourses.map((sub) => (
-                  <Pressable
-                    key={sub.id}
-                    onPress={() => setSelectedSubcourse(sub.id)}
-                    style={[
-                      styles.chip,
-                      selectedSubcourse === sub.id ? styles.chipActiveRed : styles.chipInactive,
-                    ]}
-                  >
-                    {selectedSubcourse === sub.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
-                    <Text
-                      variant="body"
-                      weight={selectedSubcourse === sub.id ? 'bold' : 'medium'}
-                      style={{ color: selectedSubcourse === sub.id ? '#FFF' : '#374151' }}
+                {subcourses.map((sub, i) => (
+                  <Animated.View key={sub.id} entering={FadeInDown.delay(i * 80).duration(350)}>
+                    <Pressable
+                      onPress={() => setSelectedSubcourse(sub.id)}
+                      style={[styles.chip, selectedSubcourse === sub.id ? styles.chipActiveRed : styles.chipInactive]}
                     >
-                      {sub.name} ({sub.level})
-                    </Text>
-                  </Pressable>
+                      {selectedSubcourse === sub.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
+                      <Text variant="body" weight={selectedSubcourse === sub.id ? 'bold' : 'medium'} style={{ color: selectedSubcourse === sub.id ? '#FFF' : '#374151' }}>
+                        {sub.name} ({sub.level})
+                      </Text>
+                    </Pressable>
+                  </Animated.View>
                 ))}
               </View>
             )}
@@ -162,8 +169,8 @@ export default function CourseSetupScreen() {
         )}
       </ScrollView>
 
-      {/* Save Button — disabled until both selected */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+      {/* Save Button */}
+      <Animated.View entering={FadeInUp.duration(400)} style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
           onPress={handleSave}
           disabled={!selectedCourse || !selectedSubcourse || saving}
@@ -173,20 +180,20 @@ export default function CourseSetupScreen() {
             { opacity: pressed ? 0.8 : 1 },
           ]}
         >
-          {saving ? <ActivityIndicator color="#FFF" /> : (
-            <Text variant="body" weight="bold" style={styles.saveButtonText}>Save Course</Text>
-          )}
+          {saving ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.saveButtonText}>Save Course</Text>}
         </Pressable>
-      </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#1E3A5F' },
-  backBtn: { padding: 8 },
-  headerTitle: { color: '#FFF', fontSize: 16 },
+  header: { paddingBottom: 20, borderBottomLeftRadius: 26, borderBottomRightRadius: 26 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  headerIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { color: '#FFF', fontSize: 18, flex: 1, textAlign: 'center' },
+  themeBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 100 },
   titleSection: { marginBottom: 24 },
   mainTitle: { color: '#1F2937', fontSize: 26 },
@@ -200,6 +207,8 @@ const styles = StyleSheet.create({
   chipInactive: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
   chipActiveBlue: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   chipActiveRed: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA' },
+  errorText: { color: '#991B1B', flex: 1, lineHeight: 18 },
   bottomBar: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
   saveButton: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   saveButtonDisabled: { backgroundColor: '#9CA3AF', shadowOpacity: 0 },
