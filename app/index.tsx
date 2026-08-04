@@ -60,7 +60,24 @@ export default function SplashScreen() {
       routedRef.current = true;
 
       if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
-      if (isVersionBelow(AppConfig.identity.version, config.minimumVersion)) { router.replace('/blocking/update-required'); return; }
+      if (isVersionBelow(AppConfig.identity.version, config.minimumVersion)) {
+        if (__DEV__) {
+          // Diagnostic: this check is 100% platform-agnostic (no Platform.OS branching
+          // anywhere in the force-update path) — current app version and remote
+          // minimumVersion are both single, unified values, not split per-platform.
+          // If Android/iOS diverge on whether this screen shows, it means one device
+          // is running a stale JS bundle, or the remote `meta/appConfig` Firestore doc
+          // was different at the time each device checked it — it is NOT caused by any
+          // per-platform code difference. Logged here to make that visible while
+          // debugging on-device without a debugger attached.
+          console.warn(
+            `[ForceUpdate] Blocking app: current version "${AppConfig.identity.version}" ` +
+              `is below remote minimumVersion "${config.minimumVersion}" (from meta/appConfig).`
+          );
+        }
+        router.replace('/blocking/update-required');
+        return;
+      }
       if (!isOnline && !user) { router.replace('/blocking/no-internet'); return; }
       if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
