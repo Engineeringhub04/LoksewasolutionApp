@@ -1,51 +1,40 @@
-// §14 Signup
+// §14 Signup — Premium purple UI, only Name/Email/Password fields.
 import React, { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { useTheme } from '@/src/core/theme';
-import { useTranslation } from '@/src/core/i18n';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { registerWithEmail } from '@/src/core/firebase/auth';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { TextField } from '@/src/components/inputs/TextField';
-import { Button } from '@/src/components/buttons/Button';
-import { Checkbox } from '@/src/components/inputs/Checkbox';
 
 export default function SignupScreen() {
-  const { colors, spacing } = useTheme();
-  const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [agreed, setAgreed] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  const validate = () => {
-    const next: Record<string, string> = {};
-    if (name.trim().length < 2) next.name = t('common.somethingWentWrong');
-    if (!/^\S+@\S+\.\S+$/.test(email)) next.email = t('auth.invalidCredentials');
-    if (password.length < 6) next.password = t('common.somethingWentWrong');
-    if (password !== confirmPassword) next.confirmPassword = t('common.somethingWentWrong');
-    setErrors(next);
-    return Object.keys(next).length === 0 && agreed;
-  };
-
   const handleSignup = async () => {
-    if (!validate()) return;
+    if (name.trim().length < 2) { showToast('Name must be at least 2 characters', 'error'); return; }
+    if (!/^\S+@\S+\.\S+$/.test(email)) { showToast('Please enter a valid email', 'error'); return; }
+    if (password.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+
     setLoading(true);
     try {
       await registerWithEmail(name.trim(), email, password);
-      showToast(t('auth.accountCreated'), 'success');
+      showToast('Account created! 🎉', 'success');
       router.replace('/(tabs)');
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code;
       if (code === 'auth/email-already-in-use') {
-        showToast(t('auth.emailAlreadyRegistered'), 'error');
+        showToast('This email is already registered', 'error');
       } else {
-        showToast(t('auth.networkError'), 'error');
+        showToast('Something went wrong. Try again.', 'error');
       }
     } finally {
       setLoading(false);
@@ -53,53 +42,65 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: spacing.xl, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
-        <View style={{ gap: spacing.md }}>
-          <View style={{ alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
-            <Text variant="h1" weight="bold">{t('auth.createAccount')}</Text>
+    <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" bounces={false}>
+        {/* Purple Header */}
+        <LinearGradient colors={['#7C3AED', '#A855F7', '#C084FC']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
+          </Pressable>
+          <View style={styles.headerContent}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="person-add" size={32} color="#7C3AED" />
+            </View>
+            <Text variant="h1" weight="bold" style={styles.headerTitle}>Create Account</Text>
+            <Text variant="body" style={styles.headerSubtitle}>Join the Loksewa community</Text>
           </View>
+        </LinearGradient>
 
-          <TextField label={t('auth.name')} value={name} onChangeText={setName} errorText={errors.name} autoComplete="name" />
-          <TextField
-            label={t('auth.email')}
-            value={email}
-            onChangeText={setEmail}
-            errorText={errors.email}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
-          <TextField label={t('auth.password')} value={password} onChangeText={setPassword} errorText={errors.password} secureToggle secureTextEntry />
-          <TextField
-            label={t('auth.confirmPassword')}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            errorText={errors.confirmPassword}
-            secureToggle
-            secureTextEntry
-          />
+        {/* White Card Body */}
+        <View style={styles.cardBody}>
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.fieldsContainer}>
+            <TextField label="Full Name" value={name} onChangeText={setName} autoComplete="name" />
+            <TextField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+            <TextField label="Password" value={password} onChangeText={setPassword} secureToggle secureTextEntry />
 
-          <Checkbox
-            checked={agreed}
-            onChange={setAgreed}
-            label={
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                <Text variant="body">{t('auth.agreeTerms')}</Text>
-              </View>
-            }
-          />
+            <Pressable
+              onPress={handleSignup}
+              disabled={loading}
+              style={({ pressed }) => [styles.signupButton, { opacity: pressed || loading ? 0.8 : 1 }]}
+            >
+              {loading ? <ActivityIndicator color="#FFF" /> : (
+                <Text variant="body" weight="bold" style={styles.signupButtonText}>Create Account</Text>
+              )}
+            </Pressable>
 
-          <Button label={t('auth.createAccount')} onPress={handleSignup} loading={loading} disabled={!agreed} />
-
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm }}>
-            <Text variant="body" secondary>{t('auth.haveAccount')}</Text>
-            <Link href="/(auth)/login">
-              <Text variant="body" weight="semiBold" style={{ color: colors.primary }}>{t('auth.login')}</Text>
-            </Link>
-          </View>
+            <View style={styles.bottomLink}>
+              <Text variant="body" style={{ color: '#6B7280' }}>Already have an account? </Text>
+              <Link href="/(auth)/login">
+                <Text variant="body" weight="bold" style={styles.loginLink}>Login</Text>
+              </Link>
+            </View>
+          </Animated.View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex1: { flex: 1, backgroundColor: '#F9FAFB' },
+  scrollContent: { flexGrow: 1 },
+  header: { paddingBottom: 40, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: 'center' },
+  backBtn: { position: 'absolute', top: 50, left: 16, zIndex: 10, padding: 8 },
+  headerContent: { alignItems: 'center', gap: 8, marginTop: 20 },
+  logoCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  headerTitle: { color: '#FFF', fontSize: 28 },
+  headerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 15 },
+  cardBody: { flex: 1, paddingHorizontal: 24, paddingTop: 32, paddingBottom: 24 },
+  fieldsContainer: { gap: 14 },
+  signupButton: { backgroundColor: '#7C3AED', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8, shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  signupButtonText: { color: '#FFF', fontSize: 16 },
+  bottomLink: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
+  loginLink: { color: '#7C3AED' },
+});
