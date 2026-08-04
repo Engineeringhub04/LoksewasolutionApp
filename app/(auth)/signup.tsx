@@ -1,7 +1,7 @@
-// §14 Signup — Big curved purple header (logo + title + description inside it).
-// Continue with Email fades fields in/out. Scrollable with natural bounce.
+// §14 Signup — Fixed curved header, scrollable body slides underneath it.
+// Continue with Email fades fields in/out.
 import React, { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -12,7 +12,7 @@ import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { GoogleIcon } from '@/src/components/misc/GoogleIcon';
-import { AuthHeader } from '@/src/components/misc/AuthHeader';
+import { AuthScreenLayout } from '@/src/components/misc/AuthScreenLayout';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -62,94 +62,88 @@ export default function SignupScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <AuthHeader
-          title="Create Account"
-          subtitle="Join the Loksewa community and start your exam preparation today"
-          onBack={() => router.back()}
-        />
+      <AuthScreenLayout
+        title="Create Account"
+        subtitle="Join the Loksewa community and start your exam preparation today"
+        onBack={() => router.back()}
+      >
+        {!showFields ? (
+          <Animated.View key="collapsed" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.collapsedContent}>
+            <Pressable onPress={handleGoogleSignIn} disabled={googleLoading} style={({ pressed }) => [styles.googleButton, { opacity: pressed ? 0.85 : 1 }]}>
+              {googleLoading ? <ActivityIndicator color="#374151" /> : (
+                <>
+                  <GoogleIcon size={20} />
+                  <Text variant="body" weight="semiBold" style={styles.googleText}>Continue with Google</Text>
+                </>
+              )}
+            </Pressable>
 
-        <View style={styles.body}>
-          {!showFields ? (
-            <Animated.View key="collapsed" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.collapsedContent}>
-              <Pressable onPress={handleGoogleSignIn} disabled={googleLoading} style={({ pressed }) => [styles.googleButton, { opacity: pressed ? 0.85 : 1 }]}>
-                {googleLoading ? <ActivityIndicator color="#374151" /> : (
-                  <>
-                    <GoogleIcon size={20} />
-                    <Text variant="body" weight="semiBold" style={styles.googleText}>Continue with Google</Text>
-                  </>
-                )}
-              </Pressable>
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text variant="bodySmall" style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text variant="bodySmall" style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
+            <Pressable onPress={() => setShowFields(true)} style={({ pressed }) => [styles.emailButton, { opacity: pressed ? 0.85 : 1 }]}>
+              <Ionicons name="mail-outline" size={20} color="#FFF" />
+              <Text variant="body" weight="semiBold" style={styles.emailButtonText}>Continue with Email</Text>
+            </Pressable>
 
-              <Pressable onPress={() => setShowFields(true)} style={({ pressed }) => [styles.emailButton, { opacity: pressed ? 0.85 : 1 }]}>
-                <Ionicons name="mail-outline" size={20} color="#FFF" />
-                <Text variant="body" weight="semiBold" style={styles.emailButtonText}>Continue with Email</Text>
-              </Pressable>
+            <View style={styles.bottomLink}>
+              <Text variant="body" style={{ color: '#6B7280' }}>Already have an account? </Text>
+              <Link href="/(auth)/login">
+                <Text variant="body" weight="bold" style={styles.loginLink}>Login</Text>
+              </Link>
+            </View>
+          </Animated.View>
+        ) : (
+          <Animated.View key="expanded" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.expandedContent}>
+            <Pressable onPress={() => setShowFields(false)} style={styles.collapseBtn}>
+              <Ionicons name="arrow-back" size={18} color="#7C3AED" />
+              <Text variant="bodySmall" weight="semiBold" style={{ color: '#7C3AED' }}>Back</Text>
+            </Pressable>
 
-              <View style={styles.bottomLink}>
-                <Text variant="body" style={{ color: '#6B7280' }}>Already have an account? </Text>
-                <Link href="/(auth)/login">
-                  <Text variant="body" weight="bold" style={styles.loginLink}>Login</Text>
-                </Link>
-              </View>
-            </Animated.View>
-          ) : (
-            <Animated.View key="expanded" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={styles.expandedContent}>
-              <Pressable onPress={() => setShowFields(false)} style={styles.collapseBtn}>
-                <Ionicons name="arrow-back" size={18} color="#7C3AED" />
-                <Text variant="bodySmall" weight="semiBold" style={{ color: '#7C3AED' }}>Back</Text>
-              </Pressable>
+            <Text variant="h2" weight="bold" style={styles.expandedTitle}>Sign Up with Email</Text>
 
-              <Text variant="h2" weight="bold" style={styles.expandedTitle}>Sign Up with Email</Text>
+            <FloatingLabelField label="Full Name" leftIcon="person-outline" value={name} onChangeText={setName} autoComplete="name" containerStyle={styles.fieldGap} />
+            <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" containerStyle={styles.fieldGap} />
+            <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry containerStyle={styles.fieldGap} />
 
-              <FloatingLabelField label="Full Name" leftIcon="person-outline" value={name} onChangeText={setName} autoComplete="name" containerStyle={styles.fieldGap} />
-              <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" containerStyle={styles.fieldGap} />
-              <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry containerStyle={styles.fieldGap} />
+            <Pressable onPress={handleSignup} disabled={loading} style={({ pressed }) => [styles.signupButton, { opacity: pressed || loading ? 0.85 : 1 }]}>
+              {loading ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.signupButtonText}>Create Account</Text>}
+            </Pressable>
 
-              <Pressable onPress={handleSignup} disabled={loading} style={({ pressed }) => [styles.signupButton, { opacity: pressed || loading ? 0.85 : 1 }]}>
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.signupButtonText}>Create Account</Text>}
-              </Pressable>
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text variant="bodySmall" style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text variant="bodySmall" style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
+            <Pressable onPress={handleGoogleSignIn} disabled={googleLoading} style={({ pressed }) => [styles.googleButton, { opacity: pressed ? 0.85 : 1 }]}>
+              {googleLoading ? <ActivityIndicator color="#374151" /> : (
+                <>
+                  <GoogleIcon size={20} />
+                  <Text variant="body" weight="semiBold" style={styles.googleText}>Continue with Google</Text>
+                </>
+              )}
+            </Pressable>
 
-              <Pressable onPress={handleGoogleSignIn} disabled={googleLoading} style={({ pressed }) => [styles.googleButton, { opacity: pressed ? 0.85 : 1 }]}>
-                {googleLoading ? <ActivityIndicator color="#374151" /> : (
-                  <>
-                    <GoogleIcon size={20} />
-                    <Text variant="body" weight="semiBold" style={styles.googleText}>Continue with Google</Text>
-                  </>
-                )}
-              </Pressable>
-
-              <View style={styles.bottomLink}>
-                <Text variant="body" style={{ color: '#6B7280' }}>Already have an account? </Text>
-                <Link href="/(auth)/login">
-                  <Text variant="body" weight="bold" style={styles.loginLink}>Login</Text>
-                </Link>
-              </View>
-            </Animated.View>
-          )}
-        </View>
-      </ScrollView>
+            <View style={styles.bottomLink}>
+              <Text variant="body" style={{ color: '#6B7280' }}>Already have an account? </Text>
+              <Link href="/(auth)/login">
+                <Text variant="body" weight="bold" style={styles.loginLink}>Login</Text>
+              </Link>
+            </View>
+          </Animated.View>
+        )}
+      </AuthScreenLayout>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex1: { flex: 1, backgroundColor: '#F9FAFB' },
-  scrollContent: { flexGrow: 1, paddingBottom: 24 },
-  body: { paddingHorizontal: 24, paddingTop: 28 },
-  collapsedContent: { gap: 4 },
+  flex1: { flex: 1 },
+  collapsedContent: { gap: 4, marginTop: 24 },
   expandedContent: { gap: 4 },
   collapseBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16, alignSelf: 'flex-start' },
   expandedTitle: { color: '#1F2937', fontSize: 22, marginBottom: 20 },

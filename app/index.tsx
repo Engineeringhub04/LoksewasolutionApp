@@ -85,10 +85,10 @@ export default function SplashScreen() {
   return (
     <LinearGradient colors={gradients.splash} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ alignItems: 'center', gap: spacing.sm }, animatedStyle]}>
-        <View style={{ width: 140, height: 140, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>
+        <View style={{ width: 150, height: 150, borderRadius: 34, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>
           <ExpoImage
             source={AppConfig.identity.logoAsset}
-            style={{ width: 104, height: 104 }}
+            style={{ width: 122, height: 122 }}
             contentFit="contain"
             cachePolicy="memory-disk"
             priority="high"

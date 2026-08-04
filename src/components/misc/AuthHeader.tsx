@@ -58,9 +58,9 @@ const styles = StyleSheet.create({
   rightSlot: { position: 'absolute', top: 54, right: 16, zIndex: 10 },
   content: { alignItems: 'center', gap: 6, paddingHorizontal: 32, marginTop: 4 },
   logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  logoImage: { width: 46, height: 46 },
+  logoImage: { width: 58, height: 58 },
   title: { color: '#FFF', fontSize: 26, textAlign: 'center' },
   subtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
