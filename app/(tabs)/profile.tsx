@@ -4,7 +4,7 @@
 // services/profile.ts), not just the cached auth session, so the values survive
 // reinstalls and match across devices.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Share, Linking, Platform } from 'react-native';
+import { View, Share, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -59,8 +59,10 @@ export default function ProfileScreen() {
     return t(`profile.gender_${gender}`);
   }, [profile?.gender, t]);
 
-  // Store listing for THIS platform — App Store on iOS, Play Store on Android.
-  const storeUrl = Platform.OS === 'ios' ? AppConfig.links.appStore : AppConfig.links.playStore;
+  // Play Store on BOTH platforms for now — the app isn't on the App Store yet, so
+  // sending iOS users to a placeholder listing would just open a dead page.
+  // Switch to AppConfig.links.appStore once the iOS build is published.
+  const storeUrl = AppConfig.links.playStore;
 
   const handleShareApp = async () => {
     const shareUrl = AppConfig.links.website;

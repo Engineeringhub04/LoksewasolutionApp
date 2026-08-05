@@ -2,7 +2,7 @@
 // Blue curved header with a WORKING theme toggle (colors are theme-aware, unlike
 // the previous version which used hardcoded hex values that never changed).
 // No back button (mandatory step). Select Course (blue) → Subcourse (red) → Save.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,9 +44,11 @@ export default function CourseSetupScreen() {
   // (b) colour-code "currently enrolled" differently from "new selection".
   const [savedCourseId, setSavedCourseId] = useState<string | null>(null);
   const [savedSubcourseId, setSavedSubcourseId] = useState<string | null>(null);
-  // Guards the subcourse effect from clearing the pre-selected subcourse during
-  // the initial hydration pass (it must only clear on a real user course change).
-  const hydratingRef = useRef(false);
+  // NOTE: clearing the subcourse is handled in handleSelectCourse (a real user
+  // tap), NOT in the subcourse effect. The previous version used a "hydrating"
+  // ref to tell the two apart, but that depended on effect ordering and broke
+  // when React re-invoked effects, wiping the restored subcourse — which is why
+  // reopening the page still looked unselected.
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
@@ -75,7 +77,6 @@ export default function CourseSetupScreen() {
       try {
         const info = await fetchUserCourseInfo(user.uid);
         if (!info.courseId) return;
-        hydratingRef.current = true;
         setSavedCourseId(info.courseId);
         setSavedSubcourseId(info.subcourseId);
         setSelectedCourse(info.courseId);
@@ -86,17 +87,24 @@ export default function CourseSetupScreen() {
     })();
   }, [user?.uid]);
 
+  /**
+   * User tapped a course. This is the ONLY place the subcourse selection is
+   * reset, which makes the behaviour deterministic: switching to a different
+   * course clears it, while tapping back onto the enrolled course restores the
+   * enrolled subcourse.
+   */
+  const handleSelectCourse = (courseId: string) => {
+    if (courseId === selectedCourse) return;
+    setSelectedCourse(courseId);
+    setSelectedSubcourse(courseId === savedCourseId ? savedSubcourseId : null);
+  };
+
+  // Loads the subcourse list for whichever course is selected. Deliberately does
+  // NOT touch the selection.
   useEffect(() => {
     if (!selectedCourse) { setSubcourses([]); return; }
     setLoadingSub(true);
     setSubcourseError(false);
-    // Only wipe the chosen subcourse when the user actually switches course —
-    // not while restoring their saved selection.
-    if (hydratingRef.current) {
-      hydratingRef.current = false;
-    } else {
-      setSelectedSubcourse(null);
-    }
     (async () => {
       try {
         const data = await fetchSubcourses(selectedCourse);
@@ -187,7 +195,7 @@ export default function CourseSetupScreen() {
               {courses.map((course, i) => (
                 <Animated.View key={course.id} entering={FadeInDown.delay(250 + i * 80).duration(350)}>
                   <Pressable
-                    onPress={() => setSelectedCourse(course.id)}
+                    onPress={() => handleSelectCourse(course.id)}
                     style={[
                       styles.chip,
                       selectedCourse === course.id
