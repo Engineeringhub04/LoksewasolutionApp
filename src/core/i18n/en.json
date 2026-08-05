@@ -290,7 +290,10 @@
     "contactUs": "Contact Us",
     "termsConditions": "Terms and Conditions",
     "appInfo": "App Info",
-    "feedback": "Feedback"
+    "feedback": "Feedback",
+    "more": "More",
+    "shareApp": "Share App",
+    "rateUs": "Rate Us"
   },
   "editProfile": {
     "title": "Edit Profile",
@@ -317,7 +320,10 @@
     "discardMessage": "You have unsaved changes. If you go back now they will be lost.",
     "discardConfirm": "Discard",
     "keepEditing": "Keep editing",
-    "permissionDenied": "Permission denied"
+    "permissionDenied": "Permission denied",
+    "loadingProfile": "Loading Your Profile...",
+    "uploadingPhoto": "Uploading your photo...",
+    "photoUploaded": "Photo uploaded successfully"
   },
   "achievements": {
     "title": "Achievements",

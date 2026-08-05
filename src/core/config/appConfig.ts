@@ -42,6 +42,9 @@ export const AppConfig = {
     fontFamily: 'System',
   },
   links: {
+    // Demo/placeholder until the app is actually published — swap for the real
+    // store listing before release. Used by Share App and Rate Us.
+    playStore: 'https://play.google.com/store/apps/details?id=com.loksewasolutionnp.hub',
     website: 'https://loksewasolution.com.np',
     facebook: 'https://facebook.com/loksewasolution',
     youtube: 'https://youtube.com/@loksewasolution',

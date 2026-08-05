@@ -290,7 +290,10 @@
     "contactUs": "सम्पर्क गर्नुहोस्",
     "termsConditions": "नियम र सर्तहरू",
     "appInfo": "एप जानकारी",
-    "feedback": "प्रतिक्रिया"
+    "feedback": "प्रतिक्रिया",
+    "more": "थप",
+    "shareApp": "एप सेयर गर्नुहोस्",
+    "rateUs": "रेटिङ दिनुहोस्"
   },
   "editProfile": {
     "title": "प्रोफाइल सम्पादन गर्नुहोस्",
@@ -317,7 +320,10 @@
     "discardMessage": "सेभ नभएका परिवर्तनहरू छन्। अहिले फर्कनुभयो भने हराउनेछन्।",
     "discardConfirm": "हटाउनुहोस्",
     "keepEditing": "सम्पादन जारी राख्नुहोस्",
-    "permissionDenied": "अनुमति अस्वीकृत भयो"
+    "permissionDenied": "अनुमति अस्वीकृत भयो",
+    "loadingProfile": "तपाईंको प्रोफाइल लोड हुँदै...",
+    "uploadingPhoto": "फोटो अपलोड हुँदै...",
+    "photoUploaded": "फोटो सफलतापूर्वक अपलोड भयो"
   },
   "achievements": {
     "title": "उपलब्धिहरू",

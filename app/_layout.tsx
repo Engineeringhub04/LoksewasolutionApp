@@ -10,7 +10,8 @@ import { I18nProvider } from '@/src/core/i18n';
 import { ToastHost } from '@/src/components/feedback/ToastHost';
 import { OfflineBanner } from '@/src/components/feedback/OfflineBanner';
 import { initNetworkListener } from '@/src/core/store/networkStore';
-import { initAuthListener } from '@/src/core/store/authStore';
+import { initAuthListener, useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 
 export const unstable_settings = {
   anchor: 'index',
@@ -18,6 +19,7 @@ export const unstable_settings = {
 
 function RootStack() {
   const { effective } = useTheme();
+  const userUid = useAuthStore((s) => s.user?.uid ?? null);
 
   useEffect(() => {
     const unsubNetwork = initNetworkListener();
@@ -27,6 +29,17 @@ function RootStack() {
       unsubAuth();
     };
   }, []);
+
+  // Warm the profile cache in the BACKGROUND as soon as a session exists, so the
+  // Profile tab renders real data immediately instead of showing a loader on
+  // first open. Cleared on sign-out so the next account never sees stale data.
+  useEffect(() => {
+    if (userUid) {
+      void useProfileStore.getState().load(userUid);
+    } else {
+      useProfileStore.getState().clear();
+    }
+  }, [userUid]);
 
   return (
     <>

@@ -19,8 +19,15 @@ interface CloudinaryUploadResponse {
 /**
  * Uploads a local image URI (from expo-image-picker) to Cloudinary.
  * Returns the hosted HTTPS URL. Throws on failure so callers can surface a toast.
+ *
+ * `onProgress` receives 0..1. XMLHttpRequest is used instead of fetch() purely
+ * because fetch() exposes no upload-progress events, and the profile screen
+ * shows a real determinate progress ring while the photo uploads.
  */
-export async function uploadImageToCloudinary(localUri: string): Promise<string> {
+export async function uploadImageToCloudinary(
+  localUri: string,
+  onProgress?: (fraction: number) => void
+): Promise<string> {
   const { cloudName, uploadPreset, folder } = AppConfig.media.cloudinary;
 
   // Derive a filename/mime from the URI extension. Cloudinary is tolerant here,
@@ -35,14 +42,37 @@ export async function uploadImageToCloudinary(localUri: string): Promise<string>
   form.append('upload_preset', uploadPreset);
   if (folder) form.append('folder', folder);
 
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: form,
-  });
+  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
 
-  const data = (await res.json()) as CloudinaryUploadResponse;
-  if (!res.ok || !data.secure_url) {
-    throw new Error(data.error?.message ?? `CLOUDINARY_UPLOAD_FAILED_${res.status}`);
-  }
-  return data.secure_url;
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress?.(Math.min(1, event.loaded / event.total));
+      }
+    };
+
+    xhr.onload = () => {
+      let data: CloudinaryUploadResponse = {};
+      try {
+        data = JSON.parse(xhr.responseText) as CloudinaryUploadResponse;
+      } catch {
+        reject(new Error('CLOUDINARY_BAD_RESPONSE'));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data.secure_url) {
+        onProgress?.(1);
+        resolve(data.secure_url);
+      } else {
+        reject(new Error(data.error?.message ?? `CLOUDINARY_UPLOAD_FAILED_${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('CLOUDINARY_NETWORK_ERROR'));
+    xhr.onabort = () => reject(new Error('CLOUDINARY_ABORTED'));
+
+    xhr.send(form);
+  });
 }

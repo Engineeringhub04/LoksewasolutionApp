@@ -15,6 +15,7 @@ import { ProgressBar } from '@/src/components/misc/ProgressBar';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { RefreshableCenter } from '@/src/components/feedback/RefreshableCenter';
 
 const MIN_ATTEMPTS_FOR_ANALYTICS = 3;
 
@@ -34,9 +35,21 @@ export default function AnalyticsScreen() {
       <SubpageHeader title={t('analytics.title')} showThemeToggle />
       <PageLoaderOverlay visible={loading || refreshing} label="Loading Analytics..." />
       {loading ? null : error || !data ? (
-        <DataNotFound onRetry={refetch} />
+        // Wrapped so the empty/error states keep pull-to-refresh, which is
+        // exactly when the user wants to retry.
+        <RefreshableCenter refreshing={refreshing} onRefresh={refresh}>
+          <DataNotFound onRetry={refetch} />
+        </RefreshableCenter>
       ) : data.attempts.length < MIN_ATTEMPTS_FOR_ANALYTICS ? (
-        <EmptyState title={t('analytics.lowData')} ctaLabel={t('history.startMockTest')} onCtaPress={() => router.push('/(tabs)/exam')} />
+        <RefreshableCenter refreshing={refreshing} onRefresh={refresh}>
+          <EmptyState
+            icon="stats-chart-outline"
+            title={t('analytics.lowData')}
+            ctaLabel={t('history.startMockTest')}
+            ctaIcon="play"
+            onCtaPress={() => router.push('/(tabs)/exam')}
+          />
+        </RefreshableCenter>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}

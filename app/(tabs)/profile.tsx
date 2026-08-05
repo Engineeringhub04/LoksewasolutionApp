@@ -3,8 +3,8 @@
 // Everything shown here is backed by the users/{uid} Firestore document (via
 // services/profile.ts), not just the cached auth session, so the values survive
 // reinstalls and match across devices.
-import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Share, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -12,9 +12,9 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { logout } from '@/src/core/firebase/auth';
-import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchUserProfile, ensureUserStats, formatDob, EMPTY_STATS } from '@/src/core/firebase/services/profile';
-import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
+import { useProfileStore } from '@/src/core/store/profileStore';
+import { formatDob, EMPTY_STATS } from '@/src/core/firebase/services/profile';
+import { AppConfig } from '@/src/core/config/appConfig';
 import { showToast } from '@/src/core/store/toastStore';
 import { ProfileHeader, getProfileHeaderExpandedHeight } from '@/src/components/profile/ProfileHeader';
 import { SectionHeading, SectionCard, InfoRow, MenuRow, StatsStrip } from '@/src/components/profile/ProfileRows';
@@ -33,38 +33,47 @@ export default function ProfileScreen() {
 
   const HEADER_MAX_HEIGHT = getProfileHeaderExpandedHeight(insets.top);
 
-  const profile = useAsyncData(async () => {
-    if (!user) return null;
-    // Backfills the stats map for accounts created before it existed, so the
-    // strip below always has something real to read.
-    await ensureUserStats(user.uid).catch(() => {});
-    return fetchUserProfile(user.uid);
-  }, [user?.uid]);
+  // Shared store — already warmed in the background by the root layout, so this
+  // screen normally renders real data on first paint instead of a spinner. It's
+  // also what makes an Edit Profile save show up here (and on Home) instantly.
+  const { profile, courseInfo, loading, refreshing, load } = useProfileStore();
 
-  const courseInfo = useAsyncData(async () => {
-    if (!user) return null;
-    return fetchUserCourseInfo(user.uid);
-  }, [user?.uid]);
+  useEffect(() => {
+    if (user?.uid) void load(user.uid);
+  }, [user?.uid, load]);
 
-  const refreshing = profile.refreshing || courseInfo.refreshing;
-  const loading = profile.loading || courseInfo.loading;
   const onRefresh = () => {
-    profile.refresh();
-    courseInfo.refresh();
+    if (user?.uid) void load(user.uid, { refresh: true });
   };
 
   // Prefer the Firestore document, fall back to the auth session (which is
   // where a Google sign-in's Gmail name/photo lands first).
-  const displayName = profile.data?.name || user?.displayName || '';
-  const photoURL = profile.data?.photoURL || user?.photoURL || null;
-  const email = profile.data?.email || user?.email || null;
-  const stats = profile.data?.stats ?? EMPTY_STATS;
+  const displayName = profile?.name || user?.displayName || '';
+  const photoURL = profile?.photoURL || user?.photoURL || null;
+  const email = profile?.email || user?.email || null;
+  const stats = profile?.stats ?? EMPTY_STATS;
 
   const genderLabel = useMemo(() => {
-    const gender = profile.data?.gender;
+    const gender = profile?.gender;
     if (!gender) return null;
     return t(`profile.gender_${gender}`);
-  }, [profile.data?.gender, t]);
+  }, [profile?.gender, t]);
+
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: `${AppConfig.identity.appName} — ${AppConfig.identity.tagline}\n${AppConfig.links.playStore}`,
+      });
+    } catch {
+      // User dismissed the share sheet — nothing to report.
+    }
+  };
+
+  const handleRateUs = () => {
+    Linking.openURL(AppConfig.links.playStore).catch(() =>
+      showToast(t('common.somethingWentWrong'), 'error')
+    );
+  };
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler({
@@ -93,7 +102,7 @@ export default function ProfileScreen() {
         scrollY={scrollY}
         displayName={displayName}
         photoURL={photoURL}
-        subcourseName={courseInfo.data?.subcourseName ?? null}
+        subcourseName={courseInfo?.subcourseName ?? null}
         languageLabel={language === 'en' ? 'ENGLISH' : 'नेपाली'}
         languageShortLabel={language === 'en' ? 'EN' : 'ने'}
         onToggleLanguage={toggleLanguage}
@@ -108,7 +117,15 @@ export default function ProfileScreen() {
           paddingBottom: spacing.xxl,
           gap: spacing.lg,
         }}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          // progressViewOffset is essential here: the header is a FIXED overlay,
+          // so without it the spinner renders behind the header and is invisible.
+          <AppRefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            progressViewOffset={HEADER_MAX_HEIGHT}
+          />
+        }
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
@@ -135,7 +152,7 @@ export default function ProfileScreen() {
             <InfoRow
               icon="calendar"
               label={t('profile.dateOfBirth')}
-              value={formatDob(profile.data?.dob ?? null)}
+              value={formatDob(profile?.dob ?? null)}
               addLabel={t('profile.addDob')}
               onAddPress={goToEdit}
             />
@@ -156,7 +173,7 @@ export default function ProfileScreen() {
             <MenuRow
               icon="school-outline"
               label={t('profile.courseDetails')}
-              trailingText={courseInfo.data?.courseName ?? null}
+              trailingText={courseInfo?.courseName ?? null}
               onPress={() => router.push('/course-details')}
             />
             <MenuRow icon="help-circle-outline" label={t('profile.reportQuestion')} onPress={() => router.push('/report-question')} />
@@ -173,8 +190,18 @@ export default function ProfileScreen() {
           <SectionCard>
             <MenuRow icon="chatbubbles-outline" label={t('profile.contactUs')} onPress={() => router.push('/contact-us')} />
             <MenuRow icon="document-text-outline" label={t('profile.termsConditions')} onPress={() => router.push('/terms-conditions')} />
-            <MenuRow icon="information-circle-outline" label={t('profile.appInfo')} onPress={() => router.push('/app-info')} />
             <MenuRow icon="star-outline" label={t('profile.feedback')} onPress={() => router.push('/feedback')} />
+          </SectionCard>
+        </View>
+
+        {/* ===== More ===== */}
+        <View>
+          <SectionHeading icon="ellipsis-horizontal-circle-outline" title={t('profile.more')} />
+          <SectionCard>
+            <MenuRow icon="share-social-outline" label={t('profile.shareApp')} onPress={handleShareApp} />
+            <MenuRow icon="thumbs-up-outline" label={t('profile.rateUs')} onPress={handleRateUs} />
+            {/* App Info moved here out of Support, as requested. */}
+            <MenuRow icon="information-circle-outline" label={t('profile.appInfo')} onPress={() => router.push('/app-info')} />
           </SectionCard>
         </View>
 

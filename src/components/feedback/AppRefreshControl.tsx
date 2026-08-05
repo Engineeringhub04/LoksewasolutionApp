@@ -12,6 +12,14 @@ import { useTheme } from '@/src/core/theme';
 
 export type AppRefreshControlProps = Omit<RefreshControlProps, 'tintColor' | 'colors' | 'progressBackgroundColor'>;
 
+/**
+ * NOTE on `progressViewOffset` (inherited from RefreshControlProps):
+ * screens whose header is a FIXED absolute overlay (Home, Profile) must pass
+ * their header height here. The spinner is drawn at the top edge of the scroll
+ * view's frame, which on those screens sits *underneath* the header overlay —
+ * so without an offset the spinner is completely hidden and pull-to-refresh
+ * looks broken even though it is firing.
+ */
 export function AppRefreshControl(props: AppRefreshControlProps) {
   const { colors } = useTheme();
   return (
