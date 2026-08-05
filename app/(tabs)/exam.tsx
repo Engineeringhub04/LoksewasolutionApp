@@ -179,9 +179,14 @@ export default function ExamScreen() {
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <View style={styles.headerTopRow}>
-          <Text variant="h2" weight="bold" style={styles.headerTitle} numberOfLines={1}>
-            Loksewa Exams Hub
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <View style={styles.headerIconBox}>
+              <Ionicons name="school" size={18} color="#FFF" />
+            </View>
+            <Text variant="h2" weight="bold" style={styles.headerTitle} numberOfLines={1}>
+              Loksewa Exams Hub
+            </Text>
+          </View>
           {/* Dev seeding entry point. Remove once the collections are populated. */}
           <Pressable
             onPress={handleSeed}
@@ -191,7 +196,7 @@ export default function ExamScreen() {
           >
             <Ionicons name={seeding ? 'cloud-upload' : 'cloud-upload-outline'} size={14} color="#FFF" />
             <Text variant="caption" weight="bold" style={styles.seedText}>
-              {seeding ? 'Seeding…' : 'Seed'}
+              {seeding ? 'Seeding…' : 'Seed Remaining'}
             </Text>
           </Pressable>
         </View>
@@ -241,7 +246,7 @@ export default function ExamScreen() {
                 <Text
                   variant="bodySmall"
                   weight="bold"
-                  style={{ color: active ? '#1D4ED8' : 'rgba(255,255,255,0.9)' }}
+                  style={{ color: active ? '#78350F' : 'rgba(255,255,255,0.9)' }}
                   numberOfLines={1}
                 >
                   {language === 'ne' ? section.nameNe : section.nameEn}
@@ -317,8 +322,14 @@ export default function ExamScreen() {
                       return;
                     }
                     if (entry.set.contentType === 'pdf') {
-                      if (entry.set.pdfUrl) router.push(`/pdf/${encodeURIComponent(entry.set.pdfUrl)}` as never);
-                      else showToast('The paper for this set has not been uploaded yet.', 'warning');
+                      if (entry.set.pdfUrl) {
+                        router.push({
+                          pathname: '/pdf/[id]',
+                          params: { id: entry.set.id, uri: entry.set.pdfUrl, title: entry.set.title },
+                        } as never);
+                      } else {
+                        showToast('The paper for this set has not been uploaded yet.', 'warning');
+                      }
                       return;
                     }
                     // Quiz, summary, review and rankings land in the next update.
@@ -363,7 +374,16 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
-  headerTitle: { color: '#FFF', fontSize: 20, flexShrink: 1 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  headerIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { color: '#FFF', fontSize: 19, flexShrink: 1 },
   seedButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -387,11 +407,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1.5,
   },
-  provinceChipActive: { backgroundColor: '#FFF', borderColor: '#FFF' },
+  // Provinces select to WHITE; sections select to AMBER. Two different rows of
+  // pills sitting next to each other read as one control if they highlight the
+  // same way, so each level of filtering gets its own colour.
+  provinceChipActive: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   provinceChipIdle: { backgroundColor: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.45)' },
-  sectionTab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-  sectionTabActive: { backgroundColor: '#FFF' },
-  sectionTabIdle: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  sectionTab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 },
+  sectionTabActive: { backgroundColor: '#FBBF24', borderColor: '#FBBF24' },
+  sectionTabIdle: { backgroundColor: 'rgba(255,255,255,0.10)', borderColor: 'rgba(255,255,255,0.35)' },
   banner: { borderWidth: StyleSheet.hairlineWidth, gap: 6 },
   bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
