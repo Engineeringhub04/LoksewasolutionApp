@@ -1,9 +1,10 @@
 // §37 Notifications
 import React, { useMemo, useState } from 'react';
-import { View, SectionList, RefreshControl, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, SectionList, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -126,7 +127,7 @@ export default function NotificationsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderSectionHeader={({ section }) => (
             <View style={{ paddingHorizontal: spacing.screenPadding, paddingVertical: spacing.xs, backgroundColor: colors.background }}>
               <Text variant="bodySmall" weight="semiBold" secondary>{t(`notifications.${section.title}`)}</Text>

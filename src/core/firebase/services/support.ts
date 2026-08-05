@@ -34,3 +34,33 @@ export async function submitProblemReport(category: string, description: string,
     status: 'open',
   });
 }
+
+
+/** App feedback with a 1–5 star rating (Profile → Support → Feedback). */
+export async function submitFeedback(rating: number, message: string): Promise<void> {
+  await createDocument(Collections.reports, {
+    targetType: 'app-feedback',
+    rating,
+    description: message,
+    ...deviceMetadata(),
+    createdAt: serverTimestamp(),
+    status: 'open',
+  });
+}
+
+/**
+ * Report an issue with a specific exam/quiz question (Profile → App Settings →
+ * Report Question). `questionRef` is free text — the question number, exam name
+ * or anything else that identifies it, since users rarely know the internal id.
+ */
+export async function submitQuestionReport(questionRef: string, issue: string, description: string): Promise<void> {
+  await createDocument(Collections.reports, {
+    targetType: 'question',
+    questionRef,
+    category: issue,
+    description,
+    ...deviceMetadata(),
+    createdAt: serverTimestamp(),
+    status: 'open',
+  });
+}

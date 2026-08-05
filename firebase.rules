@@ -34,10 +34,39 @@ service cloud.firestore {
 
     match /meta/{docId} { allow read: if true; }
 
+    // User profile documents: users/{uid}
+    // Shape: uid, name, firstName, lastName, email, dob, gender, photoURL,
+    //        courseId, subcourseId, courseSetupComplete,
+    //        stats { testsTaken, streak, rank, points }, createdAt, updatedAt
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId);
-      allow update, delete: if isOwner(userId) || isAdmin();
+
+      // A user may create and edit their OWN document, but must never write the
+      // `role` field: isAdmin() above is derived from users/{uid}.role, so
+      // allowing it would let anyone grant themselves admin over every
+      // collection in this file.
+      allow create: if isOwner(userId) && !request.resource.data.keys().hasAny(['role']);
+      allow update: if isAdmin() ||
+                       (isOwner(userId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+
+      // Needed for "Delete Account", which removes the profile document before
+      // deleting the auth identity.
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Security rules do NOT cascade into subcollections, so these need their
+      // own match blocks — without them every attempt/QOTD write fell through
+      // to the deny-all at the bottom of this file.
+      match /attempts/{attemptId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /qotd/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      // Catch-all for any future per-user subcollection.
+      match /{userSubcollection=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
     match /app_categories/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }

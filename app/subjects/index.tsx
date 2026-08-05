@@ -1,8 +1,9 @@
 // §17 Subject List
 import React from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchSubjects } from '@/src/core/firebase/services/content';
@@ -36,7 +37,7 @@ export default function SubjectListScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.sm, paddingHorizontal: spacing.screenPadding }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <SubjectCard
               name={item.name}

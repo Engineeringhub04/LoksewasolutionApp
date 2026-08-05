@@ -3,11 +3,12 @@
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
 import React, { useMemo } from 'react';
-import { ScrollView, View, RefreshControl, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
@@ -159,7 +160,7 @@ export default function HomeScreen() {
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingTop: HOME_HEADER_MAX_HEIGHT, paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       onScroll={onScroll}
       scrollEventThrottle={16}
     >

@@ -13,6 +13,8 @@ import { Text } from '@/src/components/misc/Text';
 import { Dropdown } from '@/src/components/inputs/Dropdown';
 import { TextField } from '@/src/components/inputs/TextField';
 import { Button } from '@/src/components/buttons/Button';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 const categories = [
   { value: 'bug', label: 'App Bug' },
@@ -23,6 +25,7 @@ const categories = [
 
 export default function ReportProblemScreen() {
   const { colors, spacing, radius } = useTheme();
+  const { refreshing, onRefresh } = useManualRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const { isOffline } = useNetworkStatus();
@@ -56,7 +59,10 @@ export default function ReportProblemScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('help.reportTitle')} />
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {isOffline ? (
           <Text variant="body" style={{ color: colors.warning }}>{t('help.offlineBlocked')}</Text>
         ) : (

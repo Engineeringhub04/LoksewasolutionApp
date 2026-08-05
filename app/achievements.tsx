@@ -1,8 +1,9 @@
 // §41 Achievements — badge grid, earned vs locked.
 import React, { useState } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -38,7 +39,7 @@ export default function AchievementsScreen() {
           numColumns={3}
           columnWrapperStyle={{ gap: spacing.sm, paddingHorizontal: spacing.screenPadding }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <Card onPress={() => setSelected(item)} style={{ flex: 1, alignItems: 'center', gap: spacing.xs, opacity: item.unlocked ? 1 : 0.5 }}>
               <View

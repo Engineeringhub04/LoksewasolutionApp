@@ -1,9 +1,10 @@
 // Exam tab hub — links to Mock Tests, Live Exams, and Exam History.
 import React from 'react';
-import { View, ScrollView, RefreshControl } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchMockTests, fetchLiveExams } from '@/src/core/firebase/services/exams';
@@ -33,7 +34,7 @@ export default function ExamHubScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxl }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <Text variant="display" weight="bold">{t('nav.exam')}</Text>

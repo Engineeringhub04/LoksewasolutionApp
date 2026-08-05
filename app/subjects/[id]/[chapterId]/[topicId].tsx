@@ -14,6 +14,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function TopicDetailScreen() {
   const { id, chapterId, topicId } = useLocalSearchParams<{ id: string; chapterId: string; topicId: string }>();
@@ -24,7 +25,10 @@ export default function TopicDetailScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [completed, setCompleted] = useState(false);
 
-  const { data: topic, loading, error, refetch } = useAsyncData(() => fetchTopic(id, chapterId, topicId), [id, chapterId, topicId]);
+  const { data: topic, loading, error, refreshing, refetch, refresh } = useAsyncData(
+    () => fetchTopic(id, chapterId, topicId),
+    [id, chapterId, topicId]
+  );
 
   const toggleBookmark = () => {
     setBookmarked((b) => !b);
@@ -61,7 +65,10 @@ export default function TopicDetailScreen() {
       ) : error || !topic ? (
         <ErrorState onRetry={refetch} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl }}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
+        >
           <Text variant="body">{topic.body}</Text>
         </ScrollView>
       )}

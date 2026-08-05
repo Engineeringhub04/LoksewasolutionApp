@@ -1,9 +1,10 @@
 // §36 Downloads — fixed reference page: proper error handling (DataNotFound
 // instead of silently showing empty state on failure) + pull-to-refresh.
 import React, { useState } from 'react';
-import { View, FlatList, Pressable, RefreshControl } from 'react-native';
+import { View, FlatList, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { loadDownloads, removeDownload, clearAllDownloads, totalStorageUsed, formatBytes } from '@/src/core/firebase/services/downloads';
@@ -60,7 +61,7 @@ export default function DownloadsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

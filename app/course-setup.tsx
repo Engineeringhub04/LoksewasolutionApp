@@ -2,7 +2,7 @@
 // Blue curved header with a WORKING theme toggle (colors are theme-aware, unlike
 // the previous version which used hardcoded hex values that never changed).
 // No back button (mandatory step). Select Course (blue) → Subcourse (red) → Save.
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 import { fetchCourses, fetchSubcourses, saveUserCourseSetup, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
 import { useTheme } from '@/src/core/theme';
@@ -37,18 +39,23 @@ export default function CourseSetupScreen() {
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await fetchCourses();
-        setCourses(data);
-      } catch {
-        showToast('Failed to load courses', 'error');
-      } finally {
-        setLoadingCourses(false);
-      }
-    })();
+  // Extracted so pull-to-refresh can re-run the same fetch.
+  const loadCourses = useCallback(async () => {
+    try {
+      const data = await fetchCourses();
+      setCourses(data);
+    } catch {
+      showToast('Failed to load courses', 'error');
+    } finally {
+      setLoadingCourses(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadCourses();
+  }, [loadCourses]);
+
+  const { refreshing, onRefresh } = useManualRefresh(loadCourses);
 
   useEffect(() => {
     if (!selectedCourse) { setSubcourses([]); return; }
@@ -110,7 +117,11 @@ export default function CourseSetupScreen() {
         </Animated.View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Animated.View entering={FadeInUp.duration(400)} style={styles.titleSection}>
           <Text variant="h1" weight="bold" style={{ color: colors.textPrimary, fontSize: 26 }}>
             {isUpdateMode ? 'Update Your Course' : 'Setup Your New Course'}

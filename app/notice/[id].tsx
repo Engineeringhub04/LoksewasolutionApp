@@ -9,10 +9,13 @@ import { APP_NOTICES } from '@/src/core/data/notices';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function NoticeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, spacing, radius } = useTheme();
+  const { refreshing, onRefresh } = useManualRefresh();
   const notice = APP_NOTICES.find((n) => n.id === id);
 
   return (
@@ -21,7 +24,10 @@ export default function NoticeDetailScreen() {
       {!notice ? (
         <DataNotFound title="Notice Not Found" description="This notice may have been removed." />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
           <View style={[{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: `${colors.primary}17`, alignItems: 'center', justifyContent: 'center' }}>

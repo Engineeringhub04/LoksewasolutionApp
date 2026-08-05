@@ -14,11 +14,14 @@ import { Chip } from '@/src/components/misc/Chip';
 import { Card } from '@/src/components/cards/Card';
 import { Spinner } from '@/src/components/feedback/Spinner';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 const DEBOUNCE_MS = 350;
 
 export default function SearchScreen() {
   const { colors, spacing } = useTheme();
+  const { refreshing, onRefresh } = useManualRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const { isOffline } = useNetworkStatus();
@@ -80,7 +83,10 @@ export default function SearchScreen() {
       ) : !hasResults ? (
         <EmptyState title={t('search.noResults', { query })} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
           {results!.subjects.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
               <Text variant="bodySmall" weight="semiBold" secondary>{t('subjects.title')}</Text>

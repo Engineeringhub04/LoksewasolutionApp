@@ -1,9 +1,10 @@
 // §18 Subject Detail / Chapter List
 import React from 'react';
-import { View, FlatList, Pressable, RefreshControl } from 'react-native';
+import { View, FlatList, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchChapters, fetchSubject } from '@/src/core/firebase/services/content';
@@ -55,7 +56,7 @@ export default function SubjectDetailScreen() {
           data={chapters.data}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm, paddingBottom: spacing.xl }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
             <Card onPress={() => router.push(`/subjects/${id}/${item.id}`)}>
               <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

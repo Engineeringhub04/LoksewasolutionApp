@@ -3,9 +3,10 @@
 // the same source so both stay in sync. Tapping a notice opens its own
 // detail page.
 import React, { useState } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
@@ -27,7 +28,7 @@ export default function NoticesScreen() {
         data={APP_NOTICES}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
           <PremiumNoticeCard title={item.title} date={item.date} onPress={() => router.push(`/notice/${item.id}`)} />
         )}

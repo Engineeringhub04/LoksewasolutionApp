@@ -1,9 +1,10 @@
 // §31 Discussion Feed
 import React, { useState } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -50,7 +51,7 @@ export default function DiscussionFeedScreen() {
           data={data}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm, paddingBottom: 96 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <DiscussionPostCard
               authorName={item.authorName}

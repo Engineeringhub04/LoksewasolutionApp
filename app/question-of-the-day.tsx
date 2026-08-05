@@ -1,9 +1,10 @@
 // §23 Question of the Day
 import React, { useState } from 'react';
-import { View, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -68,7 +69,7 @@ export default function QuestionOfTheDayScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
         >
           {alreadyAnswered ? (
             <View style={{ alignSelf: 'flex-start' }}>
