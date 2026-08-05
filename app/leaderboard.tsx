@@ -1,7 +1,8 @@
 // §29 Leaderboard
 import React, { useState } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -45,7 +46,7 @@ export default function LeaderboardScreen() {
           data={data}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.xs }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item, index }) => (
             <LeaderboardRow
               rank={index + 1}

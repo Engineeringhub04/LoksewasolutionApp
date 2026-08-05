@@ -1,11 +1,12 @@
 // Fallback destination for feature buttons that don't have a real page yet.
 // Pass ?page=Feature Name to customize the title shown.
 import React, { useCallback, useState } from 'react';
-import { View, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing, FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
@@ -44,7 +45,7 @@ export default function UnderConstructionScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Animated.View entering={FadeInDown.duration(400)} style={styles.content}>
           <View style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt }]}>

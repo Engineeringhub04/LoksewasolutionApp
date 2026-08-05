@@ -15,6 +15,8 @@ import { Card } from '@/src/components/cards/Card';
 import { TextField } from '@/src/components/inputs/TextField';
 import { Button } from '@/src/components/buttons/Button';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 const faqs = [
   { q: 'How do I take a mock test?', a: 'Go to the Exam tab, select a mock test, review the instructions, and tap Start Test.' },
@@ -25,6 +27,7 @@ const faqs = [
 
 export default function HelpCenterScreen() {
   const { colors, spacing } = useTheme();
+  const { refreshing, onRefresh } = useManualRefresh();
   const { t } = useTranslation();
   const { isOffline } = useNetworkStatus();
   const [search, setSearch] = useState('');
@@ -51,7 +54,10 @@ export default function HelpCenterScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('help.title')} />
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <SearchBar value={search} onChangeText={setSearch} placeholder={t('help.searchFaq')} />
 
         {filtered.length === 0 ? (

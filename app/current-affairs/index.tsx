@@ -1,7 +1,8 @@
 // §21 Current Affairs
 import React from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchCurrentAffairs } from '@/src/core/firebase/services/content';
@@ -31,7 +32,7 @@ export default function CurrentAffairsScreen() {
           data={data}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.sm }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <Card>
               <View style={{ gap: spacing.xs }}>

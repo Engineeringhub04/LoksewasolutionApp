@@ -1,7 +1,8 @@
 // §22 Daily Gorkhapatra
 import React, { useState } from 'react';
-import { View, ScrollView, RefreshControl } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchGorkhapatraEditions } from '@/src/core/firebase/services/content';
@@ -51,7 +52,7 @@ export default function GorkhapatraScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
         >
           <Text variant="bodySmall" secondary>{current.date?.toDate().toLocaleDateString() ?? ''}</Text>
           {current.sections.map((section, i) => (

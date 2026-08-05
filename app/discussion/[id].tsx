@@ -8,6 +8,7 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import {
   fetchDiscussion,
   fetchComments,
@@ -149,6 +150,15 @@ export default function DiscussionDetailScreen() {
         data={comments.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl }}
+        refreshControl={
+          <AppRefreshControl
+            refreshing={discussion.refreshing || comments.refreshing}
+            onRefresh={() => {
+              discussion.refresh();
+              comments.refresh();
+            }}
+          />
+        }
         ListHeaderComponent={
           <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

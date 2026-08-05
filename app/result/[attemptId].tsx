@@ -13,6 +13,7 @@ import { ProgressRing } from '@/src/components/misc/ProgressRing';
 import { Card } from '@/src/components/cards/Card';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Spinner } from '@/src/components/feedback/Spinner';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function ResultScreen() {
   const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
@@ -31,6 +32,12 @@ export default function ResultScreen() {
     if (!attempt.data) return [];
     return fetchQuestionsByIds(attempt.data.answers.map((a) => a.questionId));
   }, [attempt.data?.id]);
+
+  const refreshing = attempt.refreshing || questions.refreshing;
+  const onRefresh = () => {
+    attempt.refresh();
+    questions.refresh();
+  };
 
   if (attempt.loading) {
     return (
@@ -51,7 +58,11 @@ export default function ResultScreen() {
   const seconds = data.timeTakenSeconds % 60;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.lg }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.lg }}
+      refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <View style={{ alignItems: 'center', gap: spacing.md, marginTop: spacing.lg }}>
         <ProgressRing progress={percent} size={140} strokeWidth={12} color={percent >= 0.5 ? colors.success : colors.error} />
         <Text variant="h2" weight="bold">{data.examTitle}</Text>

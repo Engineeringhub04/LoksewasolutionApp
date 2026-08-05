@@ -1,8 +1,9 @@
 // §35 Keep Notes — personal notes, local-first, fully usable offline.
 import React from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { loadNotes } from '@/src/core/firebase/services/notes';
@@ -35,7 +36,7 @@ export default function KeepNotesScreen() {
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.sm, paddingHorizontal: spacing.screenPadding }}
           contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md, paddingBottom: 96 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <Card onPress={() => router.push(`/notes/${item.id}`)} style={{ flex: 1, backgroundColor: item.color || colors.card, gap: 4 }}>
               <Text variant="body" weight="semiBold" numberOfLines={1}>{item.title || t('keepNotes.titlePlaceholder')}</Text>

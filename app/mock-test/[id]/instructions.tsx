@@ -12,13 +12,14 @@ import { Button } from '@/src/components/buttons/Button';
 import { Card } from '@/src/components/cards/Card';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function MockTestInstructionsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { data: exam, loading, error, refetch } = useAsyncData(() => fetchMockTest(id), [id]);
+  const { data: exam, loading, error, refreshing, refetch, refresh } = useAsyncData(() => fetchMockTest(id), [id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -31,7 +32,10 @@ export default function MockTestInstructionsScreen() {
         <ErrorState onRetry={refetch} />
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}>
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
+            refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
+          >
             <Text variant="h1" weight="bold">{exam.title}</Text>
             <Card style={{ gap: spacing.sm }}>
               <Row label={t('mockTest.duration')} value={`${exam.durationMinutes} min`} />

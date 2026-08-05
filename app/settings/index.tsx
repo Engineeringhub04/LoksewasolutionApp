@@ -14,9 +14,12 @@ import { Divider } from '@/src/components/misc/Divider';
 import { Dropdown } from '@/src/components/inputs/Dropdown';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { TextField } from '@/src/components/inputs/TextField';
+import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function SettingsScreen() {
   const { colors, spacing, mode, setMode } = useTheme();
+  const { refreshing, onRefresh } = useManualRefresh();
   const { t, language, setLanguage } = useTranslation();
   const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -52,7 +55,10 @@ export default function SettingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('settings.title')} />
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: spacing.xxl }}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <SectionLabel label={t('settings.preferences')} />
         <View style={{ paddingHorizontal: spacing.screenPadding, gap: spacing.md, marginBottom: spacing.md }}>
           <Field label={t('settings.language')}>

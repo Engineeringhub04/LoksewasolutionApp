@@ -6,6 +6,7 @@ import * as Crypto from 'expo-crypto';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { loadNotes, saveNote, deleteNote } from '@/src/core/firebase/services/notes';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
@@ -23,7 +24,7 @@ export default function NoteEditorScreen() {
   const { t } = useTranslation();
   const router = useRouter();
 
-  const { data: notes } = useAsyncData(() => loadNotes(), []);
+  const { data: notes, refreshing, refresh } = useAsyncData(() => loadNotes(), []);
   const existing = notes?.find((n) => n.id === id);
 
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -61,7 +62,10 @@ export default function NoteEditorScreen() {
           !isNew ? <IconButton name="trash-outline" accessibilityLabel={t('common.delete')} onPress={() => setShowDeleteConfirm(true)} /> : undefined
         }
       />
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, flexGrow: 1 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, flexGrow: 1 }}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
+      >
         <TextField
           value={title}
           onChangeText={setTitle}

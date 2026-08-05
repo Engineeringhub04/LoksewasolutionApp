@@ -48,8 +48,18 @@ export const AppConfig = {
     instagram: 'https://instagram.com/loksewasolution',
     discord: 'https://discord.gg/loksewasolution',
   },
+  media: {
+    // Cloudinary free tier is used for user-uploaded images (profile photos)
+    // because Firebase Storage needs a paid plan. Unsigned preset — safe to
+    // ship, contains no secret.
+    cloudinary: {
+      cloudName: 'dw7gg0fhc',
+      uploadPreset: 'lsphotos',
+      folder: 'profile-photos',
+    },
+  },
   legal: {
-    privacyPolicyUrl: 'https://loksewasolution.com.np/privacy',
+    privacyPolicyUrl: 'https://www.kbr.com.np/privacypoiicy',
     termsUrl: 'https://loksewasolution.com.np/terms',
     supportEmail: 'support@loksewasolution.com.np',
     contactPhone: '+977-1-4444444',

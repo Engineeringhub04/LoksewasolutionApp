@@ -1,8 +1,9 @@
 // §28 Performance Analytics
 import React from 'react';
-import { View, ScrollView, RefreshControl } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -39,7 +40,7 @@ export default function AnalyticsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
         >
           <Card style={{ gap: spacing.sm }}>
             <Text variant="h3" weight="semiBold">{t('analytics.scoreTrend')}</Text>

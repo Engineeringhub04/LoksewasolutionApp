@@ -1,9 +1,10 @@
 // Topic list within a Chapter (feeds into §19 Topic Detail)
 import React from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchTopics } from '@/src/core/firebase/services/content';
@@ -37,7 +38,7 @@ export default function ChapterTopicsScreen() {
           data={data}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm, paddingBottom: spacing.xl }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <Card onPress={() => router.push(`/subjects/${id}/${chapterId}/${item.id}`)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
