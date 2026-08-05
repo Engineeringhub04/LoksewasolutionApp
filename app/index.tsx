@@ -13,20 +13,13 @@ import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from '
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
-import { fetchRemoteConfig, isVersionBelow } from '@/src/core/config/remoteConfig';
+import { fetchRemoteConfig } from '@/src/core/config/remoteConfig';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
 import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
 
 const MAX_SPLASH_MS = 6000;
-
-// Diagnostic: fires the instant this module is evaluated by the JS engine — BEFORE
-// React even renders anything. If this line never appears in the Metro terminal after
-// scanning a fresh QR code, the device is not running this bundle at all (e.g. Expo Go
-// resumed a stale in-memory session instead of loading fresh JS) — every other log
-// added below this point would be irrelevant in that case.
-console.log(`[BUNDLE] app/index.tsx evaluated at ${new Date().toISOString()} — build marker v3`);
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -36,14 +29,6 @@ export default function SplashScreen() {
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
   const [imagesCached, setImagesCached] = useState(false);
-
-  // Diagnostic: unconditional (not __DEV__-gated) — proves whether Splash actually
-  // mounts/re-executes on this launch at all. If this line is missing from the
-  // terminal but the Update Required screen still shows, the screen is NOT coming
-  // from this component's routing decision — it means a stale JS/navigation state
-  // (e.g. Expo Go resuming an old in-memory session instead of a true fresh launch)
-  // is restoring a previously-navigated screen without re-running any logic here.
-  console.log('[Splash] mounted — about to decide initial route.');
 
   // Logo visible immediately — only subtle scale bounce
   const scale = useSharedValue(0.9);
@@ -70,48 +55,18 @@ export default function SplashScreen() {
 
     const decide = async () => {
       if (routedRef.current) return;
-      console.log('[Splash] fetching remote config…');
+      // Force-update check intentionally removed for now (was causing a false-positive
+      // block on some Android devices unrelated to any real version mismatch — see PR
+      // history #17/#18 for the investigation). Maintenance mode is kept since it's a
+      // simple, rarely-toggled admin switch. Force-update can be reintroduced later,
+      // closer to an actual production release, with a more robust check.
       const config = await fetchRemoteConfig();
-      // Diagnostic: unconditional — prints the FULL config every single launch,
-      // whether or not it triggers a block, so the exact values Splash is comparing
-      // against are always visible in the terminal without needing to guess.
-      console.log(
-        `[Splash] remote config resolved: currentVersion="${AppConfig.identity.version}" ` +
-          `minimumVersion="${config.minimumVersion}" maintenanceMode=${config.maintenanceMode} ` +
-          `forceUpdate=${config.forceUpdate} isVersionBelow=${isVersionBelow(AppConfig.identity.version, config.minimumVersion)}`
-      );
       if (routedRef.current) return;
       routedRef.current = true;
 
-      if (config.maintenanceMode) {
-        console.log('[Splash] -> routing to /blocking/maintenance (maintenanceMode=true)');
-        router.replace('/blocking/maintenance');
-        return;
-      }
-      if (isVersionBelow(AppConfig.identity.version, config.minimumVersion)) {
-        // This check is 100% platform-agnostic (no Platform.OS branching anywhere in
-        // the force-update path) — current app version and remote minimumVersion are
-        // both single, unified values, not split per-platform. If Android/iOS diverge
-        // on whether this screen shows, it is NOT caused by any per-platform code
-        // difference in this file.
-        console.warn(
-          `[ForceUpdate] Blocking app: current version "${AppConfig.identity.version}" ` +
-            `is below remote minimumVersion "${config.minimumVersion}" (from meta/appConfig).`
-        );
-        router.replace('/blocking/update-required');
-        return;
-      }
-      if (!isOnline && !user) {
-        console.log('[Splash] -> routing to /blocking/no-internet (offline, no cached user)');
-        router.replace('/blocking/no-internet');
-        return;
-      }
-      if (user) {
-        console.log('[Splash] -> routing to /(tabs) (signed in)');
-        router.replace('/(tabs)');
-        return;
-      }
-      console.log('[Splash] -> routing to /onboarding (signed out)');
+      if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
+      if (!isOnline && !user) { router.replace('/blocking/no-internet'); return; }
+      if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
     };
     decide();
@@ -121,7 +76,6 @@ export default function SplashScreen() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (!routedRef.current) {
-        console.warn('[Splash] SAFETY TIMEOUT fired (6s) — decide() never completed. Routing without the version/maintenance check.');
         routedRef.current = true;
         router.replace(user ? '/(tabs)' : '/onboarding');
       }

@@ -45,7 +45,6 @@ function RootStack() {
         in one place, instead of needing to remember to list each one.
       */}
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="blocking/update-required" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>
