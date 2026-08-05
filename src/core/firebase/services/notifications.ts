@@ -2,6 +2,14 @@
 import { runQuery, updateDocument, commitWrites, setWrite, type FirestoreTimestamp } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 
+/**
+ * Which inbox tab a notification belongs to:
+ * - `app`   — app/admin-wide announcements (new mock test series, maintenance, etc.)
+ * - `user`  — activity directed at this specific user (reply to their post, result ready)
+ * - `other` — anything that fits neither
+ */
+export type NotificationCategory = 'app' | 'user' | 'other';
+
 export interface AppNotification {
   id: string;
   icon: string;
@@ -10,6 +18,16 @@ export interface AppNotification {
   read: boolean;
   createdAt: FirestoreTimestamp | null;
   deepLink?: string;
+  category?: NotificationCategory;
+}
+
+/**
+ * Documents written before this field existed have no `category`. Everything
+ * produced so far is app/admin-generated, so those fall back to `app` rather
+ * than disappearing from every tab.
+ */
+export function resolveNotificationCategory(n: AppNotification): NotificationCategory {
+  return n.category === 'user' || n.category === 'other' ? n.category : 'app';
 }
 
 function notificationsPath(uid: string): string {
