@@ -18,6 +18,8 @@ export const Collections = {
   notes: 'notes',
   achievements: 'achievements',
   leaderboard: 'leaderboard',
+  // Kept for reference only — support/report traffic now goes to the Google Form
+  // + Discord inbox (see src/core/messaging/), not Firestore. Nothing writes here.
   reports: 'reports',
   contactMessages: 'contactMessages',
   notifications: 'notifications',

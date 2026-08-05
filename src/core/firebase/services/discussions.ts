@@ -10,6 +10,7 @@ import {
   type FirestoreTimestamp,
 } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
+import { submitToGoogleForm } from '@/src/core/messaging/googleForm';
 
 export interface DiscussionPost {
   id: string;
@@ -92,12 +93,17 @@ export async function deleteComment(discussionId: string, commentId: string): Pr
   await updateDocument(`${Collections.discussions}/${discussionId}`, { commentCount: increment(-1) });
 }
 
+/**
+ * Reports an abusive/incorrect discussion post or comment.
+ *
+ * Routed to the Google Form + Discord inbox like every other user report, so no
+ * moderation traffic is written to Firestore.
+ */
 export async function reportContent(targetType: 'post' | 'comment', targetId: string, reason: string): Promise<void> {
-  await createDocument(Collections.reports, {
-    targetType,
-    targetId,
-    reason,
-    createdAt: serverTimestamp(),
-    status: 'open',
+  await submitToGoogleForm({
+    type: 'report',
+    issueCategory: `discussion / ${targetType}`,
+    questionReference: targetId,
+    message: reason,
   });
 }

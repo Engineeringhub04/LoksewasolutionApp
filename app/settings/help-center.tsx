@@ -6,7 +6,7 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
-import { submitContactMessage } from '@/src/core/firebase/services/support';
+import { submitContactMessage } from '@/src/core/messaging/support';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { SearchBar } from '@/src/components/inputs/SearchBar';

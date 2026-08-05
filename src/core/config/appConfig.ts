@@ -51,6 +51,34 @@ export const AppConfig = {
     instagram: 'https://instagram.com/loksewasolution',
     discord: 'https://discord.gg/loksewasolution',
   },
+  messaging: {
+    // Contact / Feedback / Report submissions go to a Google Form, whose
+    // responses land in a Google Sheet. An Apps Script bound to that sheet then
+    // routes each row to the right tab AND posts a rich embed to Discord.
+    //
+    // Why not Firestore: a Sheet is a far better support inbox (search, filter,
+    // status column, export) and keeps the Firestore quota free for real app
+    // data. Why not a Discord webhook straight from the app: a webhook URL
+    // shipped in the bundle can be extracted and abused to spam the channel —
+    // the Apps Script keeps it server-side. The Form endpoint below is public by
+    // design and holds no secret.
+    googleForm: {
+      formId: '1FAIpQLSc8fAOhc793cp8aMOAKymwtGYLT504S-yjBNixCSE8dgokGQQ',
+      // Field ids taken from the form's "Get pre-filled link".
+      entries: {
+        type: 'entry.592505579',
+        name: 'entry.1756370732',
+        email: 'entry.2059602454',
+        message: 'entry.633453203',
+        rating: 'entry.2878998',
+        questionReference: 'entry.168055861',
+        issueCategory: 'entry.1740941696',
+        appVersion: 'entry.1821448113',
+        platform: 'entry.458970457',
+        userId: 'entry.2072267690',
+      },
+    },
+  },
   media: {
     // Cloudinary free tier is used for user-uploaded images (profile photos)
     // because Firebase Storage needs a paid plan. Unsigned preset — safe to

@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
-import { submitProblemReport } from '@/src/core/firebase/services/support';
+import { submitProblemReport } from '@/src/core/messaging/support';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';

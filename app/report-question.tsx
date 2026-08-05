@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
-import { submitQuestionReport } from '@/src/core/firebase/services/support';
+import { submitQuestionReport } from '@/src/core/messaging/support';
 import { showToast } from '@/src/core/store/toastStore';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
