@@ -3,32 +3,33 @@
 // clearly as a tappable action — icon on a soft chip + label, filled
 // background using the section's accent color at low opacity.
 import React from 'react';
-import { Pressable, View, StyleSheet, Dimensions } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_GAP = 10;
-const HORIZONTAL_PADDING = 16;
-// 3 columns, accounting for padding + 2 inner gaps
-const TILE_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP * 2) / 3;
 
 export interface GridButtonProps {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   accentColor: string;
   onPress: () => void;
+  /**
+   * Exact tile width, measured and supplied by <Grid3>. This used to be computed
+   * inside this component from Dimensions + hardcoded padding, which mismatched
+   * the real container width on narrower Android phones and wrapped the 3rd tile
+   * onto its own row.
+   */
+  width: number;
 }
 
-export function GridButton({ label, icon, accentColor, onPress }: GridButtonProps) {
+export function GridButton({ label, icon, accentColor, onPress, width }: GridButtonProps) {
   const { radius } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { width: TILE_WIDTH, backgroundColor: `${accentColor}17`, borderRadius: radius.md, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
+        { width, backgroundColor: `${accentColor}17`, borderRadius: radius.md, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
       ]}
     >
       <View style={[styles.iconBox, { backgroundColor: accentColor, borderRadius: radius.pill }]}>
@@ -40,8 +41,6 @@ export function GridButton({ label, icon, accentColor, onPress }: GridButtonProp
     </Pressable>
   );
 }
-
-export { TILE_WIDTH, GRID_GAP };
 
 const styles = StyleSheet.create({
   button: {

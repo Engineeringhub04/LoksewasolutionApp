@@ -26,9 +26,10 @@ import { QuestionOfDayCard } from '@/src/components/home/QuestionOfDayCard';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { QuickLinkButton } from '@/src/components/home/QuickLinkButton';
 import { GridButton } from '@/src/components/home/GridButton';
+import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
-import { RefreshOverlay } from '@/src/components/home/RefreshOverlay';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { demoSubjectsForCourse } from '@/src/components/home/demoSubjects';
 
 interface LinkItem {
@@ -100,7 +101,16 @@ export default function HomeScreen() {
     return hasAnsweredQotdToday(user.uid, courseInfo.data?.courseId ?? null);
   }, [user?.uid, courseInfo.data?.courseId]);
 
-  const refreshing = banners.refreshing || courseInfo.refreshing || developers.refreshing || notifications.refreshing;
+  // qotdAnswered is included so the overlay stays up until EVERY source has
+  // settled — it was refreshed but not tracked, so the loader could disappear
+  // while that request was still in flight.
+  const refreshing =
+    banners.refreshing ||
+    courseInfo.refreshing ||
+    developers.refreshing ||
+    notifications.refreshing ||
+    qotdAnswered.refreshing;
+  const initialLoading = banners.loading || courseInfo.loading || developers.loading;
   const onRefresh = () => {
     banners.refresh();
     courseInfo.refresh();
@@ -203,11 +213,19 @@ export default function HomeScreen() {
       {/* Additional Feature — 3x3 */}
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>Additional Feature</Text>
-        <View style={styles.grid3}>
-          {additionalFeatures.map((item) => (
-            <GridButton key={item.key} label={item.label} icon={item.icon} accentColor={FEATURE_ACCENT} onPress={() => router.push(item.route as never)} />
-          ))}
-        </View>
+        <Grid3
+          items={additionalFeatures}
+          keyExtractor={(item) => item.key}
+          renderItem={(item, width) => (
+            <GridButton
+              label={item.label}
+              icon={item.icon}
+              accentColor={FEATURE_ACCENT}
+              width={width}
+              onPress={() => router.push(item.route as never)}
+            />
+          )}
+        />
       </View>
 
       {/* Recent Notices */}
@@ -232,11 +250,19 @@ export default function HomeScreen() {
       {/* App Guide — 3x3 */}
       <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>App Guide</Text>
-        <View style={styles.grid3}>
-          {appGuide.map((item) => (
-            <GridButton key={item.key} label={item.label} icon={item.icon} accentColor={GUIDE_ACCENT} onPress={() => router.push(item.route as never)} />
-          ))}
-        </View>
+        <Grid3
+          items={appGuide}
+          keyExtractor={(item) => item.key}
+          renderItem={(item, width) => (
+            <GridButton
+              label={item.label}
+              icon={item.icon}
+              accentColor={GUIDE_ACCENT}
+              width={width}
+              onPress={() => router.push(item.route as never)}
+            />
+          )}
+        />
       </View>
 
       {/* About Developer */}
@@ -251,7 +277,10 @@ export default function HomeScreen() {
         )}
       </View>
     </Animated.ScrollView>
-    <RefreshOverlay visible={refreshing} />
+    {/* Same centered spinner + labelled overlay every other page uses, on BOTH
+        the first load and pull-to-refresh (Home previously had a separate
+        RefreshOverlay with no page label and no initial-load coverage). */}
+    <PageLoaderOverlay visible={initialLoading || refreshing} label="Loading Home..." />
     </View>
   );
 }
@@ -265,5 +294,4 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   viewAllPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });
