@@ -27,4 +27,22 @@ export const Collections = {
   appOnboardingSettings: 'app_onboarding-settings',
   homeBanners: 'app_home_banners',
   developers: 'app_developers',
+
+  // ===== Exam Hub =====
+  // Provinces shown as the first filter row (Federal, Koshi, ... ). "All Board"
+  // is a UI-level filter, not a stored document.
+  examProvinces: 'app_exam_provinces',
+  // Section tabs (MCQ Tests, Theory Desk, Past Qns, GK & PM). Each carries the
+  // course/subcourse ids it applies to, so a section can be hidden for a given
+  // subcourse purely from the database.
+  examSections: 'app_exam_sections',
+  // One document per exam card. Questions are embedded as an array on the
+  // document rather than a subcollection: a set is always read whole, so this is
+  // one read instead of N and keeps attempts consistent with the question list.
+  examSets: 'app_exam_sets',
+  // Rules are stored per course+subcourse+province+section so any one of them can
+  // be changed later without affecting the rest.
+  examRules: 'app_exam_rules',
+  /** Per-user attempt history for an exam set. */
+  examAttempts: (uid: string) => `users/${uid}/exam_attempts`,
 } as const;
