@@ -323,7 +323,8 @@
     "permissionDenied": "Permission denied",
     "loadingProfile": "Loading Your Profile...",
     "uploadingPhoto": "Uploading your photo...",
-    "photoUploaded": "Photo uploaded successfully"
+    "photoUploaded": "Photo uploaded successfully",
+    "pickerFailed": "Could not open the photo picker. Please try again."
   },
   "achievements": {
     "title": "Achievements",

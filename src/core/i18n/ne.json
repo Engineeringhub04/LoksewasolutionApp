@@ -323,7 +323,8 @@
     "permissionDenied": "अनुमति अस्वीकृत भयो",
     "loadingProfile": "तपाईंको प्रोफाइल लोड हुँदै...",
     "uploadingPhoto": "फोटो अपलोड हुँदै...",
-    "photoUploaded": "फोटो सफलतापूर्वक अपलोड भयो"
+    "photoUploaded": "फोटो सफलतापूर्वक अपलोड भयो",
+    "pickerFailed": "फोटो पिकर खोल्न सकिएन। पुनः प्रयास गर्नुहोस्।"
   },
   "achievements": {
     "title": "उपलब्धिहरू",

@@ -5,7 +5,16 @@
 // unsaved changes asks for confirmation first (both the header back button and
 // the Android hardware back button).
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, ScrollView, StyleSheet, BackHandler, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  ActionSheetIOS,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -139,30 +148,76 @@ export default function EditProfileScreen() {
   }, [isDirty]);
 
   const pickImage = async (source: 'camera' | 'gallery') => {
-    setShowPhotoSheet(false);
+    // Only Android reaches here with a Modal open (iOS uses ActionSheetIOS, which
+    // isn't a Modal). Close it and let the dismissal settle before launching.
+    if (Platform.OS !== 'ios') {
+      setShowPhotoSheet(false);
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    }
 
-    // iOS cannot present the native camera/library picker while the bottom
-    // sheet's Modal still owns the presented view controller — the request is
-    // silently dropped, which is why Camera/Gallery appeared to do nothing there
-    // while Remove (pure JS state) worked. Waiting for the dismissal animation
-    // to finish before launching fixes it, and is harmless on Android.
-    await new Promise<void>((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 450 : 150));
+    try {
+      // Only the CAMERA genuinely needs an explicit grant. The photo library is
+      // opened through the system picker (PHPicker on iOS), which requires no
+      // permission — and asking anyway returns granted:false for anyone who ever
+      // declined library access, which made us bail out and do nothing at all.
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          showToast(t('editProfile.permissionDenied'), 'warning');
+          return;
+        }
+      }
 
-    const permission =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showToast(t('editProfile.permissionDenied'), 'warning');
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 })
+          : await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+              mediaTypes: ['images'],
+            });
+
+      if (!result.canceled && result.assets?.[0]) setPhotoURL(result.assets[0].uri);
+    } catch {
+      // A silent failure here is what made this look broken — surface it instead.
+      showToast(t('editProfile.pickerFailed'), 'error');
+    }
+  };
+
+  /**
+   * Opens the photo options.
+   *
+   * iOS uses the NATIVE action sheet rather than our Modal-based BottomSheet.
+   * Root cause of Camera/Gallery doing nothing on iOS: a React Native `Modal`
+   * presents its own view controller, and UIKit will not present the image
+   * picker while that one is still presented/dismissing. Timing hacks around it
+   * are unreliable; not opening a Modal at all removes the conflict entirely.
+   * Android has no such restriction, so it keeps the nicer bottom sheet.
+   */
+  const openPhotoOptions = () => {
+    if (Platform.OS !== 'ios') {
+      setShowPhotoSheet(true);
       return;
     }
 
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 })
-        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    const labels = [t('editProfile.camera'), t('editProfile.gallery')];
+    if (photoURL) labels.push(t('editProfile.remove'));
+    labels.push(t('common.cancel'));
 
-    if (!result.canceled && result.assets[0]) setPhotoURL(result.assets[0].uri);
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: t('editProfile.changePhoto'),
+        options: labels,
+        cancelButtonIndex: labels.length - 1,
+        destructiveButtonIndex: photoURL ? 2 : undefined,
+      },
+      (index) => {
+        if (index === 0) void pickImage('camera');
+        else if (index === 1) void pickImage('gallery');
+        else if (photoURL && index === 2) setPhotoURL(null);
+      }
+    );
   };
 
   const handleDobChange = (raw: string) => {
@@ -249,7 +304,7 @@ export default function EditProfileScreen() {
       >
         {/* Photo */}
         <Animated.View entering={FadeInDown.duration(320)} style={styles.photoBlock}>
-          <Pressable onPress={() => setShowPhotoSheet(true)} style={styles.photoPressable}>
+          <Pressable onPress={openPhotoOptions} style={styles.photoPressable}>
             {/* Ring turns blue while uploading and green on completion. */}
             <AvatarProgressRing size={96} progress={uploadProgress} state={uploadState}>
               <Avatar uri={photoURL} name={fullNameOf(firstName, lastName)} size={96} />

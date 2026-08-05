@@ -70,22 +70,42 @@ export default function CourseSetupScreen() {
 
   const { refreshing, onRefresh } = useManualRefresh(loadCourses);
 
-  // Pre-select whatever the user is already enrolled in.
+  /**
+   * Applies the user's enrolled course/subcourse as the initial selection.
+   *
+   * `prev ?? id` is important: it seeds only while nothing is chosen yet, so a
+   * selection the user has already tapped is never overwritten by a late-arriving
+   * fetch — that race is why earlier attempts appeared to "forget" the value.
+   */
+  const applySaved = useCallback((courseId: string | null, subcourseId: string | null) => {
+    if (!courseId) return;
+    setSavedCourseId(courseId);
+    setSavedSubcourseId(subcourseId);
+    setSelectedCourse((prev) => prev ?? courseId);
+    setSelectedSubcourse((prev) => prev ?? subcourseId);
+  }, []);
+
+  // Source 1: the shared profile store, which the root layout warms at app start.
+  // This is already proven to hold the right values (Home renders the course name
+  // from it), and needs no network round-trip here.
+  const storeCourseInfo = useProfileStore((s) => s.courseInfo);
   useEffect(() => {
-    if (!user) return;
+    applySaved(storeCourseInfo?.courseId ?? null, storeCourseInfo?.subcourseId ?? null);
+  }, [storeCourseInfo?.courseId, storeCourseInfo?.subcourseId, applySaved]);
+
+  // Source 2: direct fetch, covering a cold open straight into this route where
+  // the store hasn't been warmed yet.
+  useEffect(() => {
+    if (!user?.uid) return;
     (async () => {
       try {
         const info = await fetchUserCourseInfo(user.uid);
-        if (!info.courseId) return;
-        setSavedCourseId(info.courseId);
-        setSavedSubcourseId(info.subcourseId);
-        setSelectedCourse(info.courseId);
-        setSelectedSubcourse(info.subcourseId);
+        applySaved(info.courseId, info.subcourseId);
       } catch {
         // Non-fatal — the screen still works as a fresh setup.
       }
     })();
-  }, [user?.uid]);
+  }, [user?.uid, applySaved]);
 
   /**
    * User tapped a course. This is the ONLY place the subcourse selection is
@@ -118,6 +138,23 @@ export default function CourseSetupScreen() {
       }
     })();
   }, [selectedCourse]);
+
+  // Diagnostic for the "saved course still shows unselected" report. If the ids
+  // are present but don't appear in the fetched lists, the stored id and the list
+  // id genuinely differ — which no amount of UI work would fix, and this log says
+  // so explicitly instead of leaving it a mystery.
+  useEffect(() => {
+    if (!__DEV__ || loadingCourses || !savedCourseId) return;
+    const courseMatch = courses.some((c) => c.id === savedCourseId);
+    const subMatch = savedSubcourseId ? subcourses.some((s) => s.id === savedSubcourseId) : null;
+    console.log(
+      `[CourseSetup] saved course="${savedCourseId}" match=${courseMatch} | ` +
+        `saved subcourse="${savedSubcourseId}" match=${subMatch} | ` +
+        `selected="${selectedCourse}"/"${selectedSubcourse}" | ` +
+        `courseIds=[${courses.map((c) => c.id).join(', ')}] | ` +
+        `subcourseIds=[${subcourses.map((s) => s.id).join(', ')}]`
+    );
+  }, [loadingCourses, courses, subcourses, savedCourseId, savedSubcourseId, selectedCourse, selectedSubcourse]);
 
   const handleSave = async () => {
     if (!user || !selectedCourse || !selectedSubcourse) return;
