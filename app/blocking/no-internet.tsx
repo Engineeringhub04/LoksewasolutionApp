@@ -16,15 +16,24 @@ export default function NoInternetScreen() {
   // actually finished mounting. Waiting for a navigation state key means the navigator
   // is ready before we ever call replace()/back().
   const rootNavigationState = useRootNavigationState();
+  const navReady = Boolean(rootNavigationState?.key);
 
   useEffect(() => {
-    if (!rootNavigationState?.key) return;
-    if (isOnline && router.canDismiss?.()) {
-      router.back();
-    } else if (isOnline) {
-      router.replace('/');
-    }
-  }, [isOnline, router, rootNavigationState]);
+    if (!navReady || !isOnline) return;
+    // Deferred to a macrotask instead of navigating straight from the effect body.
+    // The `navReady` check alone wasn't enough: this screen's effects can still flush
+    // within the same commit in which the root navigator registers, and navigating
+    // during that window throws "Attempted to navigate before mounting the Root Layout
+    // component". A setTimeout(0) pushes the call past that commit entirely.
+    const timer = setTimeout(() => {
+      if (router.canDismiss?.()) {
+        router.back();
+      } else {
+        router.replace('/');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [navReady, isOnline, router]);
 
   return (
     <BlockingScreen

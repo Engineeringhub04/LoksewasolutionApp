@@ -24,7 +24,7 @@ const MAX_SPLASH_MS = 6000;
 export default function SplashScreen() {
   const router = useRouter();
   const { gradients, spacing } = useTheme();
-  const { isOnline } = useNetworkStatus();
+  const { isOnline, isChecked: networkChecked } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
@@ -65,12 +65,16 @@ export default function SplashScreen() {
       routedRef.current = true;
 
       if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
-      if (!isOnline && !user) { router.replace('/blocking/no-internet'); return; }
+      // Only block for connectivity once NetInfo has actually reported a status
+      // (networkChecked). Without that condition the store's optimistic default could
+      // be misread and a signed-out user could get pushed to the No Internet screen on
+      // a working connection.
+      if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
       if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
     };
     decide();
-  }, [initializing, hydrated, imagesCached, isOnline, user, router]);
+  }, [initializing, hydrated, imagesCached, isOnline, networkChecked, user, router]);
 
   // Safety timeout
   useEffect(() => {
