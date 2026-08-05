@@ -2,7 +2,7 @@
 //
 // Shows the exam's own details, then every attempt with its score and pass/fail
 // state. Tapping an attempt opens Review Answers for exactly that attempt.
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useTheme } from '@/src/core/theme';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import {
   fetchExamSet,
   fetchAttemptsForSet,
@@ -58,6 +59,14 @@ export default function ExamDetailsScreen() {
   const loading = examSet.loading || attempts.loading;
   const refreshing = examSet.refreshing || attempts.refreshing;
 
+  // Coming back from the summary/review screens must show the new attempt
+  // without a manual pull.
+  const onRefresh = useCallback(() => {
+    examSet.refresh();
+    attempts.refresh();
+  }, [examSet, attempts]);
+  useRefreshOnFocus(onRefresh);
+
   const requireUnlocked = (action: () => void) => {
     if (unlocked) {
       action();
@@ -89,10 +98,7 @@ export default function ExamDetailsScreen() {
         refreshControl={
           <AppRefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              examSet.refresh();
-              attempts.refresh();
-            }}
+            onRefresh={onRefresh}
           />
         }
       >

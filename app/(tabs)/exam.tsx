@@ -18,6 +18,7 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import {
   fetchProvinces,
   fetchExamSections,
@@ -63,6 +64,14 @@ export default function ExamScreen() {
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rules, setRules] = useState<ExamRule[]>([]);
   const [rulesForSet, setRulesForSet] = useState<ExamSet | null>(null);
+  /**
+   * 'info'  — opened from the Rules button, primary action is just "OK"
+   * 'start' — opened from Start, primary action confirms and enters the quiz
+   *
+   * The gate lives here rather than inside the quiz screen so the quiz page is
+   * never rendered behind a modal; it only opens once the user has confirmed.
+   */
+  const [rulesMode, setRulesMode] = useState<'info' | 'start'>('info');
 
   // Drives the countdown labels without re-fetching anything.
   const [now, setNow] = useState(() => Date.now());
@@ -109,6 +118,10 @@ export default function ExamScreen() {
     attempts.refresh();
   }, [provinces, sections, sets, attempts]);
 
+  // Returning from the summary/details screens must show the new state (a card
+  // flipping to Re-Join, a fresh attempt count) without a manual pull.
+  useRefreshOnFocus(onRefresh);
+
   /** Cards more than 10 minutes away are filtered out entirely. */
   const visibleCards = useMemo(() => {
     const attemptMap = attempts.data ?? {};
@@ -127,8 +140,9 @@ export default function ExamScreen() {
       .filter((entry) => entry.state.kind !== 'hidden');
   }, [sets.data, attempts.data, now]);
 
-  const openRules = async (set: ExamSet) => {
+  const openRules = async (set: ExamSet, mode: 'info' | 'start') => {
     setRulesForSet(set);
+    setRulesMode(mode);
     setRules([]);
     setRulesVisible(true);
     setRulesLoading(true);
@@ -315,7 +329,7 @@ export default function ExamScreen() {
                   state={entry.state}
                   accentColor={accentColor}
                   subcourseLabel={subcourseLabel}
-                  onRulesPress={() => openRules(entry.set)}
+                  onRulesPress={() => void openRules(entry.set, 'info')}
                   onPrimaryPress={() => {
                     if (entry.state.kind === 'locked') {
                       showToast('Purchasing is coming in the next update.', 'info');
@@ -332,12 +346,12 @@ export default function ExamScreen() {
                       }
                       return;
                     }
-                    // Already attempted -> details/attempts screen; otherwise
-                    // straight into the quiz (which gates itself on the rules).
+                    // Already attempted -> details/attempts screen. Otherwise the
+                    // rules sheet opens first and only its confirm enters the quiz.
                     if (entry.state.kind === 'rejoin') {
                       router.push({ pathname: '/exam/[setId]', params: { setId: entry.set.id } } as never);
                     } else {
-                      router.push({ pathname: '/exam/[setId]/quiz', params: { setId: entry.set.id } } as never);
+                      void openRules(entry.set, 'start');
                     }
                   }}
                   onRankingPress={() =>
@@ -359,9 +373,13 @@ export default function ExamScreen() {
         loading={rulesLoading}
         examTitle={rulesForSet?.title}
         accentColor={accentColor}
-        // Opened from the card, so this is informational only — the pre-attempt
-        // variant with "Start Quiz" arrives with the quiz screen.
-        primaryLabel="OK"
+        primaryLabel={rulesMode === 'start' ? 'Start Quiz' : 'OK'}
+        onPrimaryPress={() => {
+          setRulesVisible(false);
+          if (rulesMode === 'start' && rulesForSet) {
+            router.push({ pathname: '/exam/[setId]/quiz', params: { setId: rulesForSet.id } } as never);
+          }
+        }}
       />
     </View>
   );

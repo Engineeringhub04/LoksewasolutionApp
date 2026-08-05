@@ -40,12 +40,20 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, deps: unknown[] = [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
+  // Stable identities: these get passed into effects and memo deps by callers
+  // (e.g. useRefreshOnFocus). Re-creating them each render made any effect keyed
+  // on them re-run on every render.
+  const refetch = useCallback(() => {
+    load(false);
+  }, [load]);
+  const refresh = useCallback(() => load(true), [load]);
+
   return {
     data,
     loading,
     refreshing,
     error,
-    refetch: () => load(false),
-    refresh: () => load(true),
+    refetch,
+    refresh,
   };
 }

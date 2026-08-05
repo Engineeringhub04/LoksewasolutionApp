@@ -6,6 +6,7 @@ import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchSubjects } from '@/src/core/firebase/services/content';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { SubjectCard } from '@/src/components/cards/SubjectCard';
@@ -18,6 +19,9 @@ export default function SubjectListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchSubjects(), []);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

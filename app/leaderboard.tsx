@@ -6,6 +6,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchLeaderboard } from '@/src/core/firebase/services/leaderboard';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { TabBar } from '@/src/components/nav/TabBar';
@@ -22,6 +23,9 @@ export default function LeaderboardScreen() {
   const user = useAuthStore((s) => s.user);
   const [scope, setScope] = useState<Scope>('allTime');
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchLeaderboard(), []);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

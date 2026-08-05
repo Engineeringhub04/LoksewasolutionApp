@@ -21,16 +21,13 @@ import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import {
   fetchExamSet,
-  fetchExamRules,
   fetchAttemptsForSet,
   saveExamAttempt,
   scoreAttempt,
-  type ExamRule,
 } from '@/src/core/firebase/services/examHub';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
-import { ExamRulesSheet } from '@/src/components/exam/ExamRulesSheet';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
@@ -63,12 +60,10 @@ export default function QuizScreen() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
-  // Rules are shown once before the attempt begins, with "Start Quiz" as the
-  // primary action — the informational variant lives on the exam card.
-  const [rulesVisible, setRulesVisible] = useState(true);
-  const [rules, setRules] = useState<ExamRule[]>([]);
-  const [rulesLoading, setRulesLoading] = useState(true);
-  const [started, setStarted] = useState(false);
+  // The rules gate now lives on the Exam tab: the user confirms "Start Quiz"
+  // there and this screen opens already started, so the quiz page is never shown
+  // behind a modal.
+  const [started, setStarted] = useState(true);
 
   const startedAtRef = useRef<number | null>(null);
   const submittedRef = useRef(false);
@@ -81,22 +76,6 @@ export default function QuizScreen() {
       setAnswers(new Array(questions.length).fill(UNANSWERED));
     }
   }, [questions.length, answers.length]);
-
-  // Load the rules for this exact set.
-  useEffect(() => {
-    const set = examSet.data;
-    if (!set) return;
-    setRulesLoading(true);
-    fetchExamRules({
-      courseId: set.courseId,
-      subcourseId: set.subcourseId,
-      provinceId: set.provinceId,
-      sectionId: set.sectionId,
-    })
-      .then(setRules)
-      .catch(() => setRules([]))
-      .finally(() => setRulesLoading(false));
-  }, [examSet.data]);
 
   const handleSubmit = useCallback(
     async (auto: boolean) => {
@@ -374,23 +353,6 @@ export default function QuizScreen() {
         </View>
       </View>
 
-      {/* Rules gate — the countdown only starts once this is dismissed. */}
-      <ExamRulesSheet
-        visible={rulesVisible}
-        onClose={() => {
-          setRulesVisible(false);
-          setStarted(true);
-        }}
-        rules={rules}
-        loading={rulesLoading}
-        examTitle={set.title}
-        primaryLabel="Start Quiz"
-        onPrimaryPress={() => {
-          setRulesVisible(false);
-          setStarted(true);
-        }}
-      />
-
       <PageLoaderOverlay visible={submitting} label="Submitting your answers…" />
 
       <ConfirmDialog
@@ -448,11 +410,14 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFF' },
   headerSubtitle: { color: 'rgba(255,255,255,0.85)' },
   body: { flex: 1, flexDirection: 'row' },
-  rail: { width: 54 },
-  railContent: { padding: 8, gap: 8, alignItems: 'center' },
+  // The rail must take only the width of a number chip and give everything else
+  // to the question. flexGrow/flexShrink 0 + flexBasis pin it: a ScrollView in a
+  // row otherwise negotiates its own width and ended up eating half the screen.
+  rail: { width: 52, flexGrow: 0, flexShrink: 0, flexBasis: 52 },
+  railContent: { paddingVertical: 8, paddingHorizontal: 6, gap: 8, alignItems: 'center' },
   railItem: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,

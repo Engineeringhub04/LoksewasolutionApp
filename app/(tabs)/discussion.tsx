@@ -8,6 +8,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchDiscussions, toggleLikeDiscussion } from '@/src/core/firebase/services/discussions';
 import { Text } from '@/src/components/misc/Text';
 import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
@@ -23,6 +24,9 @@ export default function DiscussionFeedScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchDiscussions(), []);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
 
   const handleToggleLike = async (id: string) => {

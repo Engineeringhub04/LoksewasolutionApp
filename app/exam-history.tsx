@@ -7,6 +7,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchAttemptHistory } from '@/src/core/firebase/services/exams';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ResultCard } from '@/src/components/cards/ResultCard';
@@ -24,6 +25,9 @@ export default function ExamHistoryScreen() {
     if (!user) return [];
     return fetchAttemptHistory(user.uid);
   }, [user?.uid]);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

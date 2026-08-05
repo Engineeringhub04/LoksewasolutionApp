@@ -13,6 +13,7 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { logout } from '@/src/core/firebase/auth';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { formatDob, EMPTY_STATS } from '@/src/core/firebase/services/profile';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { showToast } from '@/src/core/store/toastStore';
@@ -45,6 +46,9 @@ export default function ProfileScreen() {
   const onRefresh = () => {
     if (user?.uid) void load(user.uid, { refresh: true });
   };
+
+  // Returning from Edit Profile / Course Setup must show the saved values.
+  useRefreshOnFocus(onRefresh);
 
   // Prefer the Firestore document, fall back to the auth session (which is
   // where a Google sign-in's Gmail name/photo lands first).
