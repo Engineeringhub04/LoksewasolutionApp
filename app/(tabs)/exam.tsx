@@ -332,10 +332,17 @@ export default function ExamScreen() {
                       }
                       return;
                     }
-                    // Quiz, summary, review and rankings land in the next update.
-                    showToast('The quiz screen is coming in the next update.', 'info');
+                    // Already attempted -> details/attempts screen; otherwise
+                    // straight into the quiz (which gates itself on the rules).
+                    if (entry.state.kind === 'rejoin') {
+                      router.push({ pathname: '/exam/[setId]', params: { setId: entry.set.id } } as never);
+                    } else {
+                      router.push({ pathname: '/exam/[setId]/quiz', params: { setId: entry.set.id } } as never);
+                    }
                   }}
-                  onRankingPress={() => showToast('Rankings are coming in the next update.', 'info')}
+                  onRankingPress={() =>
+                    router.push({ pathname: '/exam/[setId]/ranking', params: { setId: entry.set.id } } as never)
+                  }
                 />
               </Animated.View>
             ))

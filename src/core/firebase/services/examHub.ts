@@ -86,6 +86,7 @@ export interface ExamAttempt {
   id: string;
   examSetId: string;
   attemptNumber: number;
+  /** Percentage after negative marking, 0..100. */
   score: number;
   totalQuestions: number;
   correct: number;
@@ -93,7 +94,75 @@ export interface ExamAttempt {
   skipped: number;
   passed: number; // stored 1/0 so it survives the REST serialiser cleanly
   timeTakenSeconds: number;
+  /**
+   * The chosen option per question, -1 for skipped. Stored so Review Answers can
+   * be rebuilt exactly as it was answered, without re-deriving anything.
+   */
+  answers: number[];
   createdAt: FirestoreTimestamp | null;
+}
+
+export interface RankingRow {
+  id: string;
+  uid: string;
+  name: string;
+  photoURL: string | null;
+  score: number;
+  timeTakenSeconds: number;
+  createdAt: FirestoreTimestamp | null;
+}
+
+/** Marks deducted for a wrong answer — matches what the rules sheet states. */
+export const NEGATIVE_MARK_PER_WRONG = 0.25;
+
+export interface ScoreBreakdown {
+  correct: number;
+  incorrect: number;
+  skipped: number;
+  /** Raw marks after negative marking, floored at 0. */
+  marks: number;
+  /** Percentage of the total, 0..100. */
+  percent: number;
+  negativeMarks: number;
+  passed: boolean;
+}
+
+/**
+ * Single source of truth for scoring, used by the quiz screen, the summary and
+ * the review screen so all three can never disagree.
+ */
+export function scoreAttempt(questions: ExamQuestion[], answers: number[], passPercent: number): ScoreBreakdown {
+  let correct = 0;
+  let incorrect = 0;
+  let skipped = 0;
+
+  questions.forEach((question, index) => {
+    const chosen = answers[index];
+    if (chosen === undefined || chosen < 0) skipped += 1;
+    else if (chosen === question.correctIndex) correct += 1;
+    else incorrect += 1;
+  });
+
+  const negativeMarks = incorrect * NEGATIVE_MARK_PER_WRONG;
+  const marks = Math.max(0, correct - negativeMarks);
+  const total = questions.length || 1;
+  const percent = Math.round((marks / total) * 100);
+
+  return { correct, incorrect, skipped, marks, percent, negativeMarks, passed: percent >= passPercent };
+}
+
+/**
+ * Answer review and rankings unlock only once the exam's own window has closed
+ * (start + duration), so finishing early can't reveal answers to others.
+ */
+export function resultsUnlockAt(set: ExamSet): number | null {
+  if (!set.startTime) return null;
+  return set.startTime.getTime() + set.durationMinutes * 60 * 1000;
+}
+
+export function areResultsUnlocked(set: ExamSet, now: number): boolean {
+  const unlockAt = resultsUnlockAt(set);
+  return unlockAt === null || now >= unlockAt;
 }
 
 // ---------- Parsing helpers ----------
@@ -288,6 +357,7 @@ export async function fetchExamAttempts(uid: string): Promise<Record<string, Exa
       skipped: num(d.skipped),
       passed: num(d.passed),
       timeTakenSeconds: num(d.timeTakenSeconds),
+      answers: Array.isArray(d.answers) ? d.answers.map((a) => num(a, -1)) : [],
       createdAt: (d.createdAt as FirestoreTimestamp | undefined) ?? null,
     };
     if (!attempt.examSetId) continue;
@@ -300,15 +370,77 @@ export async function fetchExamAttempts(uid: string): Promise<Record<string, Exa
   return grouped;
 }
 
+export async function fetchAttemptsForSet(uid: string, examSetId: string): Promise<ExamAttempt[]> {
+  const grouped = await fetchExamAttempts(uid);
+  return grouped[examSetId] ?? [];
+}
+
+/**
+ * Saves an attempt twice, on purpose:
+ *  - users/{uid}/exam_attempts — private history, only this user can read it
+ *  - app_exam_rankings         — one public row per attempt, so a leaderboard can
+ *                                be built without a backend job
+ *
+ * Per-user subcollections cannot be queried across users, which is why the public
+ * row exists at all. The ranking write is best-effort: losing a leaderboard entry
+ * must never cost the user their attempt.
+ */
 export async function saveExamAttempt(
   uid: string,
-  attempt: Omit<ExamAttempt, 'id' | 'createdAt'>
+  attempt: Omit<ExamAttempt, 'id' | 'createdAt'>,
+  identity: { name: string; photoURL: string | null }
 ): Promise<string> {
   const { id } = await createDocument(Collections.examAttempts(uid), {
     ...attempt,
     createdAt: serverTimestamp(),
   });
+
+  await createDocument(Collections.examRankings, {
+    examSetId: attempt.examSetId,
+    uid,
+    name: identity.name || 'Anonymous',
+    photoURL: identity.photoURL,
+    score: attempt.score,
+    timeTakenSeconds: attempt.timeTakenSeconds,
+    createdAt: serverTimestamp(),
+  }).catch(() => {});
+
   return id;
+}
+
+/**
+ * Leaderboard for one exam set: best score per user, ties broken by the faster
+ * time. Reduced client-side because Firestore can't express "max per group".
+ */
+export async function fetchExamRanking(examSetId: string): Promise<RankingRow[]> {
+  const docs = await runQuery(Collections.examRankings, {
+    where: [{ field: 'examSetId', op: '==', value: examSetId }],
+  });
+
+  const bestByUid = new Map<string, RankingRow>();
+  for (const d of docs) {
+    const row: RankingRow = {
+      id: str(d.id),
+      uid: str(d.uid),
+      name: str(d.name, 'Anonymous'),
+      photoURL: typeof d.photoURL === 'string' && d.photoURL ? d.photoURL : null,
+      score: num(d.score),
+      timeTakenSeconds: num(d.timeTakenSeconds),
+      createdAt: (d.createdAt as FirestoreTimestamp | undefined) ?? null,
+    };
+    if (!row.uid) continue;
+
+    const existing = bestByUid.get(row.uid);
+    const better =
+      !existing ||
+      row.score > existing.score ||
+      (row.score === existing.score && row.timeTakenSeconds < existing.timeTakenSeconds);
+    if (better) bestByUid.set(row.uid, row);
+  }
+
+  return Array.from(bestByUid.values()).sort(
+    (a, b) => b.score - a.score || a.timeTakenSeconds - b.timeTakenSeconds
+  );
 }
 
 // ---------- Card state machine ----------

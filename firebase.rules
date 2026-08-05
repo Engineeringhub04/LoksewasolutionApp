@@ -121,6 +121,17 @@ service cloud.firestore {
       allow write: if true; // TODO: tighten to isAdmin() after seeding
     }
 
+    // One public row per attempt, used to build per-exam leaderboards. Needed
+    // because users/{uid}/exam_attempts is private and cannot be queried across
+    // users. A user may only create rows for themselves, and rows are immutable
+    // so a score can never be edited after the fact.
+    match /app_exam_rankings/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     // Default deny-all
     match /{document=**} { allow read, write: if false; }
   }

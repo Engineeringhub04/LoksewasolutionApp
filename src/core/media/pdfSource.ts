@@ -53,14 +53,44 @@ export interface PdfFetchResult {
 }
 
 /**
- * Downloads a PDF and returns it as base64.
+ * Every PDF begins with the bytes "%PDF", which base64-encode to "JVBER".
  *
- * `onProgress` receives 0..1, or -1 when the server doesn't report a content
- * length (so the UI can show an indeterminate bar instead of a stuck 0%).
+ * This is how we detect Google Drive's virus-scan interstitial: for larger files
+ * Drive answers `uc?export=download` with an HTML confirmation page instead of
+ * the file, and an HTML body would otherwise be handed to pdf.js and fail with an
+ * opaque parse error.
  */
-export function fetchPdfAsBase64(url: string, onProgress?: (fraction: number) => void): Promise<PdfFetchResult> {
-  const directUrl = toDirectPdfUrl(url);
+function looksLikePdf(base64: string): boolean {
+  return base64.startsWith('JVBER');
+}
 
+/**
+ * Download URLs to try in order for a Drive file.
+ *
+ * `drive.usercontent.google.com/download?...&confirm=t` is the endpoint that
+ * serves the bytes directly and skips the interstitial; the older `uc?export`
+ * form is kept as a fallback for files where it still works.
+ */
+function driveCandidates(id: string): string[] {
+  return [
+    `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`,
+    `https://drive.google.com/uc?export=download&id=${id}&confirm=t`,
+    `https://drive.google.com/uc?export=download&id=${id}`,
+  ];
+}
+
+/** All URLs worth attempting for a given share link, best first. */
+function candidateUrls(url: string): string[] {
+  const trimmed = url.trim();
+  if (/drive\.google\.com|drive\.usercontent\.google\.com/i.test(trimmed)) {
+    const id = driveFileId(trimmed);
+    if (id) return driveCandidates(id);
+  }
+  return [toDirectPdfUrl(trimmed)];
+}
+
+/** Single attempt against one concrete URL. */
+function download(directUrl: string, onProgress?: (fraction: number) => void): Promise<PdfFetchResult> {
   return new Promise<PdfFetchResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', directUrl);
@@ -107,4 +137,37 @@ export function fetchPdfAsBase64(url: string, onProgress?: (fraction: number) =>
 
     xhr.send();
   });
+}
+
+/**
+ * Downloads a PDF and returns it as base64.
+ *
+ * Tries each candidate URL until one returns something that actually starts with
+ * the PDF magic bytes, which is what transparently gets past Google Drive's
+ * virus-scan interstitial.
+ *
+ * `onProgress` receives 0..1, or -1 when the server doesn't report a content
+ * length (so the UI can show movement instead of a stuck 0%).
+ */
+export async function fetchPdfAsBase64(
+  url: string,
+  onProgress?: (fraction: number) => void
+): Promise<PdfFetchResult> {
+  const candidates = candidateUrls(url);
+  let lastError: Error | null = null;
+
+  for (const candidate of candidates) {
+    try {
+      const result = await download(candidate, onProgress);
+      if (looksLikePdf(result.base64)) return result;
+      // Reached Drive's HTML confirmation page rather than the file — reset the
+      // bar and fall through to the next candidate.
+      onProgress?.(0);
+      lastError = new Error('PDF_NOT_A_PDF');
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('PDF_DOWNLOAD_FAILED');
+    }
+  }
+
+  throw lastError ?? new Error('PDF_DOWNLOAD_FAILED');
 }

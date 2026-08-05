@@ -43,6 +43,11 @@ export const Collections = {
   // Rules are stored per course+subcourse+province+section so any one of them can
   // be changed later without affecting the rest.
   examRules: 'app_exam_rules',
-  /** Per-user attempt history for an exam set. */
+  /** Per-user attempt history for an exam set (private to that user). */
   examAttempts: (uid: string) => `users/${uid}/exam_attempts`,
+  /**
+   * One public row per attempt, used to build per-exam leaderboards. Needed
+   * because per-user subcollections can't be queried across users.
+   */
+  examRankings: 'app_exam_rankings',
 } as const;
