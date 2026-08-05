@@ -99,6 +99,28 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ===== Exam Hub =====
+    // TEMPORARY: write is open so the in-app seed button can populate these.
+    // Once seeding is done, change every `write: if true` below to
+    // `write: if isAdmin()` — same pattern already applied to app_courses and
+    // app_home_banners after their seeding finished.
+    match /app_exam_provinces/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_sections/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_sets/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_rules/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+
     // Default deny-all
     match /{document=**} { allow read, write: if false; }
   }
