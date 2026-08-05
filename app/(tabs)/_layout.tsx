@@ -18,6 +18,9 @@ export default function TabLayout() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         headerShown: false,
         tabBarButton: HapticTab,
+        // Bottom-tab switches can't show a preloader, so they cross-fade
+        // instead of hard-cutting between screens.
+        animation: 'fade',
       }}
     >
       <Tabs.Screen

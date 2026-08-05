@@ -10,6 +10,7 @@ import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native
 import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
@@ -73,7 +74,8 @@ const appGuide: LinkItem[] = [
   { key: 'help', icon: 'help-buoy-outline', label: 'Help Center', route: '/settings/help-center' },
   { key: 'notifications', icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
   { key: 'settings', icon: 'settings-outline', label: 'Settings', route: '/settings' },
-  { key: 'about', icon: 'information-circle-outline', label: 'About App', route: '/about' },
+  // Same screen as Profile → More → App Info, so both entry points match.
+  { key: 'about', icon: 'information-circle-outline', label: 'App Info', route: '/app-info' },
 ];
 
 const FEATURE_ACCENT = '#7C3AED';
@@ -85,6 +87,11 @@ export default function HomeScreen() {
   const user = useAuthStore((s) => s.user);
   const insets = useSafeAreaInsets();
   const HOME_HEADER_MAX_HEIGHT = getHomeHeaderExpandedHeight(insets.top);
+
+  // Shared profile cache — keeps the header avatar/name/course in sync with
+  // whatever Edit Profile or Course Setup last saved, without a manual refresh.
+  const storeProfile = useProfileStore((s) => s.profile);
+  const storeCourseInfo = useProfileStore((s) => s.courseInfo);
 
   const courseInfo = useAsyncData(async () => {
     if (!user) return null;
@@ -118,6 +125,8 @@ export default function HomeScreen() {
     developers.refresh();
     notifications.refresh();
     qotdAnswered.refresh();
+    // Keep the shared store fresh too, so Profile sees the same data.
+    if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
@@ -145,22 +154,32 @@ export default function HomeScreen() {
         starts right underneath it and scrolls normally from there. */}
     <HomeHeader
       scrollY={scrollY}
-      displayName={user?.displayName ?? null}
-      photoURL={user?.photoURL}
+      // Sourced from the shared profile store first, so a photo/name change
+      // saved in Edit Profile shows up here immediately — no refresh needed.
+      displayName={storeProfile?.name || user?.displayName || null}
+      photoURL={storeProfile?.photoURL ?? user?.photoURL}
       notificationCount={unreadCount}
       isDark={effective === 'dark'}
       onToggleTheme={toggleTheme}
       onNotificationsPress={() => router.push('/notifications')}
       onProfilePress={() => router.push('/profile')}
-      courseName={courseInfo.data?.courseName ?? null}
-      subcourseName={courseInfo.data?.subcourseName ?? null}
+      courseName={storeCourseInfo?.courseName ?? courseInfo.data?.courseName ?? null}
+      subcourseName={storeCourseInfo?.subcourseName ?? courseInfo.data?.subcourseName ?? null}
       onCoursePress={() => router.push('/course-setup?mode=update')}
     />
 
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ paddingTop: HOME_HEADER_MAX_HEIGHT, paddingBottom: spacing.xxl }}
-      refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        // progressViewOffset is essential here: the header is a FIXED overlay, so
+        // without it the spinner renders behind the header and is invisible.
+        <AppRefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          progressViewOffset={HOME_HEADER_MAX_HEIGHT}
+        />
+      }
       onScroll={onScroll}
       scrollEventThrottle={16}
     >

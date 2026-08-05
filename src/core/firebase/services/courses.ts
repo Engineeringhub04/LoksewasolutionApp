@@ -116,6 +116,18 @@ export async function fetchUserCourseInfo(uid: string): Promise<UserCourseInfo> 
     } catch {
       // ignore
     }
+    // Legacy fallback: subcourses seeded BEFORE the sub-collection restructure
+    // live in the flat `app_subcourses` collection. fetchSubcourses() already
+    // falls back to it, but this function didn't — which is why the enrolled
+    // subcourse name came back null and Home/Profile showed only the course.
+    if (!subcourseName) {
+      try {
+        const legacyDoc = await getDocument(`${LEGACY_SUBCOURSES_COLLECTION}/${subcourseId}`);
+        subcourseName = (legacyDoc?.name as string | undefined) ?? null;
+      } catch {
+        // ignore — subcourse may have been removed
+      }
+    }
   }
 
   return { courseId, subcourseId, courseName, subcourseName };

@@ -14,10 +14,10 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
-import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { updateCurrentUserProfile } from '@/src/core/firebase/auth';
+import { AvatarProgressRing, type UploadState } from '@/src/components/profile/AvatarProgressRing';
 import {
-  fetchUserProfile,
   updateUserProfile,
   fullNameOf,
   isValidDob,
@@ -59,10 +59,19 @@ export default function EditProfileScreen() {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [dobError, setDobError] = useState<string | null>(null);
 
-  const profile = useAsyncData(async () => {
-    if (!user) return null;
-    return fetchUserProfile(user.uid);
-  }, [user?.uid]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadState, setUploadState] = useState<UploadState>('idle');
+
+  // Reads the shared store, which the root layout warms in the background — so
+  // this screen normally has real data on first paint. `load` still runs to
+  // cover a cold open straight into this route.
+  const { profile: storeProfile, loading: profileLoading, refreshing, load } = useProfileStore();
+
+  useEffect(() => {
+    if (user?.uid) void load(user.uid);
+  }, [user?.uid, load]);
+
+  const profile = { data: storeProfile, loading: profileLoading, refreshing, refresh: () => { if (user?.uid) void load(user.uid, { refresh: true }); } };
 
   // Seed the form once from whichever source has data (Firestore doc first,
   // then the auth session for brand-new Google sign-ins).
@@ -161,7 +170,11 @@ export default function EditProfileScreen() {
       // (Cloudinary or a Google avatar) is already hosted.
       let resolvedPhotoURL = photoURL;
       if (photoURL && !/^https?:\/\//i.test(photoURL)) {
-        resolvedPhotoURL = await uploadImageToCloudinary(photoURL);
+        setUploadState('uploading');
+        setUploadProgress(0);
+        resolvedPhotoURL = await uploadImageToCloudinary(photoURL, setUploadProgress);
+        setUploadState('done');
+        showToast(t('editProfile.photoUploaded'), 'success');
       }
 
       await updateUserProfile(user.uid, {
@@ -180,9 +193,23 @@ export default function EditProfileScreen() {
       }).catch(() => {});
 
       setInitial({ firstName, lastName, dob, gender, photoURL: resolvedPhotoURL });
+      setPhotoURL(resolvedPhotoURL);
+
+      // Push the saved values into the shared store so Home and Profile update
+      // immediately — no pull-to-refresh required anywhere.
+      useProfileStore.getState().applyLocalPatch({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        name: fullNameOf(firstName, lastName),
+        dob: dob ? dob : null,
+        gender,
+        photoURL: resolvedPhotoURL,
+      });
+
       showToast(t('editProfile.updated'), 'success');
       router.back();
     } catch {
+      setUploadState('idle');
       showToast(t('editProfile.saveFailed'), 'error');
     } finally {
       setSaving(false);
@@ -202,9 +229,10 @@ export default function EditProfileScreen() {
         {/* Photo */}
         <Animated.View entering={FadeInDown.duration(320)} style={styles.photoBlock}>
           <Pressable onPress={() => setShowPhotoSheet(true)} style={styles.photoPressable}>
-            <View style={[styles.avatarGlow, { borderColor: colors.primary, backgroundColor: colors.surfaceAlt, shadowColor: colors.primary }]}>
+            {/* Ring turns blue while uploading and green on completion. */}
+            <AvatarProgressRing size={96} progress={uploadProgress} state={uploadState}>
               <Avatar uri={photoURL} name={fullNameOf(firstName, lastName)} size={96} />
-            </View>
+            </AvatarProgressRing>
             <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
               <Ionicons name="camera" size={16} color="#FFF" />
             </View>
@@ -324,7 +352,15 @@ export default function EditProfileScreen() {
         />
       </View>
 
-      <PageLoaderOverlay visible={saving} label={t('editProfile.saving')} />
+      {/* Centred loader on first open, matching every other page. */}
+      <PageLoaderOverlay
+        visible={profile.loading && !hydrated}
+        label={t('editProfile.loadingProfile')}
+      />
+      <PageLoaderOverlay
+        visible={saving}
+        label={uploadState === 'uploading' ? t('editProfile.uploadingPhoto') : t('editProfile.saving')}
+      />
 
       <BottomSheet visible={showPhotoSheet} onClose={() => setShowPhotoSheet(false)}>
         <View style={{ gap: spacing.sm }}>
@@ -362,16 +398,7 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   photoBlock: { alignItems: 'center', marginBottom: 4 },
-  photoPressable: { position: 'relative' },
-  avatarGlow: {
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 2.5,
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
+  photoPressable: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
   cameraBadge: {
     position: 'absolute',
     right: -2,

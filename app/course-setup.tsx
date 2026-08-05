@@ -2,14 +2,15 @@
 // Blue curved header with a WORKING theme toggle (colors are theme-aware, unlike
 // the previous version which used hardcoded hex values that never changed).
 // No back button (mandatory step). Select Course (blue) → Subcourse (red) → Save.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
-import { fetchCourses, fetchSubcourses, saveUserCourseSetup, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
+import { fetchCourses, fetchSubcourses, saveUserCourseSetup, fetchUserCourseInfo, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -37,6 +38,16 @@ export default function CourseSetupScreen() {
   const [subcourseError, setSubcourseError] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // What the user is ALREADY enrolled in. Kept separate from the working
+  // selection so the screen can (a) pre-select it when reopened — it previously
+  // always opened blank even for users who had already completed setup — and
+  // (b) colour-code "currently enrolled" differently from "new selection".
+  const [savedCourseId, setSavedCourseId] = useState<string | null>(null);
+  const [savedSubcourseId, setSavedSubcourseId] = useState<string | null>(null);
+  // Guards the subcourse effect from clearing the pre-selected subcourse during
+  // the initial hydration pass (it must only clear on a real user course change).
+  const hydratingRef = useRef(false);
+
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
   // Extracted so pull-to-refresh can re-run the same fetch.
@@ -57,11 +68,35 @@ export default function CourseSetupScreen() {
 
   const { refreshing, onRefresh } = useManualRefresh(loadCourses);
 
+  // Pre-select whatever the user is already enrolled in.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const info = await fetchUserCourseInfo(user.uid);
+        if (!info.courseId) return;
+        hydratingRef.current = true;
+        setSavedCourseId(info.courseId);
+        setSavedSubcourseId(info.subcourseId);
+        setSelectedCourse(info.courseId);
+        setSelectedSubcourse(info.subcourseId);
+      } catch {
+        // Non-fatal — the screen still works as a fresh setup.
+      }
+    })();
+  }, [user?.uid]);
+
   useEffect(() => {
     if (!selectedCourse) { setSubcourses([]); return; }
     setLoadingSub(true);
     setSubcourseError(false);
-    setSelectedSubcourse(null);
+    // Only wipe the chosen subcourse when the user actually switches course —
+    // not while restoring their saved selection.
+    if (hydratingRef.current) {
+      hydratingRef.current = false;
+    } else {
+      setSelectedSubcourse(null);
+    }
     (async () => {
       try {
         const data = await fetchSubcourses(selectedCourse);
@@ -81,6 +116,11 @@ export default function CourseSetupScreen() {
     setSaving(true);
     try {
       await saveUserCourseSetup(user.uid, selectedCourse, selectedSubcourse);
+      // Refresh the shared store so Home's course card and the Profile subcourse
+      // pill update immediately, without needing a manual pull-to-refresh.
+      await useProfileStore.getState().load(user.uid, { force: true }).catch(() => {});
+      setSavedCourseId(selectedCourse);
+      setSavedSubcourseId(selectedSubcourse);
       setSaving(false);
       if (isUpdateMode) {
         router.back();
@@ -187,28 +227,50 @@ export default function CourseSetupScreen() {
               </Animated.View>
             ) : (
               <View style={styles.chipsRow}>
-                {subcourses.map((sub, i) => (
-                  <Animated.View key={sub.id} entering={FadeInDown.delay(i * 80).duration(350)}>
-                    <Pressable
-                      onPress={() => setSelectedSubcourse(sub.id)}
-                      style={[
-                        styles.chip,
-                        selectedSubcourse === sub.id
-                          ? styles.chipActiveRed
-                          : { backgroundColor: colors.surface, borderColor: colors.border },
-                      ]}
-                    >
-                      {selectedSubcourse === sub.id && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
-                      <Text variant="body" weight={selectedSubcourse === sub.id ? 'bold' : 'medium'} style={{ color: selectedSubcourse === sub.id ? '#FFF' : colors.textPrimary }}>
-                        {sub.name} ({sub.level})
-                      </Text>
-                    </Pressable>
-                  </Animated.View>
-                ))}
+                {subcourses.map((sub, i) => {
+                  const isSelected = selectedSubcourse === sub.id;
+                  // Blue = the subcourse you're already enrolled in.
+                  // Red  = a NEW pick that differs from what's saved.
+                  const isEnrolled = isSelected && sub.id === savedSubcourseId && selectedCourse === savedCourseId;
+                  return (
+                    <Animated.View key={sub.id} entering={FadeInDown.delay(i * 80).duration(350)}>
+                      <Pressable
+                        onPress={() => setSelectedSubcourse(sub.id)}
+                        style={[
+                          styles.chip,
+                          isSelected
+                            ? isEnrolled
+                              ? styles.chipActiveBlue
+                              : styles.chipActiveRed
+                            : { backgroundColor: colors.surface, borderColor: colors.border },
+                        ]}
+                      >
+                        {isSelected && <Ionicons name="checkmark-circle" size={18} color="#FFF" />}
+                        <Text variant="body" weight={isSelected ? 'bold' : 'medium'} style={{ color: isSelected ? '#FFF' : colors.textPrimary }}>
+                          {sub.name} ({sub.level})
+                        </Text>
+                      </Pressable>
+                    </Animated.View>
+                  );
+                })}
               </View>
             )}
           </Animated.View>
         )}
+
+        {/* Colour legend, so the blue/red states are self-explanatory. */}
+        {savedCourseId ? (
+          <Animated.View entering={FadeIn.duration(300)} style={[styles.legendBox, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
+              <Text variant="caption" style={{ color: colors.textSecondary }}>Currently enrolled</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#DC2626' }]} />
+              <Text variant="caption" style={{ color: colors.textSecondary }}>New selection</Text>
+            </View>
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
       {/* Save Button */}
@@ -245,6 +307,9 @@ const styles = StyleSheet.create({
   chipActiveBlue: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   chipActiveRed: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA' },
+  legendBox: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, padding: 12, borderRadius: 12 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
   errorText: { color: '#991B1B', flex: 1, lineHeight: 18 },
   bottomBar: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1 },
   saveButton: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },

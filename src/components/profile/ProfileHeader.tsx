@@ -33,6 +33,9 @@ import { Avatar } from '@/src/components/misc/Avatar';
 
 const COLLAPSE_DISTANCE = 150;
 
+/** Avatar glow colour — green in BOTH the expanded and collapsed header. */
+const GLOW_GREEN = '#22C55E';
+
 export const PROFILE_HEADER_EXPANDED_HEIGHT_BASE = 252;
 export const PROFILE_HEADER_COLLAPSED_HEIGHT_BASE = 64;
 
@@ -123,7 +126,7 @@ export function ProfileHeader({
         </View>
 
         <View style={styles.avatarBlock}>
-          {/* Glow ring around the avatar edge */}
+          {/* Green glow ring around the avatar edge */}
           <View style={styles.avatarGlow}>
             <Avatar uri={photoURL} name={displayName ?? undefined} size={88} />
           </View>
@@ -156,7 +159,11 @@ export function ProfileHeader({
         pointerEvents={collapsed ? 'auto' : 'none'}
       >
         <View style={styles.collapsedRow}>
-          <Avatar uri={photoURL} name={displayName ?? undefined} size={34} />
+          {/* Same green glow, scaled down — the ring must stay visible once the
+              header shrinks, not just at rest. */}
+          <View style={styles.collapsedAvatarGlow}>
+            <Avatar uri={photoURL} name={displayName ?? undefined} size={30} />
+          </View>
           <Text variant="bodySmall" weight="semiBold" style={styles.collapsedName} numberOfLines={1}>
             {displayName ?? ''}
           </Text>
@@ -227,11 +234,11 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 999,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.95)',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    // Soft white halo — iOS uses shadow*, Android uses elevation.
-    shadowColor: '#FFFFFF',
-    shadowOpacity: 0.65,
+    borderColor: GLOW_GREEN,
+    backgroundColor: 'rgba(34,197,94,0.22)',
+    // Soft green halo — iOS uses shadow*, Android needs elevation.
+    shadowColor: GLOW_GREEN,
+    shadowOpacity: 0.9,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
     elevation: 12,
@@ -274,6 +281,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collapsedAvatarGlow: {
+    padding: 2,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: GLOW_GREEN,
+    backgroundColor: 'rgba(34,197,94,0.22)',
+    shadowColor: GLOW_GREEN,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
   // flexShrink + a width cap let a long name give up space before anything
   // overflows, which is what keeps this row fitting on narrow devices.
   collapsedName: { color: '#FFF', flexShrink: 1, maxWidth: '34%' },

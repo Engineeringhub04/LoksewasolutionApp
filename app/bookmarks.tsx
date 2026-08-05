@@ -17,6 +17,7 @@ import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { RefreshableCenter } from '@/src/components/feedback/RefreshableCenter';
 
 export default function BookmarksScreen() {
   const { colors, spacing } = useTheme();
@@ -60,9 +61,20 @@ export default function BookmarksScreen() {
 
       <PageLoaderOverlay visible={loading || refreshing} label="Loading Bookmarks..." />
       {loading ? null : error ? (
-        <DataNotFound onRetry={refetch} />
+        <RefreshableCenter refreshing={refreshing} onRefresh={refresh}>
+          <DataNotFound onRetry={refetch} />
+        </RefreshableCenter>
       ) : filtered.length === 0 ? (
-        <EmptyState title={t('bookmarks.empty')} ctaLabel={t('bookmarks.browseSubjects')} onCtaPress={() => router.push('/subjects')} />
+        // Keeps pull-to-refresh available on the empty state too.
+        <RefreshableCenter refreshing={refreshing} onRefresh={refresh}>
+          <EmptyState
+            icon="bookmark-outline"
+            title={t('bookmarks.empty')}
+            ctaLabel={t('bookmarks.browseSubjects')}
+            ctaIcon="search"
+            onCtaPress={() => router.push('/subjects')}
+          />
+        </RefreshableCenter>
       ) : (
         <FlatList
           data={filtered}
