@@ -12,6 +12,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
@@ -128,6 +129,10 @@ export default function HomeScreen() {
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
+
+  // Coming back to Home (from course setup, QOTD, notifications) must show the
+  // updated state without a manual pull.
+  useRefreshOnFocus(onRefresh);
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
   const demoSubjects = useMemo(() => demoSubjectsForCourse(courseInfo.data?.courseId ?? null), [courseInfo.data?.courseId]);

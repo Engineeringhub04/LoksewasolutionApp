@@ -7,6 +7,7 @@ import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { loadDownloads, removeDownload, clearAllDownloads, totalStorageUsed, formatBytes } from '@/src/core/firebase/services/downloads';
 import { showToast } from '@/src/core/store/toastStore';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
@@ -24,6 +25,9 @@ export default function DownloadsScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadDownloads(), []);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const items = data ?? [];

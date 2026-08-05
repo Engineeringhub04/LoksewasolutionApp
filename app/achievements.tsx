@@ -7,6 +7,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { fetchAchievements, type AchievementStatus } from '@/src/core/firebase/services/achievements';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
@@ -25,6 +26,9 @@ export default function AchievementsScreen() {
     if (!user) return [];
     return fetchAchievements(user.uid);
   }, [user?.uid]);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

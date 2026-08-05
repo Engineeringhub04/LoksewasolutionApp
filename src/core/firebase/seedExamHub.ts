@@ -284,6 +284,10 @@ export async function seedExamHub(onProgress?: (p: SeedProgress) => void): Promi
   const now = Date.now();
   const writes: WriteSpec[] = [];
 
+  // Every exam-set id is deterministic, so this run overwrites the previous seed
+  // in place. That is what lets Past Qns switch some of its sets from MCQ to
+  // paper without leaving stale documents behind — no manual cleanup needed.
+
   // Provinces
   PROVINCES.forEach((p, i) => {
     writes.push(setWrite(`${Collections.examProvinces}/${p.id}`, { ...p, order: i + 1 }));
@@ -315,7 +319,14 @@ export async function seedExamHub(onProgress?: (p: SeedProgress) => void): Promi
       for (const province of PROVINCES) {
         for (const section of SECTIONS) {
           const id = `${subcourseId}__${province.id}__${section.id}`;
-          const isPdf = section.kind === 'theory';
+          // Past Qns carries BOTH kinds of paper, alternating per province, so
+          // that tab genuinely exercises the mixed case: an MCQ set behaves like
+          // MCQ Tests (Start -> quiz) and a theory set like Theory Desk
+          // (View Question -> paper). Theory Desk is always a paper; the two MCQ
+          // sections are always questions.
+          const isPdf =
+            section.kind === 'theory' ||
+            (section.kind === 'mixed' && PROVINCES.findIndex((p) => p.id === province.id) % 2 === 1);
           const questions = isPdf ? [] : questionsFor(section.id);
           variant += 1;
 

@@ -6,6 +6,7 @@ import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { loadNotes } from '@/src/core/firebase/services/notes';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
@@ -20,6 +21,9 @@ export default function KeepNotesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadNotes(), []);
+
+  // Returning to this screen must show current data without a manual pull.
+  useRefreshOnFocus(refresh);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
