@@ -41,11 +41,12 @@ export default function ContactUsScreen() {
     },
   ];
 
-  const socials: { icon: keyof typeof Ionicons.glyphMap; url: string; label: string }[] = [
-    { icon: 'logo-facebook', url: AppConfig.links.facebook, label: 'Facebook' },
-    { icon: 'logo-youtube', url: AppConfig.links.youtube, label: 'YouTube' },
-    { icon: 'logo-instagram', url: AppConfig.links.instagram, label: 'Instagram' },
-    { icon: 'logo-discord', url: AppConfig.links.discord, label: 'Discord' },
+  // Each platform in its own brand colour, in a circular button.
+  const socials: { icon: keyof typeof Ionicons.glyphMap; url: string; label: string; color: string }[] = [
+    { icon: 'logo-facebook', url: AppConfig.links.facebook, label: 'Facebook', color: '#1877F2' },
+    { icon: 'logo-instagram', url: AppConfig.links.instagram, label: 'Instagram', color: '#E4405F' },
+    { icon: 'logo-youtube', url: AppConfig.links.youtube, label: 'YouTube', color: '#FF0000' },
+    { icon: 'logo-twitter', url: AppConfig.links.twitter, label: 'X (Twitter)', color: '#0F1419' },
   ];
 
   const handleSend = async () => {
@@ -95,17 +96,24 @@ export default function ContactUsScreen() {
       <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.sm }}>Follow us</Text>
       <View style={styles.socialRow}>
         {socials.map((social) => (
-          <Pressable
-            key={social.label}
-            onPress={() => Linking.openURL(social.url)}
-            accessibilityLabel={social.label}
-            style={({ pressed }) => [
-              styles.socialButton,
-              { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Ionicons name={social.icon} size={22} color={colors.primary} />
-          </Pressable>
+          <View key={social.label} style={styles.socialItem}>
+            <Pressable
+              onPress={() => Linking.openURL(social.url)}
+              accessibilityLabel={social.label}
+              style={({ pressed }) => [
+                styles.socialCircle,
+                {
+                  backgroundColor: `${social.color}1A`,
+                  borderColor: `${social.color}55`,
+                  opacity: pressed ? 0.7 : 1,
+                  transform: [{ scale: pressed ? 0.94 : 1 }],
+                },
+              ]}
+            >
+              <Ionicons name={social.icon} size={24} color={social.color} />
+            </Pressable>
+            <Text variant="caption" secondary numberOfLines={1}>{social.label}</Text>
+          </View>
         ))}
       </View>
 
@@ -136,6 +144,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   iconBox: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.65 },
-  socialRow: { flexDirection: 'row', gap: 10 },
-  socialButton: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderWidth: StyleSheet.hairlineWidth },
+  socialRow: { flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  socialItem: { flex: 1, alignItems: 'center', gap: 6 },
+  socialCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
 });

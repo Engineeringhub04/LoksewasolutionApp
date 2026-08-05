@@ -30,6 +30,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
 import { Avatar } from '@/src/components/misc/Avatar';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
 const COLLAPSE_DISTANCE = 150;
 
@@ -55,6 +56,8 @@ interface ProfileHeaderProps {
   languageLabel: string;
   onToggleLanguage: () => void;
   onEditPress: () => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
 }
 
 export function ProfileHeader({
@@ -66,6 +69,8 @@ export function ProfileHeader({
   languageLabel,
   onToggleLanguage,
   onEditPress,
+  isDark,
+  onToggleTheme,
 }: ProfileHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -114,15 +119,19 @@ export function ProfileHeader({
       >
         <View style={styles.titleRow}>
           <Text variant="h2" weight="bold" style={styles.pageTitle}>Profile</Text>
-          <Pressable
-            onPress={onToggleLanguage}
-            style={({ pressed }) => [styles.languagePill, pressed && styles.pressedSoft]}
-            accessibilityLabel={`Change language, currently ${languageLabel}`}
-          >
-            <Text variant="caption" weight="bold" style={styles.languageText} numberOfLines={1}>
-              {languageLabel}
-            </Text>
-          </Pressable>
+          <View style={styles.actionsRow}>
+            {/* Theme toggle sits to the LEFT of the language switcher. */}
+            <ThemeToggleButton isDark={isDark} onToggle={onToggleTheme} size={36} />
+            <Pressable
+              onPress={onToggleLanguage}
+              style={({ pressed }) => [styles.languagePill, pressed && styles.pressedSoft]}
+              accessibilityLabel={`Change language, currently ${languageLabel}`}
+            >
+              <Text variant="caption" weight="bold" style={styles.languageText} numberOfLines={1}>
+                {languageLabel}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.avatarBlock}>
@@ -181,6 +190,8 @@ export function ProfileHeader({
             </Pressable>
           </View>
 
+          {/* Same order once collapsed: theme toggle, then language. */}
+          <ThemeToggleButton isDark={isDark} onToggle={onToggleTheme} size={32} />
           <Pressable
             onPress={onToggleLanguage}
             style={({ pressed }) => [styles.collapsedLanguagePill, pressed && styles.pressedSoft]}
@@ -217,7 +228,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignSelf: 'stretch',
   },
-  pageTitle: { color: '#FFF', fontSize: 22 },
+  pageTitle: { color: '#FFF', fontSize: 22, flexShrink: 1 },
+  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   languagePill: {
     backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: 999,

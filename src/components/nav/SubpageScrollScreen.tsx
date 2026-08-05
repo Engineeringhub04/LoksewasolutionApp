@@ -11,7 +11,7 @@
 // spinner briefly, so the interaction is consistent app-wide even where there's
 // nothing to re-fetch.
 import React, { useCallback, useRef, useState } from 'react';
-import { ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ScrollView, View, KeyboardAvoidingView, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme } from '@/src/core/theme';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
@@ -56,17 +56,28 @@ export function SubpageScrollScreen({
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={title} />
-      <ScrollView
+      {/* Without this, the on-screen keyboard covered the submit button on every
+          form built on this scaffold (Contact us, Feedback, Report Question).
+          iOS needs 'padding'; on Android 'height' works with the default
+          windowSoftInputMode, and the generous paddingBottom below guarantees
+          the last control can always be scrolled clear of the keyboard. */}
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
-        contentContainerStyle={[
-          { padding: spacing.screenPadding, paddingBottom: spacing.xxl, gap: spacing.md },
-          contentContainerStyle,
-        ]}
-        refreshControl={<AppRefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
-        keyboardShouldPersistTaps="handled"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {children}
-      </ScrollView>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            { padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2, gap: spacing.md },
+            contentContainerStyle,
+          ]}
+          refreshControl={<AppRefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
       {footer}
     </View>
   );

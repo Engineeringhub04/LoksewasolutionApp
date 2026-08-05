@@ -15,7 +15,7 @@ const socialLinks: { icon: keyof typeof Ionicons.glyphMap; url: string }[] = [
   { icon: 'logo-facebook', url: AppConfig.links.facebook },
   { icon: 'logo-youtube', url: AppConfig.links.youtube },
   { icon: 'logo-instagram', url: AppConfig.links.instagram },
-  { icon: 'logo-discord', url: AppConfig.links.discord },
+  { icon: 'logo-twitter', url: AppConfig.links.twitter },
 ];
 
 export default function AboutScreen() {
