@@ -42,14 +42,15 @@ export const AppConfig = {
     fontFamily: 'System',
   },
   links: {
-    // Demo/placeholder until the app is actually published — swap for the real
-    // store listing before release. Used by Share App and Rate Us.
+    // Store listings — placeholders until the app is actually published.
+    // Rate Us picks the right one per platform.
     playStore: 'https://play.google.com/store/apps/details?id=com.loksewasolutionnp.hub',
-    website: 'https://loksewasolution.com.np',
-    facebook: 'https://facebook.com/loksewasolution',
-    youtube: 'https://youtube.com/@loksewasolution',
-    instagram: 'https://instagram.com/loksewasolution',
-    discord: 'https://discord.gg/loksewasolution',
+    appStore: 'https://apps.apple.com/app/id0000000000',
+    website: 'https://kbr.com.np',
+    facebook: 'https://www.facebook.com/profile.php?id=61580182268110',
+    instagram: 'https://www.instagram.com/loksewasolution?igsh=dmtlc3Zza2F1Y2xr&utm_source=qr',
+    youtube: 'https://www.youtube.com/loksewasolution0',
+    twitter: 'https://x.com/loksewa_soln',
   },
   messaging: {
     // Contact / Feedback / Report submissions go to a Google Form, whose
@@ -90,10 +91,10 @@ export const AppConfig = {
     },
   },
   legal: {
-    privacyPolicyUrl: 'https://www.kbr.com.np/privacypoiicy',
-    termsUrl: 'https://loksewasolution.com.np/terms',
-    supportEmail: 'support@loksewasolution.com.np',
-    contactPhone: '+977-1-4444444',
+    privacyPolicyUrl: 'https://www.kbr.com.np/privacy',
+    termsUrl: 'https://www.kbr.com.np/terms',
+    supportEmail: 'contact@kbr.com.np',
+    contactPhone: '+977-9810768297',
   },
   behavior: {
     maintenanceMode: false,

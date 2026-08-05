@@ -5,7 +5,7 @@
 // unsaved changes asks for confirmation first (both the header back button and
 // the Android hardware back button).
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, ScrollView, StyleSheet, BackHandler } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, BackHandler, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -61,6 +61,17 @@ export default function EditProfileScreen() {
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
+
+  // The profile store is pre-warmed at app start, so data is usually already
+  // there and no loader would ever appear. This holds the loader on screen
+  // briefly so this page opens the same way Course Details does — spinner with
+  // a label first, then the real values — instead of flashing straight to a
+  // populated form.
+  const [minLoaderElapsed, setMinLoaderElapsed] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMinLoaderElapsed(true), 650);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Reads the shared store, which the root layout warms in the background — so
   // this screen normally has real data on first paint. `load` still runs to
@@ -129,6 +140,14 @@ export default function EditProfileScreen() {
 
   const pickImage = async (source: 'camera' | 'gallery') => {
     setShowPhotoSheet(false);
+
+    // iOS cannot present the native camera/library picker while the bottom
+    // sheet's Modal still owns the presented view controller — the request is
+    // silently dropped, which is why Camera/Gallery appeared to do nothing there
+    // while Remove (pure JS state) worked. Waiting for the dismissal animation
+    // to finish before launching fixes it, and is harmless on Android.
+    await new Promise<void>((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 450 : 150));
+
     const permission =
       source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -220,11 +239,13 @@ export default function EditProfileScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('editProfile.title')} onBackPress={attemptLeave} />
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl, gap: spacing.md }}
         refreshControl={<AppRefreshControl refreshing={profile.refreshing} onRefresh={profile.refresh} />}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
         {/* Photo */}
         <Animated.View entering={FadeInDown.duration(320)} style={styles.photoBlock}>
@@ -341,6 +362,7 @@ export default function EditProfileScreen() {
           <Text variant="bodySmall" style={{ color: colors.warning }}>{t('editProfile.offlineBlocked')}</Text>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Save — pinned, and inert until something actually changed */}
       <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.divider, padding: spacing.screenPadding }]}>
@@ -354,7 +376,7 @@ export default function EditProfileScreen() {
 
       {/* Centred loader on first open, matching every other page. */}
       <PageLoaderOverlay
-        visible={profile.loading && !hydrated}
+        visible={!hydrated || !minLoaderElapsed}
         label={t('editProfile.loadingProfile')}
       />
       <PageLoaderOverlay

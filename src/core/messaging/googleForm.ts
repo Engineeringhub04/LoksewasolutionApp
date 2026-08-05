@@ -44,6 +44,12 @@ export async function submitToGoogleForm(submission: FormSubmission): Promise<vo
   const { formId, entries } = AppConfig.messaging.googleForm;
   const user = await getCurrentUser().catch(() => null);
 
+  // Name + uid together, e.g. "Kishan Raut (Xy2f...)", so the inbox shows at a
+  // glance WHO sent it without having to cross-reference the uid in Firestore.
+  const displayName = user?.displayName?.trim();
+  const uid = user?.uid ?? 'guest';
+  const userIdField = displayName ? `${displayName} (${uid})` : uid;
+
   const body = buildBody({
     [entries.type]: submission.type,
     [entries.name]: user?.displayName ?? '',
@@ -56,7 +62,7 @@ export async function submitToGoogleForm(submission: FormSubmission): Promise<vo
     // Expo SDK is folded into the platform string rather than taking its own
     // field, so the form stays at the ten fields that were set up.
     [entries.platform]: `${Platform.OS} ${String(Platform.Version)} · Expo ${Constants.expoConfig?.sdkVersion ?? '?'}`,
-    [entries.userId]: user?.uid ?? 'guest',
+    [entries.userId]: userIdField,
   });
 
   const res = await fetch(`https://docs.google.com/forms/d/e/${formId}/formResponse`, {

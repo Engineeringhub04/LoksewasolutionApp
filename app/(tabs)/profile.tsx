@@ -4,7 +4,7 @@
 // services/profile.ts), not just the cached auth session, so the values survive
 // reinstalls and match across devices.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Share, Linking } from 'react-native';
+import { View, Share, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -24,7 +24,7 @@ import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function ProfileScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, effective, setMode } = useTheme();
   const { t, language, setLanguage } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -59,10 +59,18 @@ export default function ProfileScreen() {
     return t(`profile.gender_${gender}`);
   }, [profile?.gender, t]);
 
+  // Store listing for THIS platform — App Store on iOS, Play Store on Android.
+  const storeUrl = Platform.OS === 'ios' ? AppConfig.links.appStore : AppConfig.links.playStore;
+
   const handleShareApp = async () => {
+    const shareUrl = AppConfig.links.website;
     try {
       await Share.share({
-        message: `${AppConfig.identity.appName} — ${AppConfig.identity.tagline}\n${AppConfig.links.playStore}`,
+        title: AppConfig.identity.appName,
+        message: `${AppConfig.identity.appName} — ${AppConfig.identity.tagline}\n\n${shareUrl}`,
+        // iOS renders a link preview from `url`; Android only reads `message`,
+        // which is why the URL is included in both.
+        url: shareUrl,
       });
     } catch {
       // User dismissed the share sheet — nothing to report.
@@ -70,9 +78,7 @@ export default function ProfileScreen() {
   };
 
   const handleRateUs = () => {
-    Linking.openURL(AppConfig.links.playStore).catch(() =>
-      showToast(t('common.somethingWentWrong'), 'error')
-    );
+    Linking.openURL(storeUrl).catch(() => showToast(t('common.somethingWentWrong'), 'error'));
   };
 
   const scrollY = useSharedValue(0);
@@ -107,6 +113,8 @@ export default function ProfileScreen() {
         languageShortLabel={language === 'en' ? 'EN' : 'ने'}
         onToggleLanguage={toggleLanguage}
         onEditPress={goToEdit}
+        isDark={effective === 'dark'}
+        onToggleTheme={() => setMode(effective === 'dark' ? 'light' : 'dark')}
       />
 
       <Animated.ScrollView

@@ -17,7 +17,7 @@ const SOCIALS: { icon: keyof typeof Ionicons.glyphMap; label: string; url: strin
   { icon: 'logo-facebook', label: 'Facebook', url: AppConfig.links.facebook, color: '#1877F2' },
   { icon: 'logo-youtube', label: 'YouTube', url: AppConfig.links.youtube, color: '#FF0000' },
   { icon: 'logo-instagram', label: 'Instagram', url: AppConfig.links.instagram, color: '#E4405F' },
-  { icon: 'logo-discord', label: 'Discord', url: AppConfig.links.discord, color: '#5865F2' },
+  { icon: 'logo-twitter', label: 'X', url: AppConfig.links.twitter, color: '#0F1419' },
 ];
 
 const HIGHLIGHTS: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }[] = [
@@ -49,11 +49,9 @@ export default function AppInfoScreen() {
 
   return (
     <SubpageScrollScreen title={t('profile.appInfo')}>
-      {/* Identity */}
+      {/* Identity — logo circle-cropped, no card behind it */}
       <View style={styles.identityBlock}>
-        <View style={[styles.logoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Image source={AppConfig.identity.logoAsset} style={styles.logo} resizeMode="contain" />
-        </View>
+        <Image source={AppConfig.identity.logoAsset} style={styles.logo} resizeMode="cover" />
         <Text variant="h2" weight="bold" style={{ marginTop: spacing.sm, textAlign: 'center' }}>
           {AppConfig.identity.appName}
         </Text>
@@ -171,20 +169,13 @@ export default function AppInfoScreen() {
 
 const styles = StyleSheet.create({
   identityBlock: { alignItems: 'center' },
-  logoBox: {
-    width: 104,
-    height: 104,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+  // Circle-cropped: resizeMode 'cover' + a radius of half the size crops the
+  // artwork into the circle instead of letter-boxing it inside a card.
+  logo: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
   },
-  logo: { width: 78, height: 78 },
   versionPill: {
     flexDirection: 'row',
     alignItems: 'center',
