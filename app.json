@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "LoksewasolutionApp",
+    "slug": "LoksewasolutionApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "scheme": "loksewasolutionapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.loksewasolutionnp.hub"
+    },
+    "android": {
+      "package": "com.loksewasolutionnp.hub",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1330",
+        "foregroundImage": "./assets/images/logo.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B1330",
+          "dark": {
+            "backgroundColor": "#0B1330"
+          }
+        }
+      ],
+      "expo-video",
+      "expo-web-browser",
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Loksewa Solution to access your photos to set a profile picture or attach images to posts.",
+          "cameraPermission": "Allow Loksewa Solution to access your camera to take a profile picture or attach photos to posts."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
