@@ -44,6 +44,8 @@ export interface ExamAnswer {
   sectionName: string;
   message: string;
   pdfUrl: string;
+  /** Teacher's checked/marked copy of the answer sheet, uploaded separately from the student's original — this is what the student downloads once reviewed. */
+  checkedPdfUrl: string;
   status: AnswerStatus;
   /** Percentage 0..100, only meaningful once status === 'reviewed'. */
   score: number;
@@ -94,6 +96,7 @@ function parseAnswer(doc: Record<string, unknown>): ExamAnswer {
     sectionName: str(doc.sectionName),
     message: str(doc.message),
     pdfUrl: str(doc.pdfUrl),
+    checkedPdfUrl: str(doc.checkedPdfUrl),
     status: doc.status === 'reviewed' ? 'reviewed' : 'pending',
     score: num(doc.score),
     fullMarks: num(doc.fullMarks, 100),
@@ -133,6 +136,7 @@ export async function submitExamAnswer(input: SubmitAnswerInput): Promise<string
   const { id } = await createDocument(Collections.examAnswers, {
     ...input,
     status: 'pending',
+    checkedPdfUrl: '',
     score: 0,
     fullMarks: 100,
     passed: false,
@@ -218,8 +222,8 @@ export interface ReviewAnswerInput {
   fullMarks: number;
   passed: boolean;
   reviewNote: string;
-  /** Only present when the admin replaced the PDF (e.g. an annotated copy). */
-  pdfUrl?: string;
+  /** The teacher's checked/marked copy — becomes the file the student downloads. */
+  checkedPdfUrl?: string;
 }
 
 /** Admin grades a submission, moving it from 'pending' to 'reviewed'. */

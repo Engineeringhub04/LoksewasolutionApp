@@ -100,7 +100,6 @@ export function ExamCard({
       style={[
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md },
-        isSubmitted ? styles.submittedCard : null,
       ]}
     >
       {/* Title row */}
@@ -216,7 +215,11 @@ export function ExamCard({
           style={({ pressed }) => [
             styles.primaryButton,
             {
-              backgroundColor: primary.disabled ? colors.textDisabled : accentColor,
+              // "View Details" always stays a fixed green (matches the "View
+              // Question" identity colour) regardless of the section's accent —
+              // a submitted card's action must read as a distinct, consistent
+              // state everywhere, not blend into whichever board it's on.
+              backgroundColor: primary.disabled ? colors.textDisabled : isSubmitted ? '#16A34A' : accentColor,
               borderRadius: radius.md,
               opacity: pressed ? 0.85 : 1,
             },
@@ -238,7 +241,6 @@ export function ExamCard({
 
 const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, gap: 12 },
-  submittedCard: { opacity: 0.72 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',

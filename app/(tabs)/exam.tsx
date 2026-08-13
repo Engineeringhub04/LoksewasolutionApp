@@ -31,7 +31,6 @@ import {
   type ExamSet,
 } from '@/src/core/firebase/services/examHub';
 import { fetchMyExamAnswersBySet } from '@/src/core/firebase/services/examAnswers';
-import { seedExamHub } from '@/src/core/firebase/seedExamHub';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/exam/ExamCard';
@@ -60,7 +59,6 @@ export default function ExamScreen() {
 
   const [provinceId, setProvinceId] = useState<string>(ALL_PROVINCES);
   const [sectionId, setSectionId] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
 
   const [rulesVisible, setRulesVisible] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -171,19 +169,6 @@ export default function ExamScreen() {
     }
   };
 
-  const handleSeed = async () => {
-    setSeeding(true);
-    try {
-      const result = await seedExamHub();
-      showToast(`Seeded ${result.total} exam documents`, 'success');
-      onRefresh();
-    } catch {
-      showToast('Seeding failed. Check Firestore rules allow writes.', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const provinceChips = useMemo(
     () => [
       { id: ALL_PROVINCES, label: 'All Board' },
@@ -211,18 +196,6 @@ export default function ExamScreen() {
               Loksewa Exams Hub
             </Text>
           </View>
-          {/* Dev seeding entry point. Remove once the collections are populated. */}
-          <Pressable
-            onPress={handleSeed}
-            disabled={seeding}
-            style={({ pressed }) => [styles.seedButton, { opacity: pressed || seeding ? 0.6 : 1 }]}
-            accessibilityLabel="Seed exam data"
-          >
-            <Ionicons name={seeding ? 'cloud-upload' : 'cloud-upload-outline'} size={14} color="#FFF" />
-            <Text variant="caption" weight="bold" style={styles.seedText}>
-              {seeding ? 'Seeding…' : 'Seed Remaining'}
-            </Text>
-          </Pressable>
         </View>
 
         {/* Province filter */}
@@ -400,7 +373,7 @@ export default function ExamScreen() {
         </ScrollView>
       )}
 
-      <PageLoaderOverlay visible={loading || seeding} label={seeding ? 'Seeding exam data…' : 'Loading Exams…'} />
+      <PageLoaderOverlay visible={loading} label="Loading Exams…" />
 
       <ExamRulesSheet
         visible={rulesVisible}
@@ -445,19 +418,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { color: '#FFF', fontSize: 19, flexShrink: 1 },
-  seedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    flexShrink: 0,
-  },
-  seedText: { color: '#FFF' },
   tabStrip: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   provinceChip: {
     flexDirection: 'row',

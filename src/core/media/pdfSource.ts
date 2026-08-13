@@ -50,6 +50,8 @@ export interface PdfFetchResult {
   /** Raw base64 (no data: prefix) — what pdf.js is handed. */
   base64: string;
   byteLength: number;
+  /** Local file this came from (freshly downloaded or read from cache) — exposed so callers needing a real file:// URI (e.g. sharing) don't have to write the bytes out again. */
+  cachedPath?: string;
 }
 
 /**
@@ -89,54 +91,94 @@ function candidateUrls(url: string): string[] {
   return [toDirectPdfUrl(trimmed)];
 }
 
-/** Single attempt against one concrete URL. */
-function download(directUrl: string, onProgress?: (fraction: number) => void): Promise<PdfFetchResult> {
-  return new Promise<PdfFetchResult>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', directUrl);
-    xhr.responseType = 'blob';
+/** Stable filename for a URL so re-opening the same paper hits the on-disk cache instead of re-downloading it every time. expo-crypto's digest is used since a plain JS hash isn't available without another dependency and this one is already in the project. */
+async function cacheKeyFor(url: string): Promise<string> {
+  const Crypto = await import('expo-crypto');
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, url);
+  return `pdf-cache-${hash}.pdf`;
+}
 
-    xhr.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress?.(Math.min(1, event.loaded / event.total));
-      } else {
-        onProgress?.(-1);
-      }
-    };
+/** Single attempt against one concrete URL. Uses expo-file-system's native
+ * downloader rather than XHR+FileReader — the blob/FileReader path is
+ * unreliable on Android (silently truncates or fails on many device/OS
+ * combinations for larger binary files), while FileSystem's downloader is
+ * the same native code path used everywhere else PDFs are fetched in the app.
+ *
+ * Checks the on-disk cache first (keyed by a hash of the URL) so opening the
+ * same paper twice — the very common "back out and reopen a question" case —
+ * reads local bytes instead of re-downloading every time.
+ *
+ * Falls back to a plain fetch()+base64 conversion if the resumable download
+ * comes back empty — some Android/Expo SDK 54 combinations silently write a
+ * 0-byte file when the server's response has no Content-Length (chunked
+ * transfer-encoding), which Cloudinary's `raw/upload` delivery can do. fetch()
+ * doesn't depend on a declared length, so it's a more reliable second attempt.
+ */
+async function download(directUrl: string, onProgress?: (fraction: number) => void): Promise<PdfFetchResult> {
+  const FileSystem = await import('expo-file-system/legacy');
+  const dest = `${FileSystem.cacheDirectory}${await cacheKeyFor(directUrl)}`;
 
-    xhr.onerror = () => reject(new Error('PDF_NETWORK_ERROR'));
-    xhr.onabort = () => reject(new Error('PDF_ABORTED'));
+  const cached = await FileSystem.getInfoAsync(dest);
+  if (cached.exists && (cached.size ?? 0) > 0) {
+    const cachedBase64 = await FileSystem.readAsStringAsync(dest, { encoding: FileSystem.EncodingType.Base64 });
+    if (cachedBase64 && looksLikePdf(cachedBase64)) {
+      onProgress?.(1);
+      return { base64: cachedBase64, byteLength: cached.size ?? 0, cachedPath: dest };
+    }
+    // Stale/corrupt cache entry (e.g. an old run cached an error page) — clear
+    // it so this attempt re-downloads instead of permanently failing on it.
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+  }
 
-    xhr.onload = () => {
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`PDF_HTTP_${xhr.status}`));
-        return;
-      }
-
-      const blob = xhr.response as Blob;
-      if (!blob) {
-        reject(new Error('PDF_EMPTY_RESPONSE'));
-        return;
-      }
-
-      // FileReader gives a data: URL; pdf.js wants the payload only.
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('PDF_READ_ERROR'));
-      reader.onload = () => {
-        const dataUrl = String(reader.result ?? '');
-        const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-        if (!base64) {
-          reject(new Error('PDF_DECODE_ERROR'));
-          return;
-        }
-        onProgress?.(1);
-        resolve({ base64, byteLength: blob.size ?? 0 });
-      };
-      reader.readAsDataURL(blob);
-    };
-
-    xhr.send();
+  const downloadable = FileSystem.createDownloadResumable(directUrl, dest, {}, (p) => {
+    if (p.totalBytesExpectedToWrite > 0) {
+      onProgress?.(Math.min(1, p.totalBytesWritten / p.totalBytesExpectedToWrite));
+    } else {
+      onProgress?.(-1);
+    }
   });
+
+  let base64 = '';
+  let byteLength = 0;
+
+  try {
+    const result = await downloadable.downloadAsync();
+    if (result?.uri && (!result.status || (result.status >= 200 && result.status < 300))) {
+      const info = await FileSystem.getInfoAsync(result.uri);
+      if (info.exists && (info.size ?? 0) > 0) {
+        base64 = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64 });
+        byteLength = info.size ?? 0;
+      }
+    } else {
+    }
+  } catch (err) {
+  }
+
+  if (!base64) {
+    const response = await fetch(directUrl);
+    if (!response.ok) throw new Error(`PDF_HTTP_${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength === 0) throw new Error('PDF_EMPTY_RESPONSE');
+    base64 = arrayBufferToBase64(arrayBuffer);
+    byteLength = arrayBuffer.byteLength;
+    await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+    onProgress?.(1);
+  }
+
+  if (!base64) throw new Error('PDF_EMPTY_RESPONSE');
+  return { base64, byteLength, cachedPath: dest };
+}
+
+/** Chunked to avoid call-stack limits on large files (base64-encoding a big Uint8Array in one String.fromCharCode(...spread) call can blow the stack). */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  // eslint-disable-next-line no-undef
+  return typeof btoa === 'function' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
 }
 
 /**

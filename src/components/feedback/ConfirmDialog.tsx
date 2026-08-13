@@ -13,6 +13,8 @@ export interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  /** Hides the Cancel button and lets Confirm take the full width — for dialogs where both actions would do the same thing (e.g. a plain acknowledgement). */
+  singleButton?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -24,6 +26,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive,
+  singleButton,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -52,7 +55,9 @@ export function ConfirmDialog({
             </Text>
           ) : null}
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-            <Button label={cancelLabel ?? t('common.cancel')} variant="secondary" onPress={onCancel} style={{ flex: 1 }} />
+            {!singleButton ? (
+              <Button label={cancelLabel ?? t('common.cancel')} variant="secondary" onPress={onCancel} style={{ flex: 1 }} />
+            ) : null}
             <Button
               label={confirmLabel ?? t('common.confirm')}
               variant={destructive ? 'danger' : 'primary'}

@@ -7,8 +7,9 @@
 // relying on the Exam Hub card already having routed submitted students
 // elsewhere), so a stale card or a direct deep-link can't bypass the rule.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -18,8 +19,8 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
-import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { PdfViewer } from '@/src/components/media/PdfViewer';
 import { pickAnswerPdf, MAX_ANSWER_PDF_BYTES, type PickedPdf } from '@/src/core/media/pdfPicker';
 import { uploadPdfToCloudinary } from '@/src/core/media/cloudinary';
 import { submitExamAnswer, updateMyExamAnswer, fetchMyExamAnswersBySet } from '@/src/core/firebase/services/examAnswers';
@@ -39,6 +40,7 @@ export default function ExamAnswerUploadScreen() {
   }>();
   const isEdit = !!editId;
   const { colors, spacing, radius } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const user = useAuthStore((s) => s.user);
@@ -47,9 +49,17 @@ export default function ExamAnswerUploadScreen() {
   const [fullName, setFullName] = useState(profile?.name ?? user?.displayName ?? '');
   const [message, setMessage] = useState('');
   const [file, setFile] = useState<PickedPdf | null>(null);
+  const [picking, setPicking] = useState(false);
+  // Uploaded to Cloudinary the moment it's picked (not deferred to Submit) so
+  // the preview below can render a real HTTPS URL through PdfViewer, same
+  // reasoning as the admin screen's Checked PDF preview.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [successVisible, setSuccessVisible] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [checkingExisting, setCheckingExisting] = useState(!isEdit);
 
@@ -78,7 +88,7 @@ export default function ExamAnswerUploadScreen() {
     return parts.length ? parts.join(' · ') : 'Course not set up';
   }, [courseInfo]);
 
-  const canSubmit = !!file && fullName.trim().length > 0 && !!examSetId && !submitting;
+  const canSubmit = !!previewUrl && fullName.trim().length > 0 && !!examSetId && !submitting && !picking;
 
   const handlePickFile = async () => {
     try {
@@ -89,19 +99,23 @@ export default function ExamAnswerUploadScreen() {
         return;
       }
       setFile(picked);
+      setPicking(true);
+      const url = await uploadPdfToCloudinary(picked.uri, picked.name, setProgress);
+      setPreviewUrl(url);
     } catch {
-      showToast('Could not open the file picker. Please try again.', 'error');
+      showToast('Could not upload the PDF. Please try again.', 'error');
+      setFile(null);
+    } finally {
+      setPicking(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!file || !user?.uid || !examSetId) return;
+    if (!previewUrl || !user?.uid || !examSetId) return;
+    const pdfUrl = previewUrl;
 
     setSubmitting(true);
-    setProgress(0);
     try {
-      const pdfUrl = await uploadPdfToCloudinary(file.uri, file.name, setProgress);
-
       if (isEdit && editId) {
         // Re-upload during the edit window — only file/message change; status,
         // score and reviewedAt stay whatever the admin already set (see
@@ -112,7 +126,7 @@ export default function ExamAnswerUploadScreen() {
         return;
       }
 
-      await submitExamAnswer({
+      const newId = await submitExamAnswer({
         uid: user.uid,
         studentName: fullName.trim(),
         profileName: profile?.name ?? user?.displayName ?? fullName.trim(),
@@ -128,6 +142,7 @@ export default function ExamAnswerUploadScreen() {
         message: message.trim(),
         pdfUrl,
       });
+      setSubmittedId(newId);
 
       // Best-effort — a failed Discord ping must never fail the submission itself.
       notifyExamAnswerSubmitted({
@@ -144,6 +159,19 @@ export default function ExamAnswerUploadScreen() {
       showToast('Upload failed. Check your connection and try again.', 'error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Both "View Details" and hardware/gesture back after a successful submit
+  // go to the real details page (replacing this screen in history) instead of
+  // back to the question paper — landing back on Upload from the paper screen
+  // would let a student submit a second answer for the same set.
+  const goToDetails = () => {
+    setSuccessVisible(false);
+    if (submittedId) {
+      router.replace({ pathname: '/exam-answer/[id]', params: { id: submittedId } } as never);
+    } else {
+      router.back();
     }
   };
 
@@ -169,6 +197,22 @@ export default function ExamAnswerUploadScreen() {
             Only one submission is allowed per paper. You can view or edit your existing submission from its details page.
           </Text>
           <Button label="View my Submission" onPress={() => router.back()} />
+        </View>
+      </View>
+    );
+  }
+
+  if (successVisible) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SubpageHeader title="Answer Submitted" showBack={false} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.screenPadding, gap: spacing.md }}>
+          <Ionicons name="checkmark-done-circle" size={56} color={colors.success} />
+          <Text variant="h3" weight="bold" style={{ textAlign: 'center' }}>Answer Submitted</Text>
+          <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>
+            Your answer PDF has been submitted to our team. Please wait a few days (up to 7 days) — once a teacher has checked your answer, the result will appear on this exam's details page, where you can download it.
+          </Text>
+          <Button label="View Details" onPress={goToDetails} />
         </View>
       </View>
     );
@@ -209,11 +253,12 @@ export default function ExamAnswerUploadScreen() {
             Answer PDF
           </Text>
           <Button
-            label={file ? 'Change file' : 'Choose PDF'}
+            label={picking ? 'Uploading…' : file ? 'Change file' : 'Choose PDF'}
             variant="secondary"
             icon={<Ionicons name="document-attach-outline" size={18} color={colors.primary} />}
             onPress={handlePickFile}
-            disabled={submitting}
+            disabled={submitting || picking}
+            loading={picking}
           />
           {file ? (
             <View style={[styles.filePill, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md }]}>
@@ -228,16 +273,37 @@ export default function ExamAnswerUploadScreen() {
               PDF only, up to 8 MB.
             </Text>
           )}
+
+          {picking ? (
+            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt, marginTop: spacing.sm }]}>
+              <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.round(progress * 100)}%` }]} />
+            </View>
+          ) : null}
+
+          {previewUrl ? (
+            <View style={[styles.pdfCard, { borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }, fullscreen ? styles.pdfCardFullscreen : null]}>
+              <View style={{ flex: 1 }}>
+                <PdfViewer uri={previewUrl} />
+              </View>
+              {!fullscreen ? (
+                <Button
+                  label="Fullscreen"
+                  variant="secondary"
+                  icon={<Ionicons name="expand-outline" size={16} color={colors.primary} />}
+                  onPress={() => setFullscreen(true)}
+                  style={{ margin: spacing.sm }}
+                />
+              ) : (
+                <Pressable onPress={() => setFullscreen(false)} style={[styles.closeButton, { top: insets.top + 12 }]} accessibilityLabel="Close fullscreen">
+                  <Ionicons name="close" size={22} color="#FFF" />
+                </Pressable>
+              )}
+            </View>
+          ) : null}
         </View>
 
-        {submitting ? (
-          <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
-            <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.round(progress * 100)}%` }]} />
-          </View>
-        ) : null}
-
         <Button
-          label={submitting ? 'Uploading…' : isEdit ? 'Save Changes' : 'Submit Answer'}
+          label={submitting ? 'Submitting…' : isEdit ? 'Save Changes' : 'Submit Answer'}
           onPress={handleSubmit}
           disabled={!canSubmit}
           loading={submitting}
@@ -253,25 +319,6 @@ export default function ExamAnswerUploadScreen() {
           </Text>
         )}
       </ScrollView>
-
-      <ConfirmDialog
-        visible={successVisible}
-        title="Answer Submitted / जवाफ पेश भयो"
-        message={
-          "Hjr ko Answer PDF file hamro team sanga submit vaisakeko cha. Hjrle ab kehi din wait garnus (upto 7 days). Hami hjr ko answer sheet teacher sanga check garera hjr lai yehi exam card ko View Details page ma upload garidinxau, hjr download garna sakinu huncha.\n\n" +
-          "Your answer PDF has been submitted to our team. Please wait a few days (up to 7 days) — once a teacher has checked your answer sheet, the result will appear on this exam's View Details page, where you can download it."
-        }
-        confirmLabel="View Details"
-        cancelLabel="OK"
-        onConfirm={() => {
-          setSuccessVisible(false);
-          router.back();
-        }}
-        onCancel={() => {
-          setSuccessVisible(false);
-          router.back();
-        }}
-      />
     </View>
   );
 }
@@ -280,6 +327,29 @@ const styles = StyleSheet.create({
   examBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 },
   readonlyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   filePill: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginTop: 10 },
+  pdfCard: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', height: 300 },
+  pdfCardFullscreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: undefined,
+    zIndex: 50,
+    borderWidth: 0,
+    borderRadius: 0,
+    margin: 0,
+  },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

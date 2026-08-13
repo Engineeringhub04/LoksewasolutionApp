@@ -1,14 +1,10 @@
 // Admin grading screen for a single Theory answer submission.
-//
-// Layout follows the spec exactly: student details (name/course/subcourse) ->
-// their message -> Score input -> a custom reviewer message with Pass/Fail
-// presets that auto-fill a professional, name-tagged note -> the PDF link ->
-// an embedded PDF viewer (with a fullscreen modal) -> a re-upload slot for a
-// corrected/annotated PDF -> Update, gated behind a confirmation dialog.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, Modal, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/src/core/theme';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { showToast } from '@/src/core/store/toastStore';
@@ -32,9 +28,27 @@ function presetMessage(kind: 'pass' | 'fail', name: string): string {
     : `${who}, your answer has been reviewed. A few areas need more work to meet the required standard — please check the marked points and try again next time.`;
 }
 
+/** A small monospace box with a copy button — used for the raw PDF link instead of dumping it as plain wrapped text. */
+function LinkCodeBox({ url }: { url: string }) {
+  const { colors, spacing, radius } = useTheme();
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(url);
+    showToast('Link copied.', 'success');
+  };
+  return (
+    <View style={[styles.linkBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.md }]}>
+      <Text variant="caption" numberOfLines={1} style={{ flex: 1, fontFamily: 'monospace' }}>{url}</Text>
+      <Pressable onPress={handleCopy} hitSlop={8} style={{ paddingLeft: spacing.sm }}>
+        <Ionicons name="copy-outline" size={18} color={colors.primary} />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function AdminExamAnswerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, spacing, radius } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [answer, setAnswer] = useState<ExamAnswer | null>(null);
@@ -47,16 +61,15 @@ export default function AdminExamAnswerDetailScreen() {
   const [reviewNote, setReviewNote] = useState('');
   const [noteTouched, setNoteTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
-  // A freshly-picked replacement PDF, already uploaded to Cloudinary the
-  // moment it's picked (not deferred to Update) — this gives it a real HTTPS
-  // URL so the preview below can render through the same PdfViewer used
-  // everywhere else, instead of trying to preview an unfetchable local
-  // file:// URI.
-  const [newPdfUrl, setNewPdfUrl] = useState<string | null>(null);
-  const [newPdfName, setNewPdfName] = useState<string | null>(null);
+  // Two independent fullscreen viewers — the original submission and the
+  // teacher's checked copy are different files and must not share one modal.
+  const [fullscreenSubmitted, setFullscreenSubmitted] = useState(false);
+  const [fullscreenChecked, setFullscreenChecked] = useState(false);
+
+  const [checkedPdfUrl, setCheckedPdfUrl] = useState<string | null>(null);
+  const [checkedPdfName, setCheckedPdfName] = useState<string | null>(null);
   const [pickingPdf, setPickingPdf] = useState(false);
 
   const load = useCallback(async () => {
@@ -106,16 +119,16 @@ export default function AdminExamAnswerDetailScreen() {
     setNoteTouched(true);
   };
 
-  const handlePickNewPdf = async () => {
+  const handlePickCheckedPdf = async () => {
     try {
       const picked = await pickAnswerPdf();
       if (!picked) return;
       setPickingPdf(true);
       const url = await uploadPdfToCloudinary(picked.uri, picked.name);
-      setNewPdfUrl(url);
-      setNewPdfName(picked.name);
+      setCheckedPdfUrl(url);
+      setCheckedPdfName(picked.name);
     } catch {
-      showToast('Could not upload the new PDF. Please try again.', 'error');
+      showToast('Could not upload the checked PDF. Please try again.', 'error');
     } finally {
       setPickingPdf(false);
     }
@@ -131,7 +144,7 @@ export default function AdminExamAnswerDetailScreen() {
         fullMarks,
         passed: passed ?? false,
         reviewNote: reviewNote.trim(),
-        ...(newPdfUrl ? { pdfUrl: newPdfUrl } : {}),
+        ...(checkedPdfUrl ? { checkedPdfUrl } : {}),
       });
 
       showToast('Submission graded and updated.', 'success');
@@ -146,7 +159,7 @@ export default function AdminExamAnswerDetailScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Answer Update" />
+        <SubpageHeader title="Answer Update" showThemeToggle={false} />
         <PageLoaderOverlay visible label="Loading…" />
       </View>
     );
@@ -155,7 +168,7 @@ export default function AdminExamAnswerDetailScreen() {
   if (notFound || !answer) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Answer Update" />
+        <SubpageHeader title="Answer Update" showThemeToggle={false} />
         <DataNotFound title="Submission not found" description="This answer may have been removed." onRetry={() => router.back()} />
       </View>
     );
@@ -163,7 +176,7 @@ export default function AdminExamAnswerDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title="Answer Update" />
+      <SubpageHeader title="Answer Update" showThemeToggle={false} />
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }} keyboardShouldPersistTaps="handled">
         {/* Student details */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.lg, borderColor: colors.border }]}>
@@ -208,52 +221,76 @@ export default function AdminExamAnswerDetailScreen() {
           />
         </View>
 
-        {/* Existing PDF link + viewer */}
+        {/* Submitted PDF: link as a copyable code box + preview + fullscreen */}
         <View>
           <Text variant="bodySmall" weight="semiBold" style={{ marginBottom: spacing.xs }}>
             Submitted PDF
           </Text>
-          <Text variant="caption" secondary numberOfLines={1} style={{ marginBottom: spacing.xs }}>
-            {answer.pdfUrl}
-          </Text>
-          <View style={[styles.pdfCard, { borderColor: colors.border, borderRadius: radius.lg }]}>
-            <View style={{ height: 360 }}>
+          <LinkCodeBox url={answer.pdfUrl} />
+          {/* fullscreenSubmitted only toggles this card's height/chrome — the
+             PdfViewer below is the ONE AND ONLY instance for this file. A
+             second WebView mounted in a Modal would force pdf.js to
+             re-download and re-render the same document from scratch. */}
+          <View style={[styles.pdfCard, { borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }, fullscreenSubmitted ? styles.pdfCardFullscreen : null]}>
+            <View style={{ flex: 1 }}>
               <PdfViewer uri={answer.pdfUrl} />
             </View>
-            <Button
-              label="Fullscreen"
-              variant="secondary"
-              icon={<Ionicons name="expand-outline" size={16} color={colors.primary} />}
-              onPress={() => setFullscreen(true)}
-              style={{ margin: spacing.sm }}
-            />
+            {!fullscreenSubmitted ? (
+              <Button
+                label="Fullscreen"
+                variant="secondary"
+                icon={<Ionicons name="expand-outline" size={16} color={colors.primary} />}
+                onPress={() => setFullscreenSubmitted(true)}
+                style={{ margin: spacing.sm }}
+              />
+            ) : (
+              <Pressable onPress={() => setFullscreenSubmitted(false)} style={[styles.closeButton, { top: insets.top + 12 }]} accessibilityLabel="Close fullscreen">
+                <Ionicons name="close" size={22} color="#FFF" />
+              </Pressable>
+            )}
           </View>
         </View>
 
-        {/* Re-upload a corrected/annotated PDF */}
+        {/* Teacher's checked/marked copy — this is the file the student downloads once reviewed. */}
         <View>
           <Text variant="bodySmall" weight="semiBold" style={{ marginBottom: spacing.xs }}>
-            Replace PDF (optional)
+            Checked PDF
+          </Text>
+          <Text variant="caption" secondary style={{ marginBottom: spacing.xs }}>
+            Upload your checked/marked copy of the student's answer sheet. This is what the student will download.
           </Text>
           <Button
-            label={pickingPdf ? 'Uploading…' : newPdfUrl ? 'Change file' : 'Upload a new PDF'}
+            label={pickingPdf ? 'Uploading…' : checkedPdfUrl ? 'Change file' : 'Upload Checked PDF'}
             variant="secondary"
             icon={<Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />}
-            onPress={handlePickNewPdf}
+            onPress={handlePickCheckedPdf}
             disabled={saving || pickingPdf}
             loading={pickingPdf}
           />
-          {newPdfName ? (
+          {checkedPdfName ? (
             <View style={[styles.filePill, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md }]}>
               <Ionicons name="document-outline" size={16} color={colors.primary} />
-              <Text variant="bodySmall" numberOfLines={1} style={{ flex: 1 }}>{newPdfName}</Text>
+              <Text variant="bodySmall" numberOfLines={1} style={{ flex: 1 }}>{checkedPdfName}</Text>
             </View>
           ) : null}
-          {newPdfUrl ? (
-            <View style={[styles.pdfCard, { borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-              <View style={{ height: 260 }}>
-                <PdfViewer uri={newPdfUrl} />
+          {checkedPdfUrl ? (
+            <View style={[styles.pdfCard, { borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }, fullscreenChecked ? styles.pdfCardFullscreen : null]}>
+              <View style={{ flex: 1 }}>
+                <PdfViewer uri={checkedPdfUrl} />
               </View>
+              {!fullscreenChecked ? (
+                <Button
+                  label="Fullscreen"
+                  variant="secondary"
+                  icon={<Ionicons name="expand-outline" size={16} color={colors.primary} />}
+                  onPress={() => setFullscreenChecked(true)}
+                  style={{ margin: spacing.sm }}
+                />
+              ) : (
+                <Pressable onPress={() => setFullscreenChecked(false)} style={[styles.closeButton, { top: insets.top + 12 }]} accessibilityLabel="Close fullscreen">
+                  <Ionicons name="close" size={22} color="#FFF" />
+                </Pressable>
+              )}
             </View>
           ) : null}
         </View>
@@ -265,13 +302,6 @@ export default function AdminExamAnswerDetailScreen() {
           loading={saving}
         />
       </ScrollView>
-
-      <Modal visible={fullscreen} animationType="slide" onRequestClose={() => setFullscreen(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <SubpageHeader title={displayName || 'Answer PDF'} onBackPress={() => setFullscreen(false)} />
-          <PdfViewer uri={answer.pdfUrl} />
-        </View>
-      </Modal>
 
       <ConfirmDialog
         visible={confirmVisible}
@@ -288,6 +318,29 @@ export default function AdminExamAnswerDetailScreen() {
 
 const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 4 },
-  pdfCard: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  pdfCard: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', height: 360 },
+  pdfCardFullscreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: undefined,
+    zIndex: 50,
+    borderWidth: 0,
+    borderRadius: 0,
+    margin: 0,
+  },
   filePill: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginTop: 10 },
+  linkBox: { flexDirection: 'row', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8 },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

@@ -28,6 +28,15 @@ export interface PdfViewerProps {
 
 /** Page tracking and rendering live in the WebView; RN only draws the chrome. */
 function buildHtml(base64: string, backgroundColor: string): string {
+  // The base64 payload is embedded directly in the HTML source (as a plain JS
+  // string literal) rather than delivered via
+  // injectedJavaScriptBeforeContentLoaded. That injection API races against
+  // the page's own <script> tags on Android — some Android WebView builds run
+  // the page's inline script (which reads the injected global) before the
+  // injection has actually landed, throwing "BASE64_DATA is not defined"; the
+  // same code was reliable on iOS purely because WKWebView doesn't have that
+  // race. Baking the data into the document itself removes the race
+  // entirely: there is no separate injection step to lose the ordering on.
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -56,13 +65,15 @@ function buildHtml(base64: string, backgroundColor: string): string {
 
     (function () {
       try {
+        var __PDF_B64__ = "${base64}";
+        post({ type: 'debug', message: 'b64 length=' + __PDF_B64__.length + ' head=' + __PDF_B64__.slice(0, 12) });
         pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFJS}/pdf.worker.min.js';
         var container = document.getElementById('pages');
         // Cap the backing resolution: full devicePixelRatio on a long document
         // exhausts WebView memory and the render dies silently.
         var scale = Math.min(window.devicePixelRatio || 1, 2);
 
-        pdfjsLib.getDocument({ data: bytesFromBase64(BASE64_DATA) }).promise.then(function (pdf) {
+        pdfjsLib.getDocument({ data: bytesFromBase64(__PDF_B64__) }).promise.then(function (pdf) {
           post({ type: 'loaded', totalPages: pdf.numPages });
 
           var rendered = 0;
@@ -132,12 +143,14 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
   const [renderProgress, setRenderProgress] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [phase, setPhase] = useState<'downloading' | 'rendering' | 'ready' | 'error'>('downloading');
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
     cancelledRef.current = false;
     setPhase('downloading');
+    setErrorDetail(null);
     setBase64(null);
     setDownloadProgress(0);
     setRenderProgress(0);
@@ -151,8 +164,15 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
         setBase64(result.base64);
         setPhase('rendering');
       })
-      .catch(() => {
-        if (!cancelledRef.current) setPhase('error');
+      .catch((err) => {
+        // Logged (not swallowed) so `npx expo start`'s Metro log shows the
+        // real failure reason, and also kept in state so the on-screen error
+        // shows it directly — every failure used to look identical.
+        console.error('[PdfViewer] fetchPdfAsBase64 failed for', uri, err);
+        if (!cancelledRef.current) {
+          setErrorDetail(err instanceof Error ? err.message : String(err));
+          setPhase('error');
+        }
       });
 
     return () => {
@@ -189,7 +209,12 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
             onPageChange?.(Number(msg.page) || 1, totalPages);
             break;
           case 'error':
+            console.error('[PdfViewer] pdf.js render error:', msg.message);
+            setErrorDetail(typeof msg.message === 'string' ? msg.message : 'PDF rendering failed');
             setPhase('error');
+            break;
+          case 'debug':
+            console.log('[PdfViewer][webview]', msg.message);
             break;
           default:
             break;
@@ -205,7 +230,11 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
     return (
       <DataNotFound
         title="Could not open this paper"
-        description="The file could not be downloaded or is not a valid PDF. Check your connection and try again."
+        description={
+          errorDetail
+            ? `The file could not be downloaded or is not a valid PDF. (${errorDetail})`
+            : 'The file could not be downloaded or is not a valid PDF. Check your connection and try again.'
+        }
         onRetry={() => setAttempt((a) => a + 1)}
       />
     );
@@ -221,9 +250,6 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
           originWhitelist={['*']}
           source={{ html }}
           onMessage={handleMessage}
-          // Injecting via a placeholder keeps the (potentially large) base64 out
-          // of the HTML string that gets parsed as markup.
-          injectedJavaScriptBeforeContentLoaded={`var BASE64_DATA = "${base64}"; true;`}
           style={{ flex: 1, backgroundColor: colors.background }}
           showsVerticalScrollIndicator
           scalesPageToFit={false}

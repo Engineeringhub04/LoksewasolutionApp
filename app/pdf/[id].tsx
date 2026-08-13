@@ -14,7 +14,7 @@
 // button so a student can go straight from reading the question to submitting
 // their written answer for review.
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -42,6 +42,7 @@ export default function PdfViewerScreen() {
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
 
   // The link arrives either as ?uri=... or as the route id itself.
   const source = uri ?? (id ? decodeURIComponent(id) : undefined);
@@ -55,7 +56,7 @@ export default function PdfViewerScreen() {
   if (!source || !/^https?:\/\//i.test(source)) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Question Paper" />
+        <SubpageHeader title="Question Paper" showThemeToggle={false} />
         <DataNotFound
           title="No paper attached"
           description="This set does not have a question paper uploaded yet."
@@ -67,13 +68,30 @@ export default function PdfViewerScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={title ?? 'Question Paper'} />
+      {/* Only ONE PdfViewer instance ever exists on this screen — toggling
+         fullscreen just hides/shows the header and footer chrome around it
+         instead of mounting a second WebView. A second instance would
+         re-download and re-render the same document from scratch (visible as
+         the "Preparing pages…" spinner flashing again), even though the bytes
+         are cached, because pdf.js has to redo all of its canvas rendering
+         work for a brand new WebView. */}
+      {!fullscreen ? (
+        <SubpageHeader
+          title={title ?? 'Question Paper'}
+          showThemeToggle={false}
+          rightSlot={
+            <Pressable onPress={() => setFullscreen(true)} style={styles.headerIconBox} accessibilityLabel="Fullscreen">
+              <Ionicons name="expand-outline" size={20} color="#FFF" />
+            </Pressable>
+          }
+        />
+      ) : null}
 
       <PdfViewer uri={source} onPageChange={handlePageChange} />
 
       {/* Page indicator — the main orientation cue while scrolling. */}
       {totalPages > 0 ? (
-        <View style={[styles.pageBadge, { bottom: (showUploadFooter ? 84 : 16) + insets.bottom }]}>
+        <View style={[styles.pageBadge, { bottom: (fullscreen ? 16 : showUploadFooter ? 84 : 16) + insets.bottom }]}>
           <Ionicons name="layers-outline" size={14} color="#FFF" />
           <Text variant="caption" weight="bold" style={styles.pageText}>
             {page} / {totalPages}
@@ -81,7 +99,7 @@ export default function PdfViewerScreen() {
         </View>
       ) : null}
 
-      {showUploadFooter ? (
+      {showUploadFooter && !fullscreen ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm, borderTopColor: colors.border, backgroundColor: colors.surface }]}>
           <Button
             label="Upload your Answer"
@@ -95,11 +113,22 @@ export default function PdfViewerScreen() {
           />
         </View>
       ) : null}
+
+      {fullscreen ? (
+        <Pressable
+          onPress={() => setFullscreen(false)}
+          style={[styles.closeButton, { top: insets.top + 12 }]}
+          accessibilityLabel="Close fullscreen"
+        >
+          <Ionicons name="close" size={22} color="#FFF" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  headerIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   pageBadge: {
     position: 'absolute',
     alignSelf: 'center',
@@ -120,5 +149,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screenPadding,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -132,6 +132,52 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ===== Theory Answer Upload + Admin Review =====
+    // One document per submitted answer PDF. Flat top-level collection (not a
+    // per-user subcollection) because the Admin desk lists/queries submissions
+    // across every user, which a subcollection cannot do — so ownership is
+    // enforced with a `uid` field check instead.
+    //
+    // Shape: uid, studentName, courseId, courseName, subcourseId, subcourseName,
+    //        examSetId, examSetTitle, message, pdfUrl, status ('pending' |
+    //        'reviewed'), score, fullMarks, passed, reviewNote, createdAt,
+    //        reviewedAt.
+    match /app_exam_answers/{docId} {
+      // Owner reads their own submissions; admin reads everything (the Answer
+      // Review desk lists across all users).
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      // A student may only create a submission under their own uid, and it must
+      // start exactly as 'pending' with a zero score — grading fields are
+      // admin-only from the very first write, not just on update.
+      allow create: if isSignedIn()
+                      && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.status == 'pending'
+                      && request.resource.data.score == 0
+                      && request.resource.data.passed == false;
+
+      // Two very different kinds of update share this collection, so they're
+      // split by who is writing:
+      //
+      // 1. The OWNER may re-upload/edit their own pending submission, but only
+      //    for one hour after createdAt, and only pdfUrl/message may change —
+      //    status/score/fullMarks/passed/reviewNote/reviewedAt/createdAt are
+      //    frozen from the student's side for the lifetime of the document,
+      //    which is what stops a student ever writing their own grade.
+      //
+      // 2. The ADMIN grades a submission — allowed to change the review fields
+      //    at any time, with no time limit.
+      allow update: if isAdmin() ||
+                      (isSignedIn() &&
+                       resource.data.uid == request.auth.uid &&
+                       resource.data.status == 'pending' &&
+                       request.time.toMillis() - resource.data.createdAt.toMillis() < 3600000 &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['uid', 'status', 'score', 'fullMarks', 'passed', 'reviewNote', 'reviewedAt', 'createdAt', 'checkedPdfUrl']));
+
+      allow delete: if isAdmin();
+    }
+
     // Default deny-all
     match /{document=**} { allow read, write: if false; }
   }
