@@ -99,6 +99,7 @@ export function ExamCard({
     <View
       style={[
         styles.card,
+        isSubmitted ? styles.submittedCard : null,
         { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md },
       ]}
     >
@@ -241,6 +242,7 @@ export function ExamCard({
 
 const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, gap: 12 },
+  submittedCard: { opacity: 0.72 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',

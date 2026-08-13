@@ -31,6 +31,7 @@ import {
   type ExamSet,
 } from '@/src/core/firebase/services/examHub';
 import { fetchMyExamAnswersBySet } from '@/src/core/firebase/services/examAnswers';
+import { seedExamHub } from '@/src/core/firebase/seedExamHub';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/exam/ExamCard';
@@ -59,6 +60,7 @@ export default function ExamScreen() {
 
   const [provinceId, setProvinceId] = useState<string>(ALL_PROVINCES);
   const [sectionId, setSectionId] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
 
   const [rulesVisible, setRulesVisible] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -130,6 +132,19 @@ export default function ExamScreen() {
   // flipping to Re-Join, a fresh attempt count) without a manual pull.
   useRefreshOnFocus(onRefresh);
 
+  const handleSeed = async () => {
+    setSeeding(true);
+    try {
+      const result = await seedExamHub();
+      showToast(`Seeded ${result.total} exam documents`, 'success');
+      onRefresh();
+    } catch {
+      showToast('Seeding failed. Check Firestore rules allow writes.', 'error');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   /** Cards more than 10 minutes away are filtered out entirely. */
   const visibleCards = useMemo(() => {
     const attemptMap = attempts.data ?? {};
@@ -196,6 +211,18 @@ export default function ExamScreen() {
               Loksewa Exams Hub
             </Text>
           </View>
+          {/* Dev seeding entry point. Remove once the collections are populated. */}
+          <Pressable
+            onPress={handleSeed}
+            disabled={seeding}
+            style={({ pressed }) => [styles.seedButton, { opacity: pressed || seeding ? 0.6 : 1 }]}
+            accessibilityLabel="Seed exam data"
+          >
+            <Ionicons name={seeding ? 'cloud-upload' : 'cloud-upload-outline'} size={14} color="#FFF" />
+            <Text variant="caption" weight="bold" style={styles.seedText}>
+              {seeding ? 'Seeding…' : 'Seed Remaining'}
+            </Text>
+          </Pressable>
         </View>
 
         {/* Province filter */}
@@ -373,7 +400,7 @@ export default function ExamScreen() {
         </ScrollView>
       )}
 
-      <PageLoaderOverlay visible={loading} label="Loading Exams…" />
+      <PageLoaderOverlay visible={loading || seeding} label={seeding ? 'Seeding exam data…' : 'Loading Exams…'} />
 
       <ExamRulesSheet
         visible={rulesVisible}
@@ -438,4 +465,17 @@ const styles = StyleSheet.create({
   sectionTabIdle: { backgroundColor: 'rgba(255,255,255,0.10)', borderColor: 'rgba(255,255,255,0.35)' },
   banner: { borderWidth: StyleSheet.hairlineWidth, gap: 6 },
   bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  seedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    flexShrink: 0,
+  },
+  seedText: { color: '#FFF' },
 });
