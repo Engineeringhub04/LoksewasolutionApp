@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, Modal, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,6 +29,9 @@ export default function SubscriptionDetailScreen() {
   const [customerMessage, setCustomerMessage] = useState('');
   const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [showImage, setShowImage] = useState(false);
+  const [imageScale, setImageScale] = useState(1);
 
   const { data: record, loading, error, refetch } = useAsyncData(async () => {
     if (!id) return null;
@@ -42,7 +45,16 @@ export default function SubscriptionDetailScreen() {
     setScreenshotUri(record.screenshotUrl || null);
   }, [record]);
 
-  const canEdit = !!record && record.status !== 'active';
+  useEffect(() => {
+    if (!record?.submittedAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [record?.submittedAt]);
+
+  const editDeadline = record?.submittedAt ? Date.parse(record.submittedAt) + 30 * 60 * 1000 : 0;
+  const remainingMs = editDeadline > 0 ? Math.max(0, editDeadline - now) : 0;
+  const canEdit = !!record && record.status !== 'active' && remainingMs > 0;
+  const remainingLabel = formatDuration(remainingMs);
 
   const pickScreenshot = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -55,7 +67,10 @@ export default function SubscriptionDetailScreen() {
   };
 
   const handleSave = async () => {
-    if (!record) return;
+    if (!record || !canEdit) {
+      showToast(t('subscription.editWindowExpired'), 'warning');
+      return;
+    }
     if (!transactionRef.trim() || !screenshotUri) {
       showToast(`${t('subscription.transactionRef')} and ${t('subscription.uploadScreenshot')} required`, 'error');
       return;
@@ -114,13 +129,19 @@ export default function SubscriptionDetailScreen() {
             ) : null}
 
             <View style={[styles.topActions, { gap: spacing.sm }]}>
-              {canEdit ? (
-                <Button
-                  label={editMode ? t('subscription.saveRequest') : t('subscription.editRequest')}
-                  loading={saving}
-                  onPress={editMode ? handleSave : () => setEditMode(true)}
-                  icon={<Ionicons name={editMode ? 'checkmark-outline' : 'create-outline'} size={17} color="#FFF" style={{ marginRight: 6 }} />}
-                />
+              {record.status !== 'active' ? (
+                <View style={{ gap: spacing.xs }}>
+                  <Button
+                    label={editMode ? t('subscription.saveRequest') : t('subscription.editRequest')}
+                    loading={saving}
+                    disabled={!canEdit}
+                    onPress={editMode ? handleSave : () => setEditMode(true)}
+                    icon={<Ionicons name={editMode ? 'checkmark-outline' : 'create-outline'} size={17} color="#FFF" style={{ marginRight: 6 }} />}
+                  />
+                  <Text variant="caption" secondary style={{ textAlign: 'center' }}>
+                    {canEdit ? `${t('subscription.editTimeRemaining')}: ${remainingLabel}` : t('subscription.editWindowExpired')}
+                  </Text>
+                </View>
               ) : null}
               <View style={[styles.row, { gap: spacing.sm }]}>
                 <Button label={t('subscription.renewNow')} variant="secondary" onPress={() => router.replace('/subscription')} style={{ flex: 1 }} />
@@ -142,7 +163,12 @@ export default function SubscriptionDetailScreen() {
                 <View style={{ gap: spacing.xs }}>
                   <Text variant="bodySmall" weight="medium" secondary>{t('subscription.uploadScreenshot')}</Text>
                   <Text variant="caption" secondary>{t('subscription.uploadScreenshotHint')}</Text>
-                  {screenshotUri ? <Image source={{ uri: screenshotUri }} style={styles.screenshotPreview} resizeMode="cover" /> : null}
+                  {screenshotUri ? (
+                    <Pressable onPress={() => { setImageScale(1); setShowImage(true); }}>
+                      <Image source={{ uri: screenshotUri }} style={styles.screenshotPreview} resizeMode="cover" />
+                      <Text variant="caption" secondary style={{ textAlign: 'center', marginTop: 4 }}>{t('subscription.tapToZoom')}</Text>
+                    </Pressable>
+                  ) : null}
                   <Button label={screenshotUri ? t('common.edit') : t('subscription.uploadScreenshot')} variant="secondary" onPress={pickScreenshot} />
                 </View>
                 <TextField
@@ -182,15 +208,48 @@ export default function SubscriptionDetailScreen() {
             {record.screenshotUrl ? (
               <View style={{ gap: spacing.xs }}>
                 <Text variant="bodySmall" weight="semiBold" secondary>{t('subscription.uploadScreenshot')}</Text>
-                <Image source={{ uri: record.screenshotUrl }} style={styles.screenshot} resizeMode="cover" />
+                <Pressable onPress={() => { setImageScale(1); setShowImage(true); }}>
+                  <Image source={{ uri: record.screenshotUrl }} style={styles.screenshot} resizeMode="cover" />
+                  <Text variant="caption" secondary style={{ textAlign: 'center', marginTop: 4 }}>{t('subscription.tapToZoom')}</Text>
+                </Pressable>
               </View>
             ) : null}
           </>
         )}
       </SubpageScrollScreen>
       <PageLoaderOverlay visible={loading || saving} label={t('subscription.loading')} />
+
+      <Modal visible={showImage && !!screenshotUri} transparent animationType="fade" onRequestClose={() => setShowImage(false)}>
+        <View style={styles.imageModal}>
+          <View style={styles.imageModalHeader}>
+            <Text variant="bodyLarge" weight="bold" style={{ color: '#FFF' }}>{t('subscription.uploadScreenshot')}</Text>
+            <Pressable onPress={() => setShowImage(false)} hitSlop={12}>
+              <Ionicons name="close" size={28} color="#FFF" />
+            </Pressable>
+          </View>
+          <View style={styles.imageStage}>
+            <Image source={{ uri: screenshotUri ?? undefined }} style={[styles.fullscreenImage, { transform: [{ scale: imageScale }] }]} resizeMode="contain" />
+          </View>
+          <View style={styles.zoomControls}>
+            <Pressable style={styles.zoomButton} onPress={() => setImageScale((value) => Math.max(1, value - 0.25))}>
+              <Ionicons name="remove" size={24} color="#FFF" />
+            </Pressable>
+            <Text variant="bodySmall" weight="bold" style={{ color: '#FFF' }}>{Math.round(imageScale * 100)}%</Text>
+            <Pressable style={styles.zoomButton} onPress={() => setImageScale((value) => Math.min(4, value + 0.25))}>
+              <Ionicons name="add" size={24} color="#FFF" />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </>
   );
+}
+
+function formatDuration(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -218,4 +277,10 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   screenshot: { width: '100%', height: 200, borderRadius: 12 },
   screenshotPreview: { width: '100%', height: 180, borderRadius: 12 },
+  imageModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)', paddingTop: 46, paddingBottom: 24 },
+  imageModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 12 },
+  imageStage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  fullscreenImage: { width: '100%', height: '82%' },
+  zoomControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24 },
+  zoomButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
 });

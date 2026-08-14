@@ -129,6 +129,7 @@ function RequestHistoryCard({ record, onPress }: { record: SubscriptionRecord; o
           <Ionicons name={tag.icon} size={12} color={tag.color} />
           <Text variant="caption" weight="bold" style={{ color: tag.color }}>{tag.label}</Text>
         </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
       </View>
       <Text variant="caption" secondary style={{ marginTop: 4 }}>
         Rs. {record.amount} · {record.method.toUpperCase()} {record.submittedAt ? `· ${formatDate(record.submittedAt)}` : ''}
@@ -152,7 +153,16 @@ function PlanCard({ plan, isCurrent, onSubscribe }: { plan: SubscriptionPlan; is
   const { t } = useTranslation();
   const isFree = plan.billingCycle === 'free';
   const isYearly = plan.billingCycle === 'yearly';
-  const cardGradient: [string, string] = isFree ? ['#64748B', '#475569'] : [plan.colorFrom || '#F59E0B', plan.colorTo || '#D97706'];
+  const cycleGradient: [string, string] = isFree
+    ? ['#64748B', '#334155']
+    : isYearly
+      ? ['#0F766E', '#4338CA']
+      : ['#7C3AED', '#DB2777'];
+  const cardGradient: [string, string] = isFree
+    ? cycleGradient
+    : plan.colorFrom && plan.colorTo
+      ? [plan.colorFrom, plan.colorTo]
+      : cycleGradient;
 
   const priceSuffix = plan.billingCycle === 'monthly' ? t('subscription.perMonth') : plan.billingCycle === 'yearly' ? t('subscription.perYear') : '';
 
@@ -242,7 +252,7 @@ const styles = StyleSheet.create({
   adminBox: { borderWidth: StyleSheet.hairlineWidth },
   historyCard: { borderWidth: StyleSheet.hairlineWidth },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
-  planCardWrap: { overflow: 'hidden' },
+  planCardWrap: { overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   planCard: { gap: 2 },
   planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   planIconBox: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

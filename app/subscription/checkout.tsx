@@ -10,7 +10,7 @@
 // sandbox/test credentials — see paymentGateway.ts). Selecting QR opens the
 // bank-transfer/QR form that was previously the only flow.
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Pressable } from 'react-native';
+import { View, StyleSheet, Image, Pressable, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -27,7 +27,7 @@ import {
   validateCoupon,
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
-import { openEsewaCheckout, openKhaltiCheckout } from '@/src/core/media/paymentGateway';
+import { createEsewaCheckoutHtml, openKhaltiCheckout } from '@/src/core/media/paymentGateway';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -40,6 +40,7 @@ import { Skeleton } from '@/src/components/feedback/Skeleton';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { WebView } from 'react-native-webview';
 
 const ESEWA_LOGO = 'https://i.ibb.co/HLpHmnQz/esewa-icon-large.png';
 const KHALTI_LOGO = 'https://i.ibb.co/tMHZRHKQ/Khalti-Logo-New-3.png';
@@ -71,6 +72,8 @@ export default function CheckoutScreen() {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [gatewayOpening, setGatewayOpening] = useState(false);
+  const [gatewayHtml, setGatewayHtml] = useState<string | null>(null);
+  const [gatewayUrl, setGatewayUrl] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrLoaded, setQrLoaded] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
@@ -179,40 +182,58 @@ export default function CheckoutScreen() {
     }
   };
 
-  /** Opens the provider's hosted checkout. The user completes payment there, screenshots the receipt, then comes back and submits it like any manual payment — this app has no backend to receive a verified callback yet, so admin review is still the final step either way. */
+  /** Opens only the provider checkout. Receipt ID/screenshot submission is QR-only. */
   const handleOpenGateway = async () => {
-    if (!user?.uid || !plan || !method || method === 'qr') return;
+    if (!plan || !method || method === 'qr') return;
     setGatewayOpening(true);
     try {
       const redirectUrl = 'loksewasolutionapp://subscription';
       if (method === 'esewa') {
-        await openEsewaCheckout({
+        const { html } = createEsewaCheckoutHtml({
           amount: finalAmount,
           successUrl: redirectUrl,
           failureUrl: redirectUrl,
           merchantCode: settings?.esewa.merchantCode,
           secretKey: settings?.esewa.secretKey,
         });
+        setGatewayHtml(html);
+        setGatewayUrl(null);
       } else if (method === 'khalti') {
         if (!settings?.khalti.secretKey) {
-          showToast('Khalti sandbox key is not configured yet.', 'error');
+          showToast('Khalti sandbox secret key is not configured in app_subscription_settings/config.', 'error');
           return;
         }
-        await openKhaltiCheckout({
+        const result = await openKhaltiCheckout({
           amount: finalAmount,
           purchaseOrderName: plan.name,
           returnUrl: redirectUrl,
           websiteUrl: 'https://loksewasolution.app',
-          customerName: profile?.name ?? user.displayName ?? null,
-          customerEmail: profile?.email ?? user.email ?? null,
+          customerName: profile?.name ?? user?.displayName ?? null,
+          customerEmail: profile?.email ?? user?.email ?? null,
           secretKey: settings.khalti.secretKey,
         });
+        setGatewayUrl(result.paymentUrl);
+        setGatewayHtml(null);
       }
-      showToast('Complete the payment, then come back and submit your receipt below.', 'info');
-    } catch {
-      showToast('Could not open the payment gateway.', 'error');
+    } catch (error) {
+      const message = error instanceof Error && error.message.startsWith('KHALTI_')
+        ? 'Khalti sandbox initiate failed. Check the sandbox secret key and try again.'
+        : 'Could not open the payment gateway. Please try again.';
+      showToast(message, 'error');
     } finally {
       setGatewayOpening(false);
+    }
+  };
+
+  const closeGateway = () => {
+    setGatewayHtml(null);
+    setGatewayUrl(null);
+  };
+
+  const handleGatewayNavigation = ({ url }: { url: string }) => {
+    if (url.startsWith('loksewasolutionapp://')) {
+      closeGateway();
+      showToast('Gateway returned to the app. Payment status will be reviewed by admin.', 'info');
     }
   };
 
@@ -290,20 +311,7 @@ export default function CheckoutScreen() {
                   onPress={handleOpenGateway}
                   icon={<Ionicons name="open-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />}
                 />
-                <Text variant="caption" secondary>{t('subscription.gatewayReturnHint')}</Text>
-
-                <ReceiptSubmitForm
-                  transactionRef={transactionRef}
-                  onTransactionRefChange={setTransactionRef}
-                  screenshotUri={screenshotUri}
-                  onPickScreenshot={handlePickScreenshot}
-                  uploadingScreenshot={uploadingScreenshot}
-                  customerMessage={customerMessage}
-                  onCustomerMessageChange={setCustomerMessage}
-                  submitting={submitting}
-                  canSubmit={transactionRef.trim().length > 0 && !!screenshotUri}
-                  onSubmit={() => setShowConfirm(true)}
-                />
+                <Text variant="caption" secondary>{t('subscription.gatewayOnlyHint')}</Text>
               </Animated.View>
             ) : method === 'qr' ? (
               <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.md }}>
@@ -334,6 +342,22 @@ export default function CheckoutScreen() {
         )}
       </SubpageScrollScreen>
       <PageLoaderOverlay visible={loading} label={t('subscription.loading')} />
+
+      <Modal visible={!!gatewayHtml || !!gatewayUrl} animationType="slide" onRequestClose={closeGateway}>
+        <View style={styles.gatewayModal}>
+          <View style={styles.gatewayHeader}>
+            <Text variant="bodyLarge" weight="bold">{method === 'esewa' ? 'eSewa' : 'Khalti'}</Text>
+            <Pressable onPress={closeGateway} hitSlop={12}>
+              <Ionicons name="close" size={26} color="#111827" />
+            </Pressable>
+          </View>
+          {gatewayHtml ? (
+            <WebView source={{ html: gatewayHtml }} onNavigationStateChange={handleGatewayNavigation} startInLoadingState />
+          ) : gatewayUrl ? (
+            <WebView source={{ uri: gatewayUrl }} onNavigationStateChange={handleGatewayNavigation} startInLoadingState />
+          ) : null}
+        </View>
+      </Modal>
 
       <ConfirmDialog
         visible={showConfirm}
@@ -609,5 +633,7 @@ const styles = StyleSheet.create({
   instructionsBox: { overflow: 'hidden' },
   instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   instructionsIconRing: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  screenshotPreview: { width: '100%', height: 160, borderRadius: 12, marginTop: 4 },
+  screenshotPreview: { width: '100%', height: 180, borderRadius: 12 },
+  gatewayModal: { flex: 1, backgroundColor: '#FFF' },
+  gatewayHeader: { height: 58, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#D1D5DB' },
 });
