@@ -24,7 +24,6 @@ import {
   validateCoupon,
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
-import { createEsewaCheckoutHtml } from '@/src/core/media/paymentGateway';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -77,7 +76,6 @@ export default function CheckoutScreen() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [gatewayOpening, setGatewayOpening] = useState(false);
   const [gatewayHtml, setGatewayHtml] = useState<string | null>(null);
   const [gatewayUrl, setGatewayUrl] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -97,14 +95,7 @@ export default function CheckoutScreen() {
   const settingsAvailable = settings?.sourceAvailable === true;
   const esewaReady = settingsAvailable && !!settings?.esewa.enabled;
   const khaltiReady = settingsAvailable && !!settings?.khalti.enabled;
-  const isAdmin = profile?.isAdmin === true;
 
-  const showGatewayIssue = (technicalMessage: string) => {
-    showToast(
-      isAdmin ? technicalMessage : t('subscription.gatewayUnavailableToast'),
-      isAdmin ? 'error' : 'info',
-    );
-  };
 
   const handleApplyCoupon = async () => {
     if (!couponInput.trim() || !plan) return;
@@ -218,33 +209,8 @@ export default function CheckoutScreen() {
       showToast(t('subscription.settingsUnavailableToast'), 'info');
       return;
     }
-    setGatewayOpening(true);
-    try {
-      // eSewa/Khalti require a public http(s) callback URL; custom app schemes are rejected.
-      const redirectUrl = PAYMENT_RETURN_URL;
-      if (method === 'esewa') {
-        const { html } = createEsewaCheckoutHtml({
-          amount: finalAmount,
-          successUrl: redirectUrl,
-          failureUrl: redirectUrl,
-          merchantCode: settings?.esewa.merchantCode,
-        });
-        setGatewayHtml(html);
-        setGatewayUrl(null);
-      } else if (method === 'khalti') {
-        // Khalti initiation requires a provider secret and a backend. The
-        // client intentionally does not read or ship that secret.
-        showGatewayIssue('Khalti payment is under construction until a secure merchant backend is configured.');
-        return;
-      }
-    } catch (error) {
-      const message = error instanceof Error && error.message.startsWith('KHALTI_')
-        ? 'Khalti sandbox initiate failed. Check the sandbox secret key and merchant configuration.'
-        : 'Could not open the payment gateway. Please try again.';
-      showGatewayIssue(message);
-    } finally {
-      setGatewayOpening(false);
-    }
+    showToast(t('subscription.gatewayEnabledToast'), 'info');
+    return;
   };
 
   const closeGateway = () => {
@@ -340,7 +306,6 @@ export default function CheckoutScreen() {
               <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.sm }}>
                 <Button
                   label={t('subscription.continueToGateway')}
-                  loading={gatewayOpening}
                   onPress={handleOpenGateway}
                   icon={<Ionicons name="open-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />}
                 />
