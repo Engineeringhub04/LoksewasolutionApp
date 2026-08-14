@@ -283,6 +283,8 @@
     "reportedBy": "Reported content by",
     "adminResponse": "Admin response",
     "adminResponseHistory": "Response history",
+    "questionResponse": "Question Response",
+    "questionResponseHistory": "Question response history",
     "customAdminMessage": "Custom message",
     "customAdminMessagePlaceholder": "Write a message for the reporter...",
     "resolveReport": "Resolve report",
