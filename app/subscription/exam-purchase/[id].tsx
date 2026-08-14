@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -22,7 +22,8 @@ import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function ExamPurchaseRequestDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, source } = useLocalSearchParams<{ id: string; source?: string }>();
+  const router = useRouter();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const [editMode, setEditMode] = useState(false);
@@ -49,6 +50,14 @@ export default function ExamPurchaseRequestDetailScreen() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [record?.submittedAt]);
+
+  const handleBack = () => {
+    if (source === 'exam') {
+      router.replace('/(tabs)/exam' as never);
+      return;
+    }
+    router.back();
+  };
 
   const canEdit = !!record && isExamPurchaseEditable(record, now);
   const remainingMs = record ? examPurchaseEditRemainingMs(record, now) : 0;
@@ -100,7 +109,7 @@ export default function ExamPurchaseRequestDetailScreen() {
 
   return (
     <>
-      <SubpageScrollScreen title={record?.examTitle || t('subscription.examDetails')}>
+      <SubpageScrollScreen title={record?.examTitle || t('subscription.examDetails')} onBackPress={handleBack}>
         {loading ? null : error || !record ? (
           <DataNotFound onRetry={refetch} />
         ) : (

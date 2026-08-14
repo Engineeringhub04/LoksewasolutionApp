@@ -19,6 +19,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 interface SubpageScrollScreenProps {
   title: string;
   children: React.ReactNode;
+  onBackPress?: () => void;
   refreshing?: boolean;
   onRefresh?: () => void | Promise<void>;
   /** Pinned below the scroll area (e.g. a Save button). */
@@ -29,6 +30,7 @@ interface SubpageScrollScreenProps {
 export function SubpageScrollScreen({
   title,
   children,
+  onBackPress,
   refreshing,
   onRefresh,
   footer,
@@ -55,7 +57,7 @@ export function SubpageScrollScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={title} />
+      <SubpageHeader title={title} onBackPress={onBackPress} />
       {/* Without this, the on-screen keyboard covered the submit button on every
           form built on this scaffold (Contact us, Feedback, Report Question).
           iOS needs 'padding'; on Android 'height' works with the default

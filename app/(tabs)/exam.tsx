@@ -137,6 +137,9 @@ export default function ExamScreen() {
   const loading = provinces.loading || sections.loading || sets.loading || purchases.loading;
   const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing || purchases.refreshing;
   const onRefresh = useCallback(() => {
+    // The screen remains mounted while the purchase page is on top. Clear the
+    // navigation overlay as soon as focus returns, otherwise it can stay stuck.
+    setPurchaseNavigating(false);
     provinces.refresh();
     sections.refresh();
     sets.refresh();
@@ -338,6 +341,8 @@ export default function ExamScreen() {
                     accentColor={accentColor}
                     subcourseLabel={subcourseLabel}
                     answerStatus={myAnswer?.status}
+                    isPurchased={overallSubscriptionActive || approvedExamIds.includes(entry.set.id)}
+                    hasAttempted={(attempts.data?.[entry.set.id]?.length ?? 0) > 0}
                     onRulesPress={() => void openRules(entry.set, 'info')}
                     onPrimaryPress={() => {
                       if (entry.state.kind === 'locked') {
@@ -349,7 +354,7 @@ export default function ExamScreen() {
                         setPurchaseNavigating(true);
                         const pendingPurchase = (purchases.data ?? []).find((record) => record.examSetId === entry.set.id && record.status === 'pending');
                         if (pendingPurchase) {
-                          router.push({ pathname: '/subscription/exam-purchase/[id]', params: { id: pendingPurchase.id } } as never);
+                          router.push({ pathname: '/subscription/exam-purchase/[id]', params: { id: pendingPurchase.id, source: 'exam' } } as never);
                         } else {
                           setPurchaseNavigating(false);
                         }

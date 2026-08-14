@@ -32,6 +32,10 @@ interface ExamCardProps {
    * screen instead of back into Upload — multiple attempts are not allowed.
    */
   answerStatus?: AnswerStatus;
+  /** True when a pro exam is approved or covered by an active subscription. */
+  isPurchased?: boolean;
+  /** Used for free MCQ cards after the first attempt. */
+  hasAttempted?: boolean;
   onRulesPress: () => void;
   onPrimaryPress: () => void;
   onRankingPress: () => void;
@@ -61,6 +65,8 @@ export function ExamCard({
   accentColor,
   subcourseLabel,
   answerStatus,
+  isPurchased = false,
+  hasAttempted = false,
   onRulesPress,
   onPrimaryPress,
   onRankingPress,
@@ -228,7 +234,7 @@ export function ExamCard({
               // state everywhere, not blend into whichever board it's on.
               backgroundColor: primary.disabled
                 ? colors.textDisabled
-                : isSubmitted || state.kind === 'ready' || state.kind === 'rejoin'
+                : isSubmitted || (isPurchased && (state.kind === 'ready' || state.kind === 'rejoin')) || (!isPurchased && hasAttempted && state.kind === 'rejoin')
                   ? '#16A34A'
                   : accentColor,
               borderRadius: radius.md,
