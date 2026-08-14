@@ -21,12 +21,11 @@
 // Full docs shape:
 //
 // app_subscription_settings/config
+//   activeMode: 'auto' | 'manual'
 //   esewa: { enabled, merchantCode, secretKey }
 //   khalti: { enabled, publicKey, secretKey }
+//   manual: { qrImageUrl, bankDetails, instructions }
 //   updatedAt
-//
-// app_subscription_bank_details/config
-//   bankName, accountNumber, receiverName, branch, updatedAt
 //
 // app_subscription_plans/{planId}
 //   id, name, billingCycle: 'monthly' | 'yearly' | 'free', price, currency,
@@ -89,17 +88,22 @@ export interface KhaltiKeys {
   secretKey: string;
 }
 
-export interface SubscriptionSettings {
-  esewa: GatewayKeys;
-  khalti: KhaltiKeys;
+export type GatewayMode = 'auto' | 'manual';
+
+export interface ManualPaymentConfig {
+  qrImageUrl: string;
+  bankDetails: string;
+  instructions: string;
 }
 
-export interface BankDetails {
-  bankName: string;
-  accountNumber: string;
-  receiverName: string;
-  branch: string;
+export interface SubscriptionSettings {
+  activeMode: GatewayMode;
+  esewa: GatewayKeys;
+  khalti: KhaltiKeys;
+  manual: ManualPaymentConfig;
 }
+
+export type BankDetails = ManualPaymentConfig;
 
 export interface SubscriptionRecord {
   id: string;
@@ -147,8 +151,10 @@ export interface CouponCode {
 const SETTINGS_DOC = `${Collections.subscriptionSettings}/config`;
 
 const DEFAULT_SETTINGS: SubscriptionSettings = {
+  activeMode: 'manual',
   esewa: { enabled: false, merchantCode: '', secretKey: '' },
   khalti: { enabled: false, publicKey: '', secretKey: '' },
+  manual: { qrImageUrl: '', bankDetails: '', instructions: '' },
 };
 
 export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
@@ -156,8 +162,10 @@ export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings>
     const doc = await getDocument(SETTINGS_DOC);
     if (!doc) return DEFAULT_SETTINGS;
     return {
+      activeMode: doc.activeMode === 'auto' ? 'auto' : 'manual',
       esewa: { ...DEFAULT_SETTINGS.esewa, ...(doc.esewa as object) },
       khalti: { ...DEFAULT_SETTINGS.khalti, ...(doc.khalti as object) },
+      manual: { ...DEFAULT_SETTINGS.manual, ...(doc.manual as object) },
     };
   } catch {
     // Secret-bearing or temporarily unavailable settings must not block the
@@ -171,26 +179,16 @@ export async function updateSubscriptionSettings(patch: Partial<SubscriptionSett
   await setDocument(SETTINGS_DOC, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-// ===================== Bank details (for the QR/Manual method) =====================
+// ===================== Manual payment details =====================
+// QR URL, bank details, and instructions are read from
+// app_subscription_settings/config.manual by the checkout screen.
 
-const BANK_DETAILS_DOC = `${Collections.subscriptionBankDetails}/config`;
-
-const DEFAULT_BANK_DETAILS: BankDetails = {
-  bankName: '',
-  accountNumber: '',
-  receiverName: '',
-  branch: '',
-};
-
-export async function fetchBankDetails(): Promise<BankDetails> {
-  const doc = await getDocument(BANK_DETAILS_DOC);
-  if (!doc) return DEFAULT_BANK_DETAILS;
-  return { ...DEFAULT_BANK_DETAILS, ...(doc as object) };
-}
-
-/** Admin-only: update bank name / account number / receiver name / branch shown on the QR page. */
+/** Admin-only helper; writes manual payment details back into config.manual. */
 export async function updateBankDetails(patch: Partial<BankDetails>): Promise<void> {
-  await setDocument(BANK_DETAILS_DOC, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  const settings = await fetchSubscriptionSettings();
+  await updateSubscriptionSettings({
+    manual: { ...settings.manual, ...patch },
+  });
 }
 
 // ===================== Plans =====================

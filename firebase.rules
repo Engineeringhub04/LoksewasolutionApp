@@ -258,17 +258,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /app_subscription_settings/{docId} {
-      // The public config may contain only enabled flags and public identifiers.
-      // Never expose eSewa/Khalti secret keys to mobile or website clients.
+      // This document contains the existing public/manual configuration used by
+      // both clients. A non-empty gateway secret makes the whole document
+      // unreadable from the client, preventing accidental secret exposure.
+      // Empty secret fields (as in the current config) are safe to read.
       allow read: if isSignedIn() &&
         (!resource.data.keys().hasAny(['esewa']) ||
-         !resource.data.esewa.keys().hasAny(['secretKey'])) &&
+         !resource.data.esewa.keys().hasAny(['secretKey']) ||
+         resource.data.esewa.secretKey == '') &&
         (!resource.data.keys().hasAny(['khalti']) ||
-         !resource.data.khalti.keys().hasAny(['secretKey']));
-      allow write: if isAdmin();
-    }
-    match /app_subscription_bank_details/{docId} {
-      allow read: if isSignedIn();
+         !resource.data.khalti.keys().hasAny(['secretKey']) ||
+         resource.data.khalti.secretKey == '');
       allow write: if isAdmin();
     }
     match /app_coupon_codes/{code} {

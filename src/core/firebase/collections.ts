@@ -63,9 +63,6 @@ export const Collections = {
   // URL, and manual-payment instructions text. One doc, not a collection,
   // because there is only ever one active configuration.
   subscriptionSettings: 'app_subscription_settings',
-  // Bank name / account number / receiver name / branch shown on the QR
-  // (Manual) payment screen. One doc, admin-edited only.
-  subscriptionBankDetails: 'app_subscription_bank_details',
   // Plan catalog — Free / Monthly / Yearly cards shown on the Subscription page.
   subscriptionPlans: 'app_subscription_plans',
   // One row per user subscription request/record. Flat top-level collection

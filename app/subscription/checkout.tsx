@@ -23,7 +23,6 @@ import { showToast } from '@/src/core/store/toastStore';
 import {
   fetchSubscriptionPlans,
   fetchSubscriptionSettings,
-  fetchBankDetails,
   submitPayment,
   validateCoupon,
   type PaymentMethod,
@@ -56,9 +55,9 @@ export default function CheckoutScreen() {
   const { profile } = useProfileStore();
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [plans, settings, bank] = await Promise.all([fetchSubscriptionPlans(), fetchSubscriptionSettings(), fetchBankDetails()]);
+    const [plans, settings] = await Promise.all([fetchSubscriptionPlans(), fetchSubscriptionSettings()]);
     const plan = plans.find((p) => p.id === planId) ?? null;
-    return { plan, settings, bank };
+    return { plan, settings, bank: settings.manual };
   }, [planId]);
 
   const [method, setMethod] = useState<PaymentMethod | null>(null);
@@ -116,10 +115,13 @@ export default function CheckoutScreen() {
   };
 
   const handleDownloadQr = async () => {
-    if (!bank) return;
+    if (!bank?.qrImageUrl) {
+      showToast('QR image is not configured yet.', 'info');
+      return;
+    }
     setDownloadingQr(true);
     try {
-      const result = await downloadImageToDevice(QR_IMAGE_PLACEHOLDER, QR_DOWNLOAD_NAME);
+      const result = await downloadImageToDevice(bank.qrImageUrl, QR_DOWNLOAD_NAME);
       showToast(result.saved ? 'QR code saved' : 'Download cancelled', result.saved ? 'success' : 'info');
     } catch {
       showToast('Could not download the QR code.', 'error');
@@ -344,11 +346,6 @@ export default function CheckoutScreen() {
   );
 }
 
-// A neutral placeholder QR — replaced by whatever image URL the admin sets up
-// for the QR itself (kept separate from bank details, which are now plain
-// text fields rather than baked into a QR image).
-const QR_IMAGE_PLACEHOLDER = 'https://via.placeholder.com/500x500.png?text=Scan+to+Pay';
-
 function MethodCard({
   logo,
   icon,
@@ -480,81 +477,51 @@ function QrSection({
 
   return (
     <>
-      <View style={[styles.qrBox, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
-        <Text variant="bodyLarge" weight="bold">{t('subscription.scanQrTitle')}</Text>
-        <Text variant="bodySmall" secondary style={{ marginTop: 4, marginBottom: spacing.sm }}>{t('subscription.scanQrHint')}</Text>
-
-        <View style={styles.qrImageWrap}>
-          {!qrLoaded ? <Skeleton width={220} height={220} radius={16} style={styles.qrSkeletonOverlay} /> : null}
-          <Image
-            source={{ uri: QR_IMAGE_PLACEHOLDER }}
-            style={styles.qrImage}
-            resizeMode="contain"
-            onLoadEnd={onQrLoad}
-          />
-        </View>
-
-        <Pressable onPress={onDownload} disabled={downloading} style={[styles.downloadRow, { borderColor: colors.primary }]}>
-          <Ionicons name={downloading ? 'cloud-download' : 'download-outline'} size={16} color={colors.primary} />
-          <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>
-            {downloading ? 'Downloading…' : 'Download QR'}
-          </Text>
-        </Pressable>
-      </View>
-
-      {bank ? (
-        <View style={[styles.bankBox, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md }]}>
-          <Text variant="bodySmall" weight="bold" secondary style={{ marginBottom: spacing.xs }}>{t('subscription.bankDetails')}</Text>
-          <BankRow label="Bank Name" value={bank.bankName} onCopy={onCopyField} />
-          <BankRow label="Account No." value={bank.accountNumber} onCopy={onCopyField} />
-          <BankRow label="Receiver Account Name" value={bank.receiverName} onCopy={onCopyField} />
-          <BankRow label="Branch" value={bank.branch} onCopy={onCopyField} />
-        </View>
-      ) : null}
-
-      <View style={[styles.instructionsBox, { borderRadius: radius.lg, padding: spacing.lg }]}>
-        <View style={styles.instructionsHeader}>
-          <View style={styles.instructionsIconRing}>
-            <Ionicons name="shield-checkmark" size={18} color="#FFF" />
+      {bank?.qrImageUrl ? (
+        <View style={[styles.qrBox, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }] }>
+          <Text variant="bodyLarge" weight="bold">{t('subscription.scanQrTitle')}</Text>
+          <Text variant="bodySmall" secondary style={{ marginTop: 4, marginBottom: spacing.sm }}>{t('subscription.scanQrHint')}</Text>
+          <View style={styles.qrImageWrap}>
+            {!qrLoaded ? <Skeleton width={220} height={220} radius={16} style={styles.qrSkeletonOverlay} /> : null}
+            <Image
+              source={{ uri: bank.qrImageUrl }}
+              style={styles.qrImage}
+              resizeMode="contain"
+              onLoadEnd={onQrLoad}
+            />
           </View>
-          <Text variant="bodyLarge" weight="bold" style={{ color: '#FFF' }}>{t('subscription.instructions')}</Text>
+          <Pressable onPress={onDownload} disabled={downloading} style={[styles.downloadRow, { borderColor: colors.primary }] }>
+            <Ionicons name={downloading ? 'cloud-download' : 'download-outline'} size={16} color={colors.primary} />
+            <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>
+              {downloading ? 'Downloading…' : 'Download QR'}
+            </Text>
+          </Pressable>
         </View>
-        <View style={{ gap: 10, marginTop: spacing.sm }}>
-          <InstructionStep number={1} text={t('subscription.instructionStep1')} />
-          <InstructionStep number={2} text={t('subscription.instructionStep2')} />
-          <InstructionStep number={3} text={t('subscription.instructionStep3')} />
-          <InstructionStep number={4} text={t('subscription.instructionStep4')} />
-        </View>
-      </View>
-    </>
-  );
-}
-
-function BankRow({ label, value, onCopy }: { label: string; value: string; onCopy: (v: string) => void }) {
-  const { colors, spacing } = useTheme();
-  return (
-    <View style={[styles.bankRow, { borderBottomColor: colors.divider }]}>
-      <View style={{ flex: 1 }}>
-        <Text variant="caption" secondary>{label}</Text>
-        <Text variant="bodySmall" weight="semiBold">{value || '—'}</Text>
-      </View>
-      {value ? (
-        <Pressable onPress={() => onCopy(value)} hitSlop={8} style={{ padding: spacing.xs }}>
-          <Ionicons name="copy-outline" size={16} color={colors.primary} />
-        </Pressable>
       ) : null}
-    </View>
-  );
-}
 
-function InstructionStep({ number, text }: { number: number; text: string }) {
-  return (
-    <View style={styles.instructionStep}>
-      <View style={styles.instructionNumberBox}>
-        <Text variant="caption" weight="bold" style={{ color: '#FFF' }}>{number}</Text>
-      </View>
-      <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.92)', flex: 1 }}>{text}</Text>
-    </View>
+      {bank?.bankDetails ? (
+        <View style={[styles.bankBox, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md }] }>
+          <Text variant="bodySmall" weight="bold" secondary style={{ marginBottom: spacing.xs }}>{t('subscription.bankDetails')}</Text>
+          <Text variant="bodySmall" style={{ lineHeight: 22 }}>{bank.bankDetails}</Text>
+          <Pressable onPress={() => onCopyField(bank.bankDetails)} hitSlop={8} style={[styles.copyDetailsRow, { borderColor: colors.primary }] }>
+            <Ionicons name="copy-outline" size={16} color={colors.primary} />
+            <Text variant="caption" weight="semiBold" style={{ color: colors.primary }}>Copy bank details</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {bank?.instructions ? (
+        <View style={[styles.instructionsBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: spacing.lg }] }>
+          <View style={styles.instructionsHeader}>
+            <View style={[styles.instructionsIconRing, { backgroundColor: `${colors.primary}20` }] }>
+              <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+            </View>
+            <Text variant="bodyLarge" weight="bold">{t('subscription.instructions')}</Text>
+          </View>
+          <Text variant="bodySmall" secondary style={{ lineHeight: 22, marginTop: spacing.sm }}>{bank.instructions}</Text>
+        </View>
+      ) : null}
+    </>
   );
 }
 
@@ -638,11 +605,9 @@ const styles = StyleSheet.create({
   qrImage: { width: 220, height: 220, borderRadius: 12 },
   downloadRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   bankBox: {},
-  bankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  instructionsBox: { backgroundColor: '#0F172A', overflow: 'hidden' },
+  copyDetailsRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, marginTop: 12, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  instructionsBox: { overflow: 'hidden' },
   instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  instructionsIconRing: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  instructionStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  instructionNumberBox: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  instructionsIconRing: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   screenshotPreview: { width: '100%', height: 160, borderRadius: 12, marginTop: 4 },
 });
