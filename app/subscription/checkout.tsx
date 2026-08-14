@@ -25,7 +25,9 @@ import {
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
 import { fetchExamSet } from '@/src/core/firebase/services/examHub';
+import { fetchLearningChapter, fetchLearningSubject, fetchLearningUnit, type LearningChapter, type LearningSubject, type LearningUnit } from '@/src/core/firebase/services/learning';
 import { fetchPendingExamPurchase, submitExamPurchase } from '@/src/core/firebase/services/examPurchases';
+import { fetchPendingContentPurchase, submitContentPurchase, type ContentPurchaseType } from '@/src/core/firebase/services/contentPurchases';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -47,24 +49,40 @@ const QR_DOWNLOAD_NAME = 'Ls-qr.png';
 const PAYMENT_RETURN_URL = 'https://loksewasolution.app/payment-return';
 
 export default function CheckoutScreen() {
-  const { planId, examId } = useLocalSearchParams<{ planId?: string; examId?: string }>();
+  const { planId, examId, contentId, contentType, contentSubjectId, contentUnitId } = useLocalSearchParams<{
+    planId?: string;
+    examId?: string;
+    contentId?: string;
+    contentType?: ContentPurchaseType;
+    contentSubjectId?: string;
+    contentUnitId?: string;
+  }>();
   const { colors, spacing, radius } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const authInitializing = useAuthStore((s) => s.initializing);
   const { profile, courseInfo } = useProfileStore();
 
   const isExamPurchase = !!examId;
+  const isContentPurchase = !!contentId && !!contentType && !!contentSubjectId;
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [plans, settings, exam] = await Promise.all([
+    const contentPromise: Promise<LearningSubject | LearningUnit | LearningChapter | null> = !isContentPurchase
+      ? Promise.resolve(null)
+      : contentType === 'subject'
+        ? fetchLearningSubject(contentSubjectId!)
+        : contentType === 'unit'
+          ? fetchLearningUnit(contentSubjectId!, contentId!)
+          : fetchLearningChapter(contentSubjectId!, contentId!, contentUnitId ?? null);
+    const [plans, settings, exam, content] = await Promise.all([
       fetchSubscriptionPlans(),
       fetchSubscriptionSettings(),
       examId ? fetchExamSet(examId) : Promise.resolve(null),
+      contentPromise,
     ]);
     const plan = plans.find((p) => p.id === planId) ?? null;
-    return { plan, exam, settings, bank: settings.manual };
-  }, [planId, examId, user?.uid, authInitializing], {
+    return { plan, exam, content, settings, bank: settings.manual };
+  }, [planId, examId, contentId, contentType, contentSubjectId, contentUnitId, user?.uid, authInitializing], {
     // Firestore config reads are authenticated. Waiting for session hydration is
     // essential because the hook otherwise caches an empty fallback forever.
     enabled: !authInitializing && !!user?.uid,
@@ -92,12 +110,14 @@ export default function CheckoutScreen() {
 
   const plan = data?.plan ?? null;
   const exam = data?.exam ?? null;
+  const content = data?.content ?? null;
   const settings = data?.settings ?? null;
   const bank = data?.bank ?? null;
-  const purchasable = isExamPurchase ? exam : plan;
-  const originalAmount = exam?.price ?? plan?.price ?? 0;
+  const purchasable = isContentPurchase ? content : isExamPurchase ? exam : plan;
+  const contentTitle = content ? (language === 'ne' ? content.titleNe : content.title) : null;
+  const originalAmount = content?.price ?? exam?.price ?? plan?.price ?? 0;
   const finalAmount = couponApplied ? couponApplied.discountedAmount : originalAmount;
-  const checkoutTitle = exam?.title ?? plan?.name ?? t('subscription.title');
+  const checkoutTitle = contentTitle ?? exam?.title ?? plan?.name ?? t('subscription.title');
 
   useEffect(() => {
     setQrLoaded(false);
@@ -109,11 +129,12 @@ export default function CheckoutScreen() {
 
 
   const handleApplyCoupon = async () => {
-    if (!couponInput.trim() || (!plan && !exam)) return;
+    if (!couponInput.trim() || (!plan && !exam && !content)) return;
     setValidatingCoupon(true);
     setCouponError(null);
     try {
-      const result = await validateCoupon(couponInput.trim(), isExamPurchase ? 'exam' : plan?.billingCycle ?? 'free', originalAmount);
+      const couponCategory = isContentPurchase || isExamPurchase ? 'exam' : plan?.billingCycle ?? 'free';
+      const result = await validateCoupon(couponInput.trim(), couponCategory, originalAmount);
       if (!result.valid) {
         setCouponError(result.reason ?? t('subscription.couponInvalid'));
         return;
@@ -186,11 +207,20 @@ export default function CheckoutScreen() {
     setSubmitting(true);
     try {
       let submittedExamPurchaseId: string | null = null;
+      let submittedContentPurchaseId: string | null = null;
       if (isExamPurchase && exam) {
         const existingPending = await fetchPendingExamPurchase(user.uid, exam.id);
         if (existingPending) {
           showToast(t('subscription.purchasePending'), 'info');
           router.replace({ pathname: '/subscription/exam-purchase/[id]', params: { id: existingPending.id, source: 'exam' } } as never);
+          return;
+        }
+      }
+      if (isContentPurchase && content && contentType && contentId) {
+        const existingPending = await fetchPendingContentPurchase(user.uid, contentType, contentId);
+        if (existingPending) {
+          showToast(t('subscription.purchasePending'), 'info');
+          router.replace({ pathname: '/purchase-details/content/[id]', params: { id: existingPending.id, source: 'content' } } as never);
           return;
         }
       }
@@ -218,6 +248,25 @@ export default function CheckoutScreen() {
           customerMessage: customerMessage.trim() || null,
           couponCode: couponApplied?.code ?? null,
         });
+      } else if (isContentPurchase && content && contentType && contentId) {
+        submittedContentPurchaseId = await submitContentPurchase({
+          uid: user.uid,
+          userName: profile?.name ?? user.displayName ?? null,
+          userEmail: profile?.email ?? user.email ?? null,
+          courseId: content.courseId ?? profile?.courseId ?? null,
+          subcourseId: content.subcourseId ?? profile?.subcourseId ?? null,
+          contentType,
+          contentId,
+          contentTitle: content.title,
+          contentTitleNe: content.titleNe,
+          subjectId: contentType === 'subject' ? content.id : contentSubjectId!,
+          unitId: contentType === 'unit' ? content.id : contentType === 'chapter' ? contentUnitId ?? null : null,
+          amount: finalAmount,
+          transactionRef: transactionRef.trim(),
+          screenshotUrl,
+          customerMessage: customerMessage.trim() || null,
+          couponCode: couponApplied?.code ?? null,
+        });
       } else if (plan) {
         await submitPayment({
           uid: user.uid,
@@ -237,6 +286,8 @@ export default function CheckoutScreen() {
       showToast(t('subscription.submitSuccess'), 'success');
       if (submittedExamPurchaseId) {
         router.replace({ pathname: '/subscription/exam-purchase/[id]', params: { id: submittedExamPurchaseId, source: 'exam' } } as never);
+      } else if (submittedContentPurchaseId) {
+        router.replace({ pathname: '/purchase-details/content/[id]', params: { id: submittedContentPurchaseId, source: 'content' } } as never);
       } else {
         router.replace('/subscription');
       }

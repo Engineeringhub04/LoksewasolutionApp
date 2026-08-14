@@ -1,4 +1,4 @@
-// §17 Subject List
+// Syllabus-driven Subject list. Legacy content remains available to older routes.
 import React from 'react';
 import { View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -7,7 +7,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
-import { fetchSubjects } from '@/src/core/firebase/services/content';
+import { fetchLearningSubjects } from '@/src/core/firebase/services/learning';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { SubjectCard } from '@/src/components/cards/SubjectCard';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
@@ -16,11 +16,10 @@ import { SkeletonCard } from '@/src/components/feedback/Skeleton';
 
 export default function SubjectListScreen() {
   const { colors, spacing } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchSubjects(), []);
+  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(fetchLearningSubjects, []);
 
-  // Returning to this screen must show current data without a manual pull.
   useRefreshOnFocus(refresh);
 
   return (
@@ -44,9 +43,10 @@ export default function SubjectListScreen() {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={({ item }) => (
             <SubjectCard
-              name={item.name}
+              name={language === 'ne' ? item.titleNe : item.title}
               icon={item.icon as never}
               chapterCount={item.chapterCount}
+              countLabel={t('learning.chapters')}
               progress={0}
               onPress={() => router.push(`/subjects/${item.id}`)}
             />

@@ -8,12 +8,13 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchMyExamPurchases, type ExamPurchaseRecord } from '@/src/core/firebase/services/examPurchases';
+import { fetchMyContentPurchases, type ContentPurchaseRecord } from '@/src/core/firebase/services/contentPurchases';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
-const TRACKS = ['all', 'exam'] as const;
+const TRACKS = ['all', 'exam', 'content'] as const;
 type Track = (typeof TRACKS)[number];
 
 export default function PurchaseDetailsScreen() {
@@ -25,12 +26,21 @@ export default function PurchaseDetailsScreen() {
   const [track, setTrack] = useState<Track>('all');
 
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(
-    () => (user?.uid ? fetchMyExamPurchases(user.uid) : Promise.resolve([])),
+    async () => {
+      if (!user?.uid) return { exams: [] as ExamPurchaseRecord[], content: [] as ContentPurchaseRecord[] };
+      const [exams, content] = await Promise.all([
+        fetchMyExamPurchases(user.uid),
+        fetchMyContentPurchases(user.uid),
+      ]);
+      return { exams, content };
+    },
     [user?.uid]
   );
 
-  const records = useMemo(() => data ?? [], [data]);
-  const visibleRecords = track === 'exam' || track === 'all' ? records : [];
+  const examRecords = useMemo(() => data?.exams ?? [], [data?.exams]);
+  const contentRecords = useMemo(() => data?.content ?? [], [data?.content]);
+  const visibleExamRecords = track === 'exam' || track === 'all' ? examRecords : [];
+  const visibleContentRecords = track === 'content' || track === 'all' ? contentRecords : [];
 
   return (
     <>
@@ -59,7 +69,7 @@ export default function PurchaseDetailsScreen() {
                 >
                   <Ionicons name={item === 'all' ? 'layers-outline' : 'document-text-outline'} size={15} color={active ? colors.onPrimary : colors.textSecondary} />
                   <Text variant="bodySmall" weight={active ? 'bold' : 'semiBold'} style={{ color: active ? colors.onPrimary : colors.textSecondary }}>
-                    {item === 'all' ? t('subscription.allRequests') : t('subscription.examDetails')}
+                    {item === 'all' ? t('subscription.allRequests') : item === 'exam' ? t('subscription.examDetails') : t('subscription.contentDetailsTrack')}
                   </Text>
                 </Pressable>
               );
@@ -68,16 +78,19 @@ export default function PurchaseDetailsScreen() {
 
           {loading ? null : error ? (
             <DataNotFound onRetry={refetch} />
-          ) : visibleRecords.length === 0 ? (
+          ) : visibleExamRecords.length + visibleContentRecords.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg }]}> 
               <Ionicons name="receipt-outline" size={30} color={colors.textSecondary} />
-              <Text variant="bodyLarge" weight="bold">{t('subscription.noExamPurchases')}</Text>
-              <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>{t('subscription.purchaseDetailsEmpty')}</Text>
+              <Text variant="bodyLarge" weight="bold">{track === 'content' ? t('subscription.noContentPurchases') : t('subscription.noExamPurchases')}</Text>
+              <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>{track === 'content' ? t('subscription.noContentPurchases') : t('subscription.purchaseDetailsEmpty')}</Text>
             </View>
           ) : (
             <View style={{ gap: spacing.sm }}>
-              {visibleRecords.map((record) => (
-                <PurchaseCard key={record.id} record={record} onPress={() => router.push(`/subscription/exam-purchase/${record.id}`)} />
+              {visibleExamRecords.map((record) => (
+                <PurchaseCard key={`exam-${record.id}`} record={record} onPress={() => router.push(`/subscription/exam-purchase/${record.id}`)} />
+              ))}
+              {visibleContentRecords.map((record) => (
+                <ContentPurchaseCard key={`content-${record.id}`} record={record} onPress={() => router.push(`/purchase-details/content/${record.id}`)} />
               ))}
             </View>
           )}
@@ -118,6 +131,35 @@ function PurchaseCard({ record, onPress }: { record: ExamPurchaseRecord; onPress
           <Ionicons name={status.icon} size={12} color={status.color} />
           <Text variant="caption" weight="bold" style={{ color: status.color }}>{status.label}</Text>
         </View>
+      </View>
+      {record.adminMessage ? <Text variant="caption" style={{ color: colors.primary, marginTop: spacing.xs }}>{record.adminMessage}</Text> : null}
+    </Pressable>
+  );
+}
+
+function ContentPurchaseCard({ record, onPress }: { record: ContentPurchaseRecord; onPress: () => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const { t, language } = useTranslation();
+  const status = record.status === 'active'
+    ? { label: t('subscription.tagApproved'), color: colors.success, icon: 'checkmark-circle' as const }
+    : record.status === 'rejected'
+      ? { label: t('subscription.tagRejected'), color: colors.error, icon: 'close-circle' as const }
+      : { label: t('subscription.purchasePending'), color: colors.warning, icon: 'time-outline' as const };
+  const title = language === 'ne' ? record.contentTitleNe || record.contentTitle : record.contentTitle;
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, opacity: pressed ? 0.78 : 1 }]}>
+      <View style={styles.cardTop}>
+        <View style={[styles.cardIcon, { backgroundColor: `${colors.secondary}15`, borderRadius: radius.md }]}><Ionicons name="book-outline" size={21} color={colors.secondary} /></View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text variant="bodyLarge" weight="bold" numberOfLines={2}>{title || t('subscription.contentPurchase')}</Text>
+          <Text variant="caption" secondary numberOfLines={1}>{record.contentType} · {record.subjectId}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={colors.textSecondary} />
+      </View>
+      <View style={styles.cardBottom}>
+        <Text variant="caption" secondary>Rs. {record.amount} · {record.submittedAt ? formatDate(record.submittedAt) : '—'}</Text>
+        <View style={[styles.status, { backgroundColor: `${status.color}18` }]}><Ionicons name={status.icon} size={12} color={status.color} /><Text variant="caption" weight="bold" style={{ color: status.color }}>{status.label}</Text></View>
       </View>
       {record.adminMessage ? <Text variant="caption" style={{ color: colors.primary, marginTop: spacing.xs }}>{record.adminMessage}</Text> : null}
     </Pressable>

@@ -2,8 +2,17 @@
 // Never hardcode a collection path string outside this file.
 export const Collections = {
   users: 'users',
+  // Legacy content collections remain unchanged for backward compatibility.
   subjects: 'subjects',
   chapters: (subjectId: string) => `subjects/${subjectId}/chapters`,
+  units: (subjectId: string) => `subjects/${subjectId}/units`,
+  unit: (subjectId: string, unitId: string) => `subjects/${subjectId}/units/${unitId}`,
+  unitChapters: (subjectId: string, unitId: string) => `subjects/${subjectId}/units/${unitId}/chapters`,
+  // New syllabus-driven learning catalog; isolated from legacy content.
+  learningSubjects: 'app_learning_subjects',
+  learningChapters: (subjectId: string) => `app_learning_subjects/${subjectId}/chapters`,
+  learningUnits: (subjectId: string) => `app_learning_subjects/${subjectId}/units`,
+  learningUnitChapters: (subjectId: string, unitId: string) => `app_learning_subjects/${subjectId}/units/${unitId}/chapters`,
   topics: (subjectId: string, chapterId: string) => `subjects/${subjectId}/chapters/${chapterId}/topics`,
   questions: 'questions',
   mockTests: 'mockTests',
@@ -21,6 +30,7 @@ export const Collections = {
   discussionGuidelines: 'app_discussion_guidelines',
   reportHistory: 'app_report_history',
   bookmarks: 'bookmarks',
+  learningProgress: (uid: string) => `users/${uid}/learning_progress`,
   notes: 'notes',
   achievements: 'achievements',
   leaderboard: 'leaderboard',
@@ -78,6 +88,9 @@ export const Collections = {
   // Individual premium exam purchase requests. Kept separate from overall
   // subscription requests so the existing plan lifecycle remains unchanged.
   examPurchases: 'app_exam_purchases',
+  // Individual Subject/Unit/Chapter purchase requests. Kept separate from
+  // subscriptions and exam purchases so each entitlement has its own review flow.
+  contentPurchases: 'app_content_purchases',
   // Coupon codes — admin-created, time-limited, usable by both auto and
   // manual flows.
   couponCodes: 'app_coupon_codes',

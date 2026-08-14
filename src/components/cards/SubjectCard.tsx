@@ -10,11 +10,12 @@ export interface SubjectCardProps {
   name: string;
   icon?: keyof typeof Ionicons.glyphMap;
   chapterCount: number;
+  countLabel?: string;
   progress: number;
   onPress: () => void;
 }
 
-export function SubjectCard({ name, icon = 'book-outline', chapterCount, progress, onPress }: SubjectCardProps) {
+export function SubjectCard({ name, icon = 'book-outline', chapterCount, countLabel = 'chapters', progress, onPress }: SubjectCardProps) {
   const { colors, spacing, radius } = useTheme();
   return (
     <Card onPress={onPress} style={{ width: 160, gap: spacing.sm }}>
@@ -34,7 +35,7 @@ export function SubjectCard({ name, icon = 'book-outline', chapterCount, progres
         {name}
       </Text>
       <Text variant="caption" secondary>
-        {chapterCount} chapters
+        {chapterCount} {countLabel}
       </Text>
       <ProgressBar progress={progress} />
     </Card>
