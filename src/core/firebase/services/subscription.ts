@@ -99,6 +99,8 @@ export interface SubscriptionSettings {
   esewa: GatewayKeys;
   khalti: KhaltiKeys;
   manual: ManualPaymentConfig;
+  /** True only when app_subscription_settings/config was read successfully. */
+  sourceAvailable: boolean;
 }
 
 export type BankDetails = ManualPaymentConfig;
@@ -153,6 +155,7 @@ const DEFAULT_SETTINGS: SubscriptionSettings = {
   esewa: { enabled: false, merchantCode: '' },
   khalti: { enabled: false, publicKey: '' },
   manual: { qrImageUrl: '', bankDetails: '', instructions: '' },
+  sourceAvailable: false,
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -164,7 +167,9 @@ function asString(value: unknown): string {
 }
 
 function asBoolean(value: unknown): boolean {
-  return value === true;
+  // Firestore stores these as booleans. Accepting the legacy string form too
+  // keeps the toggle usable if an older admin form saved "true"/"false".
+  return value === true || value === 'true';
 }
 
 /**
@@ -188,17 +193,18 @@ function normalizeSettings(...documents: (Record<string, unknown> | null)[]): Su
       publicKey: asString(khalti.publicKey),
     },
     manual: {
-      qrImageUrl: asString(manual.qrImageUrl),
-      bankDetails: asString(manual.bankDetails),
-      instructions: asString(manual.instructions),
+      qrImageUrl: asString(manual.qrImageUrl ?? merged.qrImageUrl ?? manual.qrUrl),
+      bankDetails: asString(manual.bankDetails ?? merged.bankDetails),
+      instructions: asString(manual.instructions ?? merged.instructions),
     },
+    sourceAvailable: true,
   };
 }
 
 export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
   try {
     const doc = await getDocument(SETTINGS_DOC);
-    return doc ? normalizeSettings(doc) : DEFAULT_SETTINGS;
+    return doc ? normalizeSettings(doc) : { ...DEFAULT_SETTINGS, sourceAvailable: true };
   } catch (error) {
     // Keep the screen resilient for normal users, but do not hide the root cause
     // during development. In particular, a config containing secretKey fields

@@ -24,7 +24,6 @@ import {
   validateCoupon,
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
-import { createEsewaCheckoutHtml } from '@/src/core/media/paymentGateway';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -77,7 +76,6 @@ export default function CheckoutScreen() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [gatewayOpening, setGatewayOpening] = useState(false);
   const [gatewayHtml, setGatewayHtml] = useState<string | null>(null);
   const [gatewayUrl, setGatewayUrl] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -94,16 +92,10 @@ export default function CheckoutScreen() {
     setQrLoaded(false);
   }, [bank?.qrImageUrl]);
 
-  const esewaReady = !!settings?.esewa.enabled;
-  const khaltiReady = !!settings?.khalti.enabled;
-  const isAdmin = profile?.isAdmin === true;
+  const settingsAvailable = settings?.sourceAvailable === true;
+  const esewaReady = settingsAvailable && !!settings?.esewa.enabled;
+  const khaltiReady = settingsAvailable && !!settings?.khalti.enabled;
 
-  const showGatewayIssue = (technicalMessage: string) => {
-    showToast(
-      isAdmin ? technicalMessage : t('subscription.gatewayUnavailableToast'),
-      isAdmin ? 'error' : 'info',
-    );
-  };
 
   const handleApplyCoupon = async () => {
     if (!couponInput.trim() || !plan) return;
@@ -213,33 +205,12 @@ export default function CheckoutScreen() {
   /** Opens only the provider checkout. Receipt ID/screenshot submission is QR-only. */
   const handleOpenGateway = async () => {
     if (!plan || !method || method === 'qr') return;
-    setGatewayOpening(true);
-    try {
-      // eSewa/Khalti require a public http(s) callback URL; custom app schemes are rejected.
-      const redirectUrl = PAYMENT_RETURN_URL;
-      if (method === 'esewa') {
-        const { html } = createEsewaCheckoutHtml({
-          amount: finalAmount,
-          successUrl: redirectUrl,
-          failureUrl: redirectUrl,
-          merchantCode: settings?.esewa.merchantCode,
-        });
-        setGatewayHtml(html);
-        setGatewayUrl(null);
-      } else if (method === 'khalti') {
-        // Khalti initiation requires a provider secret and a backend. The
-        // client intentionally does not read or ship that secret.
-        showGatewayIssue('Khalti payment is under construction until a secure merchant backend is configured.');
-        return;
-      }
-    } catch (error) {
-      const message = error instanceof Error && error.message.startsWith('KHALTI_')
-        ? 'Khalti sandbox initiate failed. Check the sandbox secret key and merchant configuration.'
-        : 'Could not open the payment gateway. Please try again.';
-      showGatewayIssue(message);
-    } finally {
-      setGatewayOpening(false);
+    if (!settingsAvailable) {
+      showToast(t('subscription.settingsUnavailableToast'), 'info');
+      return;
     }
+    showToast(t('subscription.gatewayEnabledToast'), 'info');
+    return;
   };
 
   const closeGateway = () => {
@@ -298,22 +269,33 @@ export default function CheckoutScreen() {
                   label="eSewa"
                   color="#60BB46"
                   ready={esewaReady}
+                  settingsAvailable={settingsAvailable}
                   selected={method === 'esewa'}
-                  onPress={() => (esewaReady ? setMethod('esewa') : showToast(t('subscription.comingSoonToast'), 'info'))}
+                  onPress={() => {
+                    if (!settingsAvailable) showToast(t('subscription.settingsUnavailableToast'), 'info');
+                    else if (esewaReady) setMethod('esewa');
+                    else showToast(t('subscription.comingSoonToast'), 'info');
+                  }}
                 />
                 <MethodCard
                   logo={KHALTI_LOGO}
                   label="Khalti"
                   color="#5C2D91"
                   ready={khaltiReady}
+                  settingsAvailable={settingsAvailable}
                   selected={method === 'khalti'}
-                  onPress={() => (khaltiReady ? setMethod('khalti') : showToast(t('subscription.comingSoonToast'), 'info'))}
+                  onPress={() => {
+                    if (!settingsAvailable) showToast(t('subscription.settingsUnavailableToast'), 'info');
+                    else if (khaltiReady) setMethod('khalti');
+                    else showToast(t('subscription.comingSoonToast'), 'info');
+                  }}
                 />
                 <MethodCard
                   icon="qr-code-outline"
                   label={t('subscription.qrMethodLabel')}
                   color="#0EA5E9"
                   ready
+                  settingsAvailable
                   selected={method === 'qr'}
                   onPress={() => setMethod('qr')}
                 />
@@ -324,7 +306,6 @@ export default function CheckoutScreen() {
               <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.sm }}>
                 <Button
                   label={t('subscription.continueToGateway')}
-                  loading={gatewayOpening}
                   onPress={handleOpenGateway}
                   icon={<Ionicons name="open-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />}
                 />
@@ -419,6 +400,7 @@ function MethodCard({
   label,
   color,
   ready,
+  settingsAvailable,
   selected,
   onPress,
 }: {
@@ -427,6 +409,7 @@ function MethodCard({
   label: string;
   color: string;
   ready: boolean;
+  settingsAvailable: boolean;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -442,7 +425,7 @@ function MethodCard({
           borderRadius: radius.md,
           backgroundColor: selected ? `${color}12` : colors.surface,
           padding: spacing.md,
-          opacity: ready ? 1 : 0.55,
+          opacity: settingsAvailable ? (ready ? 1 : 0.55) : 0.7,
         },
       ]}
     >
@@ -454,7 +437,11 @@ function MethodCard({
         </View>
       )}
       <Text variant="bodyLarge" weight="semiBold" style={{ flex: 1, marginLeft: 12 }}>{label}</Text>
-      {!ready ? (
+      {!settingsAvailable ? (
+        <View style={[styles.comingSoonBadge, { backgroundColor: colors.surfaceAlt }]}>
+          <Text variant="caption" weight="bold" secondary>{t('subscription.settingsUnavailable')}</Text>
+        </View>
+      ) : !ready ? (
         <View style={[styles.comingSoonBadge, { backgroundColor: colors.surfaceAlt }]}>
           <Text variant="caption" weight="bold" secondary>{t('subscription.comingSoon')}</Text>
         </View>
@@ -546,6 +533,15 @@ function QrSection({
 
   return (
     <>
+      {!bank?.qrImageUrl && !bank?.bankDetails && !bank?.instructions ? (
+        <View style={[styles.manualUnavailableBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
+          <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text variant="bodySmall" weight="semiBold">{t('subscription.manualDetailsUnavailable')}</Text>
+            <Text variant="caption" secondary>{t('subscription.manualDetailsUnavailableHint')}</Text>
+          </View>
+        </View>
+      ) : null}
       {bank?.qrImageUrl ? (
         <View style={[styles.qrBox, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }] }>
           <Text variant="bodyLarge" weight="bold">{t('subscription.scanQrTitle')}</Text>
@@ -721,6 +717,7 @@ const styles = StyleSheet.create({
   comingSoonBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   couponDropdown: { borderWidth: 1 },
   qrBox: { borderWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
+  manualUnavailableBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: StyleSheet.hairlineWidth },
   qrImageWrap: { width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
   qrSkeletonOverlay: { position: 'absolute' },
   qrImage: { width: 220, height: 220, borderRadius: 12 },
