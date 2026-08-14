@@ -46,6 +46,7 @@ const ESEWA_LOGO = 'https://i.ibb.co/HLpHmnQz/esewa-icon-large.png';
 const KHALTI_LOGO = 'https://i.ibb.co/tMHZRHKQ/Khalti-Logo-New-3.png';
 
 const QR_DOWNLOAD_NAME = 'Ls-qr.png';
+const PAYMENT_RETURN_URL = 'https://loksewasolution.app/payment-return';
 
 export default function CheckoutScreen() {
   const { planId } = useLocalSearchParams<{ planId: string }>();
@@ -85,6 +86,14 @@ export default function CheckoutScreen() {
 
   const esewaReady = !!settings?.esewa.enabled;
   const khaltiReady = !!settings?.khalti.enabled;
+  const isAdmin = profile?.isAdmin === true;
+
+  const showGatewayIssue = (technicalMessage: string) => {
+    showToast(
+      isAdmin ? technicalMessage : t('subscription.gatewayUnavailableToast'),
+      isAdmin ? 'error' : 'info',
+    );
+  };
 
   const handleApplyCoupon = async () => {
     if (!couponInput.trim() || !plan) return;
@@ -187,7 +196,8 @@ export default function CheckoutScreen() {
     if (!plan || !method || method === 'qr') return;
     setGatewayOpening(true);
     try {
-      const redirectUrl = 'loksewasolutionapp://subscription';
+      // eSewa/Khalti require a public http(s) callback URL; custom app schemes are rejected.
+      const redirectUrl = PAYMENT_RETURN_URL;
       if (method === 'esewa') {
         const { html } = createEsewaCheckoutHtml({
           amount: finalAmount,
@@ -200,7 +210,7 @@ export default function CheckoutScreen() {
         setGatewayUrl(null);
       } else if (method === 'khalti') {
         if (!settings?.khalti.secretKey) {
-          showToast('Khalti sandbox secret key is not configured in app_subscription_settings/config.', 'error');
+          showGatewayIssue('Khalti sandbox secret key is not configured in app_subscription_settings/config.');
           return;
         }
         const result = await openKhaltiCheckout({
@@ -217,9 +227,9 @@ export default function CheckoutScreen() {
       }
     } catch (error) {
       const message = error instanceof Error && error.message.startsWith('KHALTI_')
-        ? 'Khalti sandbox initiate failed. Check the sandbox secret key and try again.'
+        ? 'Khalti sandbox initiate failed. Check the sandbox secret key and merchant configuration.'
         : 'Could not open the payment gateway. Please try again.';
-      showToast(message, 'error');
+      showGatewayIssue(message);
     } finally {
       setGatewayOpening(false);
     }
@@ -231,9 +241,9 @@ export default function CheckoutScreen() {
   };
 
   const handleGatewayNavigation = ({ url }: { url: string }) => {
-    if (url.startsWith('loksewasolutionapp://')) {
+    if (url.startsWith(PAYMENT_RETURN_URL)) {
       closeGateway();
-      showToast('Gateway returned to the app. Payment status will be reviewed by admin.', 'info');
+      showToast(t('subscription.gatewayReturnHint'), 'info');
     }
   };
 

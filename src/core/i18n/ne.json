@@ -460,6 +460,7 @@
     "continueToGateway": "भुक्तानी गेटवेमा जानुहोस्",
     "gatewayReturnHint": "भुक्तानी gateway मै पूरा गर्नुहोस्। Receipt upload QR payment मा मात्र उपलब्ध छ।",
     "gatewayOnlyHint": "Gateway मा भुक्तानी पूरा गर्नुहोस्। यहाँ Transaction ID वा screenshot आवश्यक छैन।",
+    "gatewayUnavailableToast": "यो भुक्तानी gateway अहिले अस्थायी रूपमा उपलब्ध छैन। कृपया QR विधि प्रयोग गर्नुहोस् वा केही समयपछि पुनः प्रयास गर्नुहोस्।",
     "scanQrTitle": "भुक्तानीको लागि QR स्क्यान गर्नुहोस्",
     "scanQrHint": "तलको QR कोड स्क्यान गर्न eSewa, Khalti वा कुनै पनि Fonepay-सक्षम बैंकिङ एप प्रयोग गर्नुहोस्।",
     "bankDetails": "बैंक विवरण",
