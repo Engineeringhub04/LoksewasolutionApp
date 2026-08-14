@@ -117,7 +117,14 @@ service cloud.firestore {
     }
     match /app_coupon_codes/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Only admins manage coupon definitions. A signed-in user may increment
+      // usedCount by exactly one when redeeming a coupon during checkout.
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+                    (isSignedIn() &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']) &&
+                     request.resource.data.usedCount == resource.data.usedCount + 1);
+      allow delete: if isAdmin();
     }
 
     // A user can create and read only their own subscription request. Admins
