@@ -458,6 +458,7 @@ export type ExamCardState =
   | { kind: 'countdown'; msRemaining: number }
   | { kind: 'ready' }
   | { kind: 'rejoin' }
+  | { kind: 'pending' }
   | { kind: 'locked' };
 
 /**
@@ -467,15 +468,19 @@ export type ExamCardState =
  * - countdown : within the 10-minute lead-in, button shows a timer
  * - ready     : open, and never attempted -> Start / View Question
  * - rejoin    : open, already attempted   -> Re-Join + Ranking
- * - locked    : pro exam the user hasn't purchased -> To Buy
+ * - pending   : pro exam purchase request is awaiting review -> To Purchase (Pending)
+ * - locked    : pro exam the user hasn't purchased -> To Purchase
  */
 export function resolveExamCardState(
   set: ExamSet,
   now: number,
   hasAttempted: boolean,
-  isPurchased: boolean
+  isPurchased: boolean,
+  hasPendingPurchase = false
 ): ExamCardState {
-  if (set.accessType === 'pro' && !isPurchased) return { kind: 'locked' };
+  if (set.accessType === 'pro' && !isPurchased) {
+    return hasPendingPurchase ? { kind: 'pending' } : { kind: 'locked' };
+  }
 
   // No start time means "always open" rather than "never visible".
   const start = set.startTime?.getTime();

@@ -29,6 +29,7 @@ export interface ExamPurchaseRecord {
   transactionRef: string | null;
   screenshotUrl: string;
   customerMessage: string | null;
+  couponCode: string | null;
   adminMessage: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
@@ -53,6 +54,7 @@ export interface SubmitExamPurchaseInput {
   transactionRef: string;
   screenshotUrl: string;
   customerMessage: string | null;
+  couponCode: string | null;
 }
 
 export const EXAM_PURCHASE_EDIT_WINDOW_MS = 30 * 60 * 1000;
@@ -85,6 +87,7 @@ function parseRecord(doc: Record<string, unknown>): ExamPurchaseRecord {
     transactionRef: stringValue(doc.transactionRef),
     screenshotUrl: typeof doc.screenshotUrl === 'string' ? doc.screenshotUrl : '',
     customerMessage: stringValue(doc.customerMessage),
+    couponCode: stringValue(doc.couponCode),
     adminMessage: stringValue(doc.adminMessage),
     submittedAt: stringValue(doc.submittedAt),
     reviewedAt: stringValue(doc.reviewedAt),
@@ -141,6 +144,7 @@ export async function submitExamPurchase(input: SubmitExamPurchaseInput): Promis
     transactionRef: input.transactionRef.trim(),
     screenshotUrl: input.screenshotUrl,
     customerMessage: input.customerMessage,
+    couponCode: input.couponCode,
     adminMessage: null,
     submittedAt: new Date().toISOString(),
     reviewedAt: null,

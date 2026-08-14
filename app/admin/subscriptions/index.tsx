@@ -38,13 +38,13 @@ export default function AdminSubscriptionsScreen() {
         ) : (
           <>
             <Pressable
-              onPress={() => router.push('/admin/exam-purchases')}
+              onPress={() => router.push('/admin/purchase-details')}
               style={[styles.examPurchaseLink, { borderColor: colors.primary, backgroundColor: `${colors.primary}12`, borderRadius: 14, padding: spacing.md }]}
             >
               <Ionicons name="receipt-outline" size={20} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{t('subscription.examPurchaseReview')}</Text>
-                <Text variant="caption" secondary>{t('subscription.examPurchaseReviewHint')}</Text>
+                <Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{t('subscription.purchaseRequestControl')}</Text>
+                <Text variant="caption" secondary>{t('subscription.purchaseRequestControlHint')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
             </Pressable>

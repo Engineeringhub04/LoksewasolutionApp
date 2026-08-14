@@ -95,7 +95,8 @@ export default function CheckoutScreen() {
   const settings = data?.settings ?? null;
   const bank = data?.bank ?? null;
   const purchasable = isExamPurchase ? exam : plan;
-  const finalAmount = couponApplied ? couponApplied.discountedAmount : (exam?.price ?? plan?.price ?? 0);
+  const originalAmount = exam?.price ?? plan?.price ?? 0;
+  const finalAmount = couponApplied ? couponApplied.discountedAmount : originalAmount;
   const checkoutTitle = exam?.title ?? plan?.name ?? t('subscription.title');
 
   useEffect(() => {
@@ -108,18 +109,18 @@ export default function CheckoutScreen() {
 
 
   const handleApplyCoupon = async () => {
-    if (!couponInput.trim() || !plan || isExamPurchase) return;
+    if (!couponInput.trim() || (!plan && !exam)) return;
     setValidatingCoupon(true);
     setCouponError(null);
     try {
-      const result = await validateCoupon(couponInput.trim(), plan.billingCycle, plan.price);
+      const result = await validateCoupon(couponInput.trim(), isExamPurchase ? 'exam' : plan?.billingCycle ?? 'free', originalAmount);
       if (!result.valid) {
         setCouponError(result.reason ?? t('subscription.couponInvalid'));
         return;
       }
       setCouponApplied({
         code: couponInput.trim().toUpperCase(),
-        discountedAmount: result.discountedAmount ?? plan.price,
+        discountedAmount: result.discountedAmount ?? originalAmount,
         label: result.discountLabel ?? '',
       });
       showToast(t('subscription.couponApplied'), 'success');
@@ -205,6 +206,7 @@ export default function CheckoutScreen() {
           transactionRef: transactionRef.trim(),
           screenshotUrl,
           customerMessage: customerMessage.trim() || null,
+          couponCode: couponApplied?.code ?? null,
         });
       } else if (plan) {
         await submitPayment({
@@ -273,13 +275,13 @@ export default function CheckoutScreen() {
                 <Text variant="bodyLarge" weight="bold" style={{ flex: 1 }}>{checkoutTitle}</Text>
                 <Text variant="h3" weight="bold" style={{ color: colors.primary }}>Rs. {finalAmount}</Text>
               </View>
-              {couponApplied && !isExamPurchase && plan ? (
-                <Text variant="caption" secondary style={{ textDecorationLine: 'line-through' }}>Rs. {plan.price}</Text>
+              {couponApplied ? (
+                <Text variant="caption" secondary style={{ textDecorationLine: 'line-through' }}>Rs. {originalAmount}</Text>
               ) : null}
             </View>
 
             {/* Coupon */}
-            {!isExamPurchase ? <CouponSection
+            <CouponSection
               couponInput={couponInput}
               onCouponInputChange={setCouponInput}
               couponApplied={couponApplied}
@@ -287,7 +289,7 @@ export default function CheckoutScreen() {
               validating={validatingCoupon}
               onApply={handleApplyCoupon}
               onRemove={() => { setCouponApplied(null); setCouponInput(''); setCouponError(null); }}
-            /> : null}
+            />
 
             {/* Method picker */}
             <View style={{ gap: spacing.sm }}>

@@ -57,7 +57,7 @@ import { Collections } from '@/src/core/firebase/collections';
 
 // ===================== Types =====================
 
-export type BillingCycle = 'monthly' | 'yearly' | 'free';
+export type BillingCycle = 'monthly' | 'yearly' | 'free' | 'exam';
 export type PaymentMethod = 'esewa' | 'khalti' | 'qr';
 export type SubscriptionStatus = 'pending' | 'active' | 'rejected' | 'expired';
 
@@ -441,12 +441,13 @@ export interface CouponValidationResult {
   discountLabel?: string;
 }
 
-/** Validates a coupon against a plan's billing cycle + current usage/date window. */
+/** Validates a coupon against a plan/exam billing cycle + current usage/date window. */
 export async function validateCoupon(code: string, billingCycle: BillingCycle, originalAmount: number): Promise<CouponValidationResult> {
   const coupon = await fetchCouponCode(code);
   if (!coupon) return { valid: false, reason: 'Coupon code not found' };
   if (!coupon.isActive) return { valid: false, reason: 'This coupon is no longer active' };
-  if (coupon.appliesToBillingCycle !== 'all' && coupon.appliesToBillingCycle !== billingCycle) {
+  const appliesToExam = billingCycle === 'exam' && coupon.appliesToBillingCycle === 'all';
+  if (!appliesToExam && coupon.appliesToBillingCycle !== 'all' && coupon.appliesToBillingCycle !== billingCycle) {
     return { valid: false, reason: 'This coupon does not apply to the selected plan' };
   }
   if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) {
