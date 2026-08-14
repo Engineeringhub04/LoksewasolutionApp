@@ -300,6 +300,23 @@ export async function fetchSubscriptionById(id: string): Promise<SubscriptionRec
 }
 
 /**
+ * Lets the signed-in owner correct their own payment reference, receipt URL,
+ * or customer note. Firestore rules enforce ownership and reject every other
+ * field, including status and adminMessage.
+ */
+export async function updateMySubscriptionDetails(
+  id: string,
+  input: { transactionRef: string; screenshotUrl: string; customerMessage: string | null },
+): Promise<void> {
+  await updateDocument(`${Collections.subscriptions}/${id}`, {
+    transactionRef: input.transactionRef,
+    screenshotUrl: input.screenshotUrl,
+    customerMessage: input.customerMessage,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
  * Admin-only approve. Sets status: 'active', computes the expiry window from
  * the plan's durationDays, and mirrors isPremium + premiumPlanName +
  * premiumExpiryDate onto the user document so the rest of the app (profile
@@ -414,24 +431,4 @@ async function incrementCouponUsage(code: string): Promise<void> {
   } catch {
     // Coupon may not exist / no-code path — nothing to increment.
   }
-}
-
-// ===================== Seed (dev/admin utility) =====================
-
-/**
- * Seeds ONLY the bank details document (app_subscription_bank_details/config)
- * with placeholder values the admin then edits from Firestore console. This
- * is deliberately narrow — plans, gateway settings and coupons are
- * configured by the admin directly (via Firestore console), not seeded with
- * sample data, so nothing fake ever ends up looking "real" on the checkout
- * screen.
- */
-export async function seedBankDetails(): Promise<void> {
-  await setDocument(BANK_DETAILS_DOC, {
-    bankName: 'Sample Bank Ltd.',
-    accountNumber: '0000000000000',
-    receiverName: 'Loksewa Solution',
-    branch: 'Kathmandu',
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
 }

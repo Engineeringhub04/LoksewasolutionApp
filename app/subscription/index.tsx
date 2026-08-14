@@ -5,7 +5,7 @@
 // available plan cards (each with its own colour identity from Firestore,
 // animated entrance), and a centered "We Accept" strip with the eSewa /
 // Khalti / Fonepay logos on a soft tinted background.
-import React, { useState } from 'react';
+import React from 'react';
 import { View, StyleSheet, Pressable, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,21 +16,17 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { showToast } from '@/src/core/store/toastStore';
 import {
   fetchSubscriptionPlans,
   fetchMySubscriptionHistory,
   expireIfPastDue,
-  seedBankDetails,
   type SubscriptionPlan,
   type SubscriptionRecord,
 } from '@/src/core/firebase/services/subscription';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
-import { Button } from '@/src/components/buttons/Button';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 
 const ESEWA_LOGO = 'https://i.ibb.co/HLpHmnQz/esewa-icon-large.png';
 const KHALTI_LOGO = 'https://i.ibb.co/tMHZRHKQ/Khalti-Logo-New-3.png';
@@ -42,8 +38,6 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const { profile } = useProfileStore();
-  const [seeding, setSeeding] = useState(false);
-  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
 
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     if (!user?.uid) return null;
@@ -51,20 +45,6 @@ export default function SubscriptionScreen() {
     const [plans, history] = await Promise.all([fetchSubscriptionPlans(), fetchMySubscriptionHistory(user.uid)]);
     return { plans, history };
   }, [user?.uid]);
-
-  const handleSeed = async () => {
-    setShowSeedConfirm(false);
-    setSeeding(true);
-    try {
-      await seedBankDetails();
-      showToast(t('subscription.seedSuccess'), 'success');
-      refetch();
-    } catch {
-      showToast(t('subscription.seedError'), 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   const goToPayment = (plan: SubscriptionPlan) => {
     router.push({ pathname: '/subscription/checkout', params: { planId: plan.id } });
@@ -89,7 +69,7 @@ export default function SubscriptionScreen() {
               <View style={{ gap: spacing.sm }}>
                 <Text variant="bodySmall" weight="semiBold" secondary>{t('subscription.yourRequests')}</Text>
                 {history.map((record) => (
-                  <RequestHistoryCard key={record.id} record={record} onPressRejected={() => router.push(`/subscription/${record.id}`)} />
+                  <RequestHistoryCard key={record.id} record={record} onPress={() => router.push(`/subscription/${record.id}`)} />
                 ))}
               </View>
             ) : null}
@@ -115,11 +95,6 @@ export default function SubscriptionScreen() {
                   <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary, flex: 1 }}>{t('subscription.adminReviewTitle')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </Pressable>
-
-                <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
-                <Button label={t('subscription.seedButton')} variant="secondary" loading={seeding} onPress={() => setShowSeedConfirm(true)} />
-                <Text variant="caption" secondary>{t('subscription.seedButtonHint')}</Text>
               </View>
             ) : null}
           </>
@@ -127,20 +102,13 @@ export default function SubscriptionScreen() {
       </SubpageScrollScreen>
       <PageLoaderOverlay visible={loading || refreshing} label={t('subscription.loading')} />
 
-      <ConfirmDialog
-        visible={showSeedConfirm}
-        title={t('subscription.seedConfirmTitle')}
-        message={t('subscription.seedConfirmMessage')}
-        onConfirm={handleSeed}
-        onCancel={() => setShowSeedConfirm(false)}
-      />
     </>
   );
 }
 
 // ===================== Request history card (status tag, never removed) =====================
 
-function RequestHistoryCard({ record, onPressRejected }: { record: SubscriptionRecord; onPressRejected: () => void }) {
+function RequestHistoryCard({ record, onPress }: { record: SubscriptionRecord; onPress: () => void }) {
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
 
@@ -174,10 +142,7 @@ function RequestHistoryCard({ record, onPressRejected }: { record: SubscriptionR
     </View>
   );
 
-  if (record.status === 'rejected') {
-    return <Pressable onPress={onPressRejected}>{content}</Pressable>;
-  }
-  return content;
+  return <Pressable onPress={onPress}>{content}</Pressable>;
 }
 
 // ===================== Plan Card =====================

@@ -17,7 +17,7 @@ import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 type FilterTab = 'all' | SubscriptionStatus;
 
 export default function AdminSubscriptionsScreen() {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const [filter, setFilter] = useState<FilterTab>('all');
@@ -26,7 +26,7 @@ export default function AdminSubscriptionsScreen() {
     return fetchAllSubscriptions();
   }, []);
 
-  const all = data ?? [];
+  const all = useMemo(() => data ?? [], [data]);
   const filtered = useMemo(() => (filter === 'all' ? all : all.filter((r) => r.status === filter)), [all, filter]);
   const pendingCount = all.filter((r) => r.status === 'pending').length;
 

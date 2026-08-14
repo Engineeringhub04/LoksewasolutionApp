@@ -16,7 +16,8 @@ const BRANDS = [
 ] as const;
 
 export function PaymentMethodBadges({ settings }: { settings: SubscriptionSettings | null }) {
-  const { colors, spacing, radius } = useTheme();
+  const { spacing, radius } = useTheme();
+  void settings;
   const { t } = useTranslation();
 
   return (
@@ -40,11 +41,6 @@ export function PaymentMethodBadges({ settings }: { settings: SubscriptionSettin
           </View>
         ))}
       </View>
-      {settings?.activeMode === 'manual' ? (
-        <Text variant="caption" secondary>
-          Manual — payments are verified by an admin after you submit your reference.
-        </Text>
-      ) : null}
     </View>
   );
 }
