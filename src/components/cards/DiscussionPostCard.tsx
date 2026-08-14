@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Pressable, Image, Linking, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, withSequence, withTiming, useAnimatedStyle } from 'react-native-reanimated';
@@ -27,7 +27,7 @@ export interface DiscussionPostCardProps {
   liked: boolean;
   onPress: () => void;
   onToggleLike: () => void;
-  onMenuPress?: () => void;
+  onMenuPress?: (anchor: { top: number; right: number }) => void;
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
@@ -59,13 +59,14 @@ export function DiscussionPostCard({
   const { t } = useTranslation();
   const scale = useSharedValue(1);
   const [pendingLink, setPendingLink] = useState<string | null>(null);
+  const menuRef = useRef<View>(null);
 
   useEffect(() => {
     if (liked) scale.value = withSequence(withTiming(1.22, { duration: 120 }), withTiming(1, { duration: 120 }));
   }, [liked, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const contextLabel = [courseName, subcourseName].filter(Boolean).join(' · ');
+  const contextLabel = subcourseName?.trim() ?? '';
   const bodyWeight = !isAdmin || !title.trim() ? 'bold' : 'regular';
 
   const openLink = async () => {
@@ -113,11 +114,17 @@ export function DiscussionPostCard({
             </View>
             <View style={styles.metaLine}>
               <Text variant="caption" secondary>{timestamp}</Text>
-              {!isAdmin && contextLabel ? <Text variant="caption" secondary numberOfLines={1}> · {contextLabel}</Text> : null}
+              {!isAdmin && contextLabel ? <Text variant="caption" secondary numberOfLines={1} ellipsizeMode="tail"> · {contextLabel}</Text> : null}
             </View>
           </View>
           {onMenuPress ? (
-            <Pressable onPress={onMenuPress} hitSlop={10} style={styles.menuButton} accessibilityLabel={t('discussion.postMenu')}>
+            <Pressable
+              ref={menuRef}
+              onPress={() => menuRef.current?.measureInWindow((_x, y, _width, height) => onMenuPress?.({ top: y + height + 6, right: 16 }))}
+              hitSlop={10}
+              style={styles.menuButton}
+              accessibilityLabel={t('discussion.postMenu')}
+            >
               <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
             </Pressable>
           ) : null}

@@ -16,6 +16,8 @@ export const Collections = {
   comments: (discussionId: string) => `discussions/${discussionId}/comments`,
   replies: (discussionId: string, commentId: string) => `discussions/${discussionId}/comments/${commentId}/replies`,
   discussionReactions: (discussionId: string) => `discussions/${discussionId}/reactions`,
+  commentReactions: (discussionId: string, commentId: string) => `discussions/${discussionId}/comments/${commentId}/reactions`,
+  replyReactions: (discussionId: string, commentId: string, replyId: string) => `discussions/${discussionId}/comments/${commentId}/replies/${replyId}/reactions`,
   discussionGuidelines: 'app_discussion_guidelines',
   reportHistory: 'app_report_history',
   bookmarks: 'bookmarks',

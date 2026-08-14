@@ -44,6 +44,7 @@ export interface Comment {
   authorId?: string;
   editedAt?: FirestoreTimestamp | null;
   createdAt: FirestoreTimestamp | null;
+  likeCount: number;
 }
 
 export interface Reply extends Comment {
@@ -95,6 +96,7 @@ function parseComment(doc: Record<string, unknown>): Comment {
     authorId: stringOrNull(doc.authorId) ?? undefined,
     editedAt: asTimestamp(doc.editedAt),
     createdAt: asTimestamp(doc.createdAt),
+    likeCount: numberOrZero(doc.likeCount),
   };
 }
 
@@ -184,6 +186,7 @@ export async function addComment(
 ): Promise<string> {
   const { id } = await createDocument(Collections.comments(discussionId), {
     ...input,
+    likeCount: 0,
     createdAt: serverTimestamp(),
     editedAt: null,
   });
@@ -214,6 +217,7 @@ export async function addReply(
 ): Promise<string> {
   const { id } = await createDocument(Collections.replies(discussionId, commentId), {
     ...input,
+    likeCount: 0,
     parentCommentId: commentId,
     createdAt: serverTimestamp(),
     editedAt: null,
@@ -223,6 +227,41 @@ export async function addReply(
 
 export async function deleteReply(discussionId: string, commentId: string, replyId: string): Promise<void> {
   await deleteDocument(`${Collections.replies(discussionId, commentId)}/${replyId}`);
+}
+
+async function isReactionLiked(reactionPath: string): Promise<boolean> {
+  const uid = await getCurrentUid();
+  if (!uid) return false;
+  return Boolean(await getDocument(`${reactionPath}/${uid}`));
+}
+
+async function toggleReaction(reactionPath: string, targetPath: string, liked: boolean): Promise<void> {
+  const uid = await getCurrentUid();
+  if (!uid) throw new Error('AUTH_REQUIRED');
+  if (liked) {
+    await setDocument(`${reactionPath}/${uid}`, { uid, createdAt: serverTimestamp() }, { merge: true });
+    await updateDocument(targetPath, { likeCount: increment(1) });
+  } else {
+    await deleteDocument(`${reactionPath}/${uid}`);
+    await updateDocument(targetPath, { likeCount: increment(-1) });
+  }
+}
+
+export async function isCommentLiked(discussionId: string, commentId: string, replyId?: string): Promise<boolean> {
+  const reactionPath = replyId
+    ? Collections.replyReactions(discussionId, commentId, replyId)
+    : Collections.commentReactions(discussionId, commentId);
+  return isReactionLiked(reactionPath);
+}
+
+export async function toggleCommentLike(discussionId: string, commentId: string, liked: boolean, replyId?: string): Promise<void> {
+  const targetPath = replyId
+    ? `${Collections.replies(discussionId, commentId)}/${replyId}`
+    : `${Collections.comments(discussionId)}/${commentId}`;
+  const reactionPath = replyId
+    ? Collections.replyReactions(discussionId, commentId, replyId)
+    : Collections.commentReactions(discussionId, commentId);
+  await toggleReaction(reactionPath, targetPath, liked);
 }
 
 /**

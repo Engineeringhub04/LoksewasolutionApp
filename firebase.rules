@@ -147,18 +147,36 @@ service cloud.firestore {
         allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
         allow update: if isAdmin() ||
           (isSignedIn() && resource.data.authorId == request.auth.uid &&
-            changedOnly(['body', 'editedAt']));
+            changedOnly(['body', 'editedAt'])) ||
+          (isSignedIn() && changedOnly(['likeCount']) &&
+            (request.resource.data.likeCount == resource.data.likeCount + 1 ||
+             request.resource.data.likeCount == resource.data.likeCount - 1));
         allow delete: if isAdmin() ||
           (isSignedIn() && resource.data.authorId == request.auth.uid);
+        match /reactions/{userId} {
+          allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+          allow create: if isSignedIn() && request.auth.uid == userId;
+          allow delete: if isSignedIn() && request.auth.uid == userId;
+          allow update: if false;
+        }
 
         match /replies/{replyId} {
           allow read: if isSignedIn();
           allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
           allow update: if isAdmin() ||
             (isSignedIn() && resource.data.authorId == request.auth.uid &&
-              changedOnly(['body', 'editedAt']));
+              changedOnly(['body', 'editedAt'])) ||
+            (isSignedIn() && changedOnly(['likeCount']) &&
+              (request.resource.data.likeCount == resource.data.likeCount + 1 ||
+               request.resource.data.likeCount == resource.data.likeCount - 1));
           allow delete: if isAdmin() ||
             (isSignedIn() && resource.data.authorId == request.auth.uid);
+          match /reactions/{userId} {
+            allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+            allow create: if isSignedIn() && request.auth.uid == userId;
+            allow delete: if isSignedIn() && request.auth.uid == userId;
+            allow update: if false;
+          }
         }
       }
 

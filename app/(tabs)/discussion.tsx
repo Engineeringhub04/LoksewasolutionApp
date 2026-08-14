@@ -12,7 +12,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
-import { deleteDiscussion, fetchDiscussions, isDiscussionLiked, toggleLikeDiscussion, type DiscussionPost } from '@/src/core/firebase/services/discussions';
+import { deleteDiscussion, fetchDiscussions, isDiscussionLiked, toggleLikeDiscussion, reportContent, type DiscussionPost } from '@/src/core/firebase/services/discussions';
 import { fetchDiscussionGuidelines, seedDiscussionGuidelines, type DiscussionGuidelines } from '@/src/core/firebase/services/discussionGuidelines';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
@@ -23,6 +23,9 @@ import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { DiscussionActionMenu, type DiscussionActionMenuItem } from '@/src/components/discussion/DiscussionActionMenu';
+import { DiscussionReportModal, type DiscussionReportTarget } from '@/src/components/discussion/DiscussionReportModal';
 
 export default function DiscussionFeedScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -40,7 +43,11 @@ export default function DiscussionFeedScreen() {
   const [guidelinesLoading, setGuidelinesLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedPost, setSelectedPost] = useState<DiscussionPost | null>(null);
-  const [showPostActions, setShowPostActions] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 16 });
+  const [confirmAction, setConfirmAction] = useState<{ kind: 'edit' | 'delete' | 'report'; post: DiscussionPost } | null>(null);
+  const [reportTarget, setReportTarget] = useState<DiscussionReportTarget | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   useRefreshOnFocus(refresh);
 
@@ -109,16 +116,54 @@ export default function DiscussionFeedScreen() {
     }
   };
 
-  const handleDeleteSelectedPost = async () => {
-    if (!selectedPost) return;
+  const handleDeleteSelectedPost = async (post: DiscussionPost) => {
     try {
-      await deleteDiscussion(selectedPost.id);
-      setShowPostActions(false);
+      await deleteDiscussion(post.id);
       setSelectedPost(null);
       refresh();
       showToast(t('discussion.postDeleted'), 'success');
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
+    }
+  };
+
+  const postMenuActions: DiscussionActionMenuItem[] = selectedPost
+    ? selectedPost.authorId === user?.uid || isAdmin
+      ? [
+          { label: t('common.edit'), icon: 'create-outline', onPress: () => setConfirmAction({ kind: 'edit', post: selectedPost }) },
+          { label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'delete', post: selectedPost }) },
+        ]
+      : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', post: selectedPost }) }]
+    : [];
+
+  const handleConfirmedPostAction = () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!action) return;
+    if (action.kind === 'edit') {
+      router.push(`/discussion/create?editId=${action.post.id}`);
+      return;
+    }
+    if (action.kind === 'delete') {
+      void handleDeleteSelectedPost(action.post);
+      return;
+    }
+    setReportTarget({ type: 'post', id: action.post.id, authorName: action.post.authorName, authorPhoto: action.post.authorPhoto, preview: action.post.body });
+    setShowReportModal(true);
+  };
+
+  const handleReport = async (reason: string) => {
+    if (!reportTarget) return;
+    setReportSubmitting(true);
+    try {
+      await reportContent(reportTarget.type, reportTarget.id, reason, { title: reportTarget.type === 'post' ? selectedPost?.title : null, preview: reportTarget.preview, authorName: reportTarget.authorName, authorPhoto: reportTarget.authorPhoto });
+      setShowReportModal(false);
+      setReportTarget(null);
+      showToast(t('discussion.postReported'), 'success');
+    } catch {
+      showToast(t('common.somethingWentWrong'), 'error');
+    } finally {
+      setReportSubmitting(false);
     }
   };
 
@@ -141,7 +186,7 @@ export default function DiscussionFeedScreen() {
       liked={!!likedIds[item.id]}
       onPress={() => router.push(`/discussion/${item.id}`)}
       onToggleLike={() => handleToggleLike(item.id)}
-      onMenuPress={() => { setSelectedPost(item); setShowPostActions(true); }}
+      onMenuPress={(anchor) => { setSelectedPost(item); setMenuAnchor(anchor); }}
     />
   );
 
@@ -265,33 +310,29 @@ export default function DiscussionFeedScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showPostActions} transparent animationType="slide" onRequestClose={() => setShowPostActions(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.postActionsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.modalHandle} />
-            <Text variant="h3" weight="bold">{t('discussion.postActions')}</Text>
-            {selectedPost && (selectedPost.authorId === user?.uid || isAdmin) ? (
-              <>
-                <Pressable style={styles.postActionButton} onPress={() => { setShowPostActions(false); router.push(`/discussion/create?editId=${selectedPost.id}`); }}>
-                  <Ionicons name="create-outline" size={21} color={colors.primary} /><Text variant="body" weight="semiBold">{t('common.edit')}</Text>
-                </Pressable>
-                <Pressable style={styles.postActionButton} onPress={handleDeleteSelectedPost}>
-                  <Ionicons name="trash-outline" size={21} color={colors.error} /><Text variant="body" weight="semiBold" style={{ color: colors.error }}>{t('common.delete')}</Text>
-                </Pressable>
-              </>
-            ) : null}
-            {selectedPost && selectedPost.authorId !== user?.uid && !isAdmin ? (
-              <Pressable style={styles.postActionButton} onPress={() => { setShowPostActions(false); router.push(`/discussion/${selectedPost.id}`); }}>
-                <Ionicons name="flag-outline" size={21} color={colors.warning} /><Text variant="body" weight="semiBold">{t('discussion.reportPost')}</Text>
-              </Pressable>
-            ) : null}
-            <Pressable style={styles.postActionButton} onPress={() => setShowPostActions(false)}>
-              <Ionicons name="close-outline" size={21} color={colors.textSecondary} /><Text variant="body" weight="semiBold" secondary>{t('common.cancel')}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
+      <DiscussionActionMenu
+        visible={Boolean(selectedPost)}
+        top={menuAnchor.top}
+        right={menuAnchor.right}
+        actions={postMenuActions}
+        onClose={() => setSelectedPost(null)}
+      />
+      <ConfirmDialog
+        visible={Boolean(confirmAction)}
+        title={confirmAction?.kind === 'delete' ? t('discussion.deleteConfirm') : confirmAction?.kind === 'report' ? t('discussion.confirmReportTitle') : t('discussion.confirmEditTitle')}
+        message={confirmAction?.kind === 'delete' ? t('discussion.deleteConfirmMessage') : confirmAction?.kind === 'report' ? t('discussion.confirmReportMessage') : t('discussion.confirmEditMessage')}
+        destructive={confirmAction?.kind === 'delete' || confirmAction?.kind === 'report'}
+        confirmLabel={confirmAction?.kind === 'delete' ? t('common.delete') : confirmAction?.kind === 'report' ? t('discussion.reportPost') : t('common.edit')}
+        onConfirm={handleConfirmedPostAction}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <DiscussionReportModal
+        visible={showReportModal}
+        target={reportTarget}
+        submitting={reportSubmitting}
+        onClose={() => { setShowReportModal(false); setReportTarget(null); }}
+        onSubmit={handleReport}
+      />
       {user ? <FAB icon="add" accessibilityLabel={t('discussion.createPost')} onPress={() => router.push('/discussion/create')} /> : null}
     </View>
   );
@@ -320,8 +361,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2,6,23,0.62)' },
   guidelinesSheet: { width: '100%', maxHeight: '82%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26, borderWidth: 1, elevation: 12 },
-  postActionsSheet: { width: '100%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 30, gap: 6, borderWidth: 1, elevation: 12 },
-  postActionButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 8 },
   modalHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 4, backgroundColor: '#CBD5E1', marginBottom: 18 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 18 },
   modalIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
