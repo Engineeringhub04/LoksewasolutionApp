@@ -37,6 +37,18 @@ export default function AdminSubscriptionsScreen() {
           <DataNotFound onRetry={refetch} />
         ) : (
           <>
+            <Pressable
+              onPress={() => router.push('/admin/exam-purchases')}
+              style={[styles.examPurchaseLink, { borderColor: colors.primary, backgroundColor: `${colors.primary}12`, borderRadius: 14, padding: spacing.md }]}
+            >
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{t('subscription.examPurchaseReview')}</Text>
+                <Text variant="caption" secondary>{t('subscription.examPurchaseReviewHint')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </Pressable>
+
             <View style={styles.tabsRow}>
               <FilterChip label={t('subscription.tagNew')} count={pendingCount} active={filter === 'pending'} onPress={() => setFilter(filter === 'pending' ? 'all' : 'pending')} color={colors.warning} />
               <FilterChip label={t('subscription.tagApproved')} active={filter === 'active'} onPress={() => setFilter(filter === 'active' ? 'all' : 'active')} color={colors.success} />
@@ -109,6 +121,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth },
   iconBox: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   tabsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  examPurchaseLink: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5 },
   chip: { borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 6 },
   tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
 });

@@ -27,11 +27,12 @@ import {
   fetchExamAttempts,
   resolveExamCardState,
   ALL_PROVINCES,
+  type ExamAttempt,
   type ExamRule,
   type ExamSet,
 } from '@/src/core/firebase/services/examHub';
-import { fetchMyExamAnswersBySet } from '@/src/core/firebase/services/examAnswers';
-import { seedExamHub } from '@/src/core/firebase/seedExamHub';
+import { fetchMyExamAnswersBySet, type ExamAnswer } from '@/src/core/firebase/services/examAnswers';
+import { fetchMyApprovedExamSetIds, seedMissingExamPrices } from '@/src/core/firebase/services/examPurchases';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/exam/ExamCard';
@@ -100,15 +101,20 @@ export default function ExamScreen() {
     [subcourseId, sectionId, provinceId]
   );
 
-  const attempts = useAsyncData(
-    () => (user ? fetchExamAttempts(user.uid) : Promise.resolve({})),
+  const attempts = useAsyncData<Record<string, ExamAttempt[]>>(
+    () => (user ? fetchExamAttempts(user.uid) : Promise.resolve({} as Record<string, ExamAttempt[]>)),
     [user?.uid]
   );
 
   // Keyed by examSetId so PDF cards can look up "did I already submit an
   // answer for this set?" in O(1) — see ExamCard's answerStatus prop.
-  const myAnswers = useAsyncData(
-    () => (user ? fetchMyExamAnswersBySet(user.uid) : Promise.resolve({})),
+  const myAnswers = useAsyncData<Record<string, ExamAnswer>>(
+    () => (user ? fetchMyExamAnswersBySet(user.uid) : Promise.resolve({} as Record<string, ExamAnswer>)),
+    [user?.uid]
+  );
+
+  const approvedPurchases = useAsyncData(
+    () => (user ? fetchMyApprovedExamSetIds(user.uid) : Promise.resolve([])),
     [user?.uid]
   );
 
@@ -116,17 +122,19 @@ export default function ExamScreen() {
     () => sections.data?.find((s) => s.id === sectionId) ?? null,
     [sections.data, sectionId]
   );
+  const overallSubscriptionActive = profile?.isPremium === true && (!profile.premiumExpiryDate || new Date(profile.premiumExpiryDate).getTime() > Date.now());
   const accentColor = activeSection?.color ?? colors.primary;
 
   const loading = provinces.loading || sections.loading || sets.loading;
-  const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing;
+  const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing || approvedPurchases.refreshing;
   const onRefresh = useCallback(() => {
     provinces.refresh();
     sections.refresh();
     sets.refresh();
     attempts.refresh();
     myAnswers.refresh();
-  }, [provinces, sections, sets, attempts, myAnswers]);
+    approvedPurchases.refresh();
+  }, [provinces, sections, sets, attempts, myAnswers, approvedPurchases]);
 
   // Returning from the summary/details screens must show the new state (a card
   // flipping to Re-Join, a fresh attempt count) without a manual pull.
@@ -135,8 +143,8 @@ export default function ExamScreen() {
   const handleSeed = async () => {
     setSeeding(true);
     try {
-      const result = await seedExamHub();
-      showToast(`Seeded ${result.total} exam documents`, 'success');
+      const result = await seedMissingExamPrices(50);
+      showToast(`Seed Money: ${result.updated} of ${result.total} exam sets updated`, 'success');
       onRefresh();
     } catch {
       showToast('Seeding failed. Check Firestore rules allow writes.', 'error');
@@ -155,13 +163,11 @@ export default function ExamScreen() {
           set,
           now,
           (attemptMap[set.id]?.length ?? 0) > 0,
-          // Purchases aren't implemented yet, so a pro set stays locked. The
-          // subscription screen will supply this later.
-          false
+          overallSubscriptionActive || (approvedPurchases.data ?? []).includes(set.id)
         ),
       }))
       .filter((entry) => entry.state.kind !== 'hidden');
-  }, [sets.data, attempts.data, now]);
+  }, [sets.data, attempts.data, now, approvedPurchases.data, overallSubscriptionActive]);
 
   const openRules = async (set: ExamSet, mode: 'info' | 'start') => {
     setRulesForSet(set);
@@ -211,8 +217,7 @@ export default function ExamScreen() {
               Loksewa Exams Hub
             </Text>
           </View>
-          {/* Dev seeding entry point. Remove once the collections are populated. */}
-          <Pressable
+          {profile?.isAdmin ? <Pressable
             onPress={handleSeed}
             disabled={seeding}
             style={({ pressed }) => [styles.seedButton, { opacity: pressed || seeding ? 0.6 : 1 }]}
@@ -220,9 +225,9 @@ export default function ExamScreen() {
           >
             <Ionicons name={seeding ? 'cloud-upload' : 'cloud-upload-outline'} size={14} color="#FFF" />
             <Text variant="caption" weight="bold" style={styles.seedText}>
-              {seeding ? 'Seeding…' : 'Seed Remaining'}
+              {seeding ? 'Seeding…' : 'Seed Money'}
             </Text>
-          </Pressable>
+          </Pressable> : null}
         </View>
 
         {/* Province filter */}
@@ -350,7 +355,7 @@ export default function ExamScreen() {
                     onRulesPress={() => void openRules(entry.set, 'info')}
                     onPrimaryPress={() => {
                       if (entry.state.kind === 'locked') {
-                        showToast('Purchasing is coming in the next update.', 'info');
+                        router.push({ pathname: '/exam-purchase/[id]', params: { id: entry.set.id } } as never);
                         return;
                       }
                       if (entry.set.contentType === 'pdf') {

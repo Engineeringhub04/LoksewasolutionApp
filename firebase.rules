@@ -284,7 +284,7 @@ service cloud.firestore {
          changedOnly(['usedCount']) &&
          request.resource.data.usedCount == resource.data.usedCount + 1);
     }
-    match /app_subscriptions/{docId} {
+        match /app_subscriptions/{docId} {
       allow read: if isAdmin() ||
         (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create: if isSignedIn() &&
@@ -301,6 +301,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Individual premium exam purchase requests. Users can only create and edit
+    // their own pending payment proof; status, amount and entitlement are admin-only.
+    match /app_exam_purchases/{docId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount >= 0 &&
+        request.resource.data.adminMessage == null &&
+        request.resource.data.reviewedAt == null &&
+        request.resource.data.reviewedBy == null;
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         resource.data.uid == request.auth.uid &&
+         resource.data.status == 'pending' &&
+         request.resource.data.uid == resource.data.uid &&
+         request.resource.data.status == resource.data.status &&
+         request.resource.data.amount == resource.data.amount &&
+         changedOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
     // Default deny-all: any collection not explicitly listed above is closed.
     match /{document=**} {
       allow read, write: if false;

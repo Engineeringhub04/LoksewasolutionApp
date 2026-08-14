@@ -78,7 +78,7 @@ export function ExamCard({
       case 'rejoin':
         return { label: 'Re-Join', icon: 'refresh' as const, disabled: false };
       case 'locked':
-        return { label: 'To Buy', icon: 'lock-closed' as const, disabled: false };
+        return { label: 'To Purchase', icon: 'lock-closed' as const, disabled: false };
       default:
         return isPdf
           ? { label: 'View Question', icon: 'document-text' as const, disabled: false }
@@ -178,7 +178,7 @@ export function ExamCard({
               weight="bold"
               style={{ color: state.kind === 'locked' ? colors.error : '#16A34A' }}
             >
-              {state.kind === 'locked' ? 'Not Purchased' : 'Purchased'}
+              {state.kind === 'locked' ? 'Not Purchased' : 'Active (Purchased)'}
             </Text>
           </View>
         )}

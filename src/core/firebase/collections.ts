@@ -69,6 +69,9 @@ export const Collections = {
   // (not a per-user subcollection) so the Admin desk can list/query pending
   // requests across ALL users.
   subscriptions: 'app_subscriptions',
+  // Individual premium exam purchase requests. Kept separate from overall
+  // subscription requests so the existing plan lifecycle remains unchanged.
+  examPurchases: 'app_exam_purchases',
   // Coupon codes — admin-created, time-limited, usable by both auto and
   // manual flows.
   couponCodes: 'app_coupon_codes',
