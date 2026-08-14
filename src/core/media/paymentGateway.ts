@@ -1,46 +1,23 @@
-// Opens the eSewa or Khalti hosted checkout page for a subscription payment.
+// Payment gateway helpers for the subscription checkout.
 //
-// Both gateways are wired to their OFFICIAL SANDBOX/UAT endpoints using the
-// publicly documented test credentials (safe to ship — they only work
-// against each provider's sandbox and cannot move real money). This lets the
-// whole "Subscribe → pay → return → pending → admin approves → active" flow
-// be exercised end-to-end before either card's `enabled` flag is switched on
-// for real customers.
-//
-// GOING LIVE LATER — two things must change together, not separately:
-//  1. In Firestore (app_subscription_settings/config) set esewa.enabled /
-//     khalti.enabled to true and replace merchantCode/publicKey/secretKey
-//     with the real values from each provider's merchant dashboard.
-//  2. Move the eSewa HMAC-SHA256 signing step (see hmacSha256.ts) to a small
-//     server endpoint. eSewa's signature must be computed with a secret key
-//     that should never ship inside a client app bundle — the UAT test key
-//     used here is meant to be public, but a live merchant secret key is
-//     not. Khalti's ePayment `initiate` call has the same requirement: it
-//     must be a server-to-server POST with the secret key in an
-//     Authorization header, which is why this file calls it directly from
-//     the client only in test mode, clearly flagged below.
+// eSewa ePay v2 uses a signed POST form. Khalti ePayment uses a server-side
+// initiate request and returns a hosted payment URL. This app supports the
+// providers' sandbox/UAT flow for testing; live secret keys must never be
+// shipped in the client bundle.
 import * as WebBrowser from 'expo-web-browser';
-import * as FileSystem from 'expo-file-system/legacy';
 import { hmacSha256Base64 } from './hmacSha256';
 
-// ===== Official public UAT/sandbox test credentials =====
-// eSewa: https://developer.esewa.com.np/pages/Test-credentials
+// Official eSewa UAT credentials documented at:
+// https://developer.esewa.com.np/pages/Test-credentials
 export const ESEWA_TEST = {
   productCode: 'EPAYTEST',
   secretKey: '8gBm/:&EnhH.1/q',
   formUrl: 'https://rc-epay.esewa.com.np/api/epay/main/v2/form',
 };
 
-// Khalti: https://docs.khalti.com/khalti-epayment/ (test-admin.khalti.com sandbox)
-// Khalti does NOT publish a shared public test secret key the way eSewa
-// does — every merchant (even a test one) must sign up free at
-// test-admin.khalti.com to get their own sandbox live_secret_key. There is
-// no safe placeholder to embed here, so KHALTI_TEST.secretKey stays blank
-// until an admin pastes their own sandbox key into
-// app_subscription_settings/config.khalti.secretKey via Firestore. Until
-// then the Khalti card falls back to showing "Coming Soon" even if
-// `enabled` is accidentally left true with an empty key — see the
-// isMethodReady() check in checkout.tsx.
+// Khalti does not publish one shared secret key. A merchant must create a
+// sandbox account at https://test-admin.khalti.com and store its secret key
+// in app_subscription_settings/config.khalti.secretKey.
 export const KHALTI_TEST = {
   initiateUrl: 'https://dev.khalti.com/api/v2/epayment/initiate/',
 };
@@ -49,33 +26,26 @@ function randomTxnId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
-/**
- * Builds an eSewa ePay v2 signed auto-submit HTML form, writes it to a cache
- * file, and opens it in the in-app browser. eSewa's redirect is a form POST
- * (not a plain link), so an auto-submitting HTML page is the standard way to
- * trigger it from a mobile app with no backend.
- */
-export async function openEsewaCheckout(params: {
+export function createEsewaCheckoutHtml(params: {
   amount: number;
   transactionUuid?: string;
   successUrl: string;
   failureUrl: string;
   merchantCode?: string;
   secretKey?: string;
-}): Promise<{ transactionUuid: string }> {
+}): { html: string; transactionUuid: string } {
   const productCode = params.merchantCode || ESEWA_TEST.productCode;
   const secretKey = params.secretKey || ESEWA_TEST.secretKey;
   const transactionUuid = params.transactionUuid ?? randomTxnId('LS');
-  const totalAmount = params.amount;
-
+  const totalAmount = String(params.amount);
   const signedFieldNames = 'total_amount,transaction_uuid,product_code';
   const messageToSign = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
   const signature = hmacSha256Base64(messageToSign, secretKey);
 
   const fields: Record<string, string> = {
-    amount: String(totalAmount),
+    amount: totalAmount,
     tax_amount: '0',
-    total_amount: String(totalAmount),
+    total_amount: totalAmount,
     transaction_uuid: transactionUuid,
     product_code: productCode,
     product_service_charge: '0',
@@ -89,25 +59,23 @@ export async function openEsewaCheckout(params: {
   const inputs = Object.entries(fields)
     .map(([key, value]) => `<input type="hidden" name="${key}" value="${escapeHtml(value)}" />`)
     .join('\n');
-
-  const html = `<!DOCTYPE html><html><body onload="document.forms[0].submit()">
-    <form action="${ESEWA_TEST.formUrl}" method="POST">${inputs}</form>
-  </body></html>`;
-
-  const fileUri = `${FileSystem.cacheDirectory}esewa-redirect-${Date.now()}.html`;
-  await FileSystem.writeAsStringAsync(fileUri, html);
-  await WebBrowser.openBrowserAsync(fileUri);
-
-  return { transactionUuid };
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /></head><body onload="document.forms[0].submit()"><form action="${ESEWA_TEST.formUrl}" method="POST">${inputs}</form><p>Opening eSewa…</p></body></html>`;
+  return { html, transactionUuid };
 }
 
 /**
- * Initiates a Khalti ePayment and opens the returned hosted checkout URL.
- * NOTE: this call is normally server-to-server (it carries the secret key in
- * an Authorization header). It's called directly from the client here only
- * because this app has no backend yet, and only ever with the public
- * sandbox test secret key above — never do this with a live secret key.
+ * Retained for callers that want to open eSewa directly in the system browser.
+ * The checkout screen uses createEsewaCheckoutHtml in a WebView so the form
+ * POST works reliably on Android and iOS.
  */
+export async function openEsewaCheckout(params: Parameters<typeof createEsewaCheckoutHtml>[0]): Promise<{ transactionUuid: string }> {
+  const { html, transactionUuid } = createEsewaCheckoutHtml(params);
+  const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  await WebBrowser.openBrowserAsync(dataUrl);
+  return { transactionUuid };
+}
+
+/** Initiates Khalti and returns its hosted payment URL to the caller. */
 export async function openKhaltiCheckout(params: {
   amount: number;
   purchaseOrderId?: string;
@@ -117,7 +85,7 @@ export async function openKhaltiCheckout(params: {
   customerName?: string | null;
   customerEmail?: string | null;
   secretKey: string;
-}): Promise<{ purchaseOrderId: string; pidx: string | null }> {
+}): Promise<{ purchaseOrderId: string; pidx: string | null; paymentUrl: string }> {
   const purchaseOrderId = params.purchaseOrderId ?? randomTxnId('LS');
   if (!params.secretKey) throw new Error('KHALTI_SECRET_KEY_MISSING');
 
@@ -130,7 +98,7 @@ export async function openKhaltiCheckout(params: {
     body: JSON.stringify({
       return_url: params.returnUrl,
       website_url: params.websiteUrl,
-      amount: Math.round(params.amount * 100), // Khalti expects paisa
+      amount: Math.round(params.amount * 100),
       purchase_order_id: purchaseOrderId,
       purchase_order_name: params.purchaseOrderName,
       customer_info: {
@@ -141,14 +109,13 @@ export async function openKhaltiCheckout(params: {
   });
 
   if (!response.ok) {
-    throw new Error('KHALTI_INITIATE_FAILED');
+    const detail = await response.text().catch(() => '');
+    throw new Error(`KHALTI_INITIATE_FAILED:${detail.slice(0, 160)}`);
   }
 
   const data = (await response.json()) as { payment_url?: string; pidx?: string };
   if (!data.payment_url) throw new Error('KHALTI_NO_PAYMENT_URL');
-
-  await WebBrowser.openBrowserAsync(data.payment_url);
-  return { purchaseOrderId, pidx: data.pidx ?? null };
+  return { purchaseOrderId, pidx: data.pidx ?? null, paymentUrl: data.payment_url };
 }
 
 function escapeHtml(value: string): string {
