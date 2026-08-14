@@ -11,15 +11,26 @@ interface UseAsyncDataResult<T> {
   refresh: () => Promise<void>;
 }
 
-export function useAsyncData<T>(fetcher: () => Promise<T>, deps: unknown[] = []): UseAsyncDataResult<T> {
+interface UseAsyncDataOptions {
+  /** Prevents a request until prerequisites such as auth/session hydration are ready. */
+  enabled?: boolean;
+}
+
+export function useAsyncData<T>(
+  fetcher: () => Promise<T>,
+  deps: unknown[] = [],
+  options: UseAsyncDataOptions = {},
+): UseAsyncDataResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const enabled = options.enabled ?? true;
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
   const load = useCallback(async (isRefresh: boolean) => {
+    if (!enabled) return;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(false);
@@ -33,12 +44,12 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, deps: unknown[] = [])
       setRefreshing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, enabled]);
 
   useEffect(() => {
-    load(false);
+    if (enabled) load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, enabled]);
 
   // Stable identities: these get passed into effects and memo deps by callers
   // (e.g. useRefreshOnFocus). Re-creating them each render made any effect keyed
