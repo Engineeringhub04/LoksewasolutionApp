@@ -5,13 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
-import { fetchDiscussions, toggleLikeDiscussion, type DiscussionPost } from '@/src/core/firebase/services/discussions';
+import { deleteDiscussion, fetchDiscussions, isDiscussionLiked, toggleLikeDiscussion, type DiscussionPost } from '@/src/core/firebase/services/discussions';
 import { fetchDiscussionGuidelines, seedDiscussionGuidelines, type DiscussionGuidelines } from '@/src/core/firebase/services/discussionGuidelines';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
@@ -22,10 +23,9 @@ import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { Card } from '@/src/components/cards/Card';
 
 export default function DiscussionFeedScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -33,13 +33,29 @@ export default function DiscussionFeedScreen() {
   const profile = useProfileStore((s) => s.profile);
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchDiscussions(), []);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
+  const [likeDeltas, setLikeDeltas] = useState<Record<string, number>>({});
   const [query, setQuery] = useState('');
   const [showGuidelines, setShowGuidelines] = useState(false);
   const [guidelines, setGuidelines] = useState<DiscussionGuidelines | null>(null);
   const [guidelinesLoading, setGuidelinesLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<DiscussionPost | null>(null);
+  const [showPostActions, setShowPostActions] = useState(false);
 
   useRefreshOnFocus(refresh);
+
+  useEffect(() => {
+    const posts = data ?? [];
+    if (!posts.length) return;
+    let active = true;
+    Promise.all(posts.map(async (post) => [post.id, await isDiscussionLiked(post.id).catch(() => false)] as const))
+      .then((entries) => {
+        if (!active) return;
+        setLikedIds(Object.fromEntries(entries));
+        setLikeDeltas({});
+      });
+    return () => { active = false; };
+  }, [data]);
 
   useEffect(() => {
     if (!user) return;
@@ -84,10 +100,25 @@ export default function DiscussionFeedScreen() {
   const handleToggleLike = async (id: string) => {
     const nowLiked = !likedIds[id];
     setLikedIds((prev) => ({ ...prev, [id]: nowLiked }));
+    setLikeDeltas((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + (nowLiked ? 1 : -1) }));
     try {
       await toggleLikeDiscussion(id, nowLiked);
     } catch {
       setLikedIds((prev) => ({ ...prev, [id]: !nowLiked }));
+      setLikeDeltas((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + (nowLiked ? -1 : 1) }));
+    }
+  };
+
+  const handleDeleteSelectedPost = async () => {
+    if (!selectedPost) return;
+    try {
+      await deleteDiscussion(selectedPost.id);
+      setShowPostActions(false);
+      setSelectedPost(null);
+      refresh();
+      showToast(t('discussion.postDeleted'), 'success');
+    } catch {
+      showToast(t('common.somethingWentWrong'), 'error');
     }
   };
 
@@ -105,11 +136,12 @@ export default function DiscussionFeedScreen() {
       linkUrl={item.linkUrl}
       isAdmin={item.isAdmin}
       isSeed={item.isSeed}
-      likeCount={item.likeCount + (likedIds[item.id] ? 1 : 0)}
+      likeCount={item.likeCount + (likeDeltas[item.id] ?? 0)}
       commentCount={item.commentCount}
       liked={!!likedIds[item.id]}
       onPress={() => router.push(`/discussion/${item.id}`)}
       onToggleLike={() => handleToggleLike(item.id)}
+      onMenuPress={() => { setSelectedPost(item); setShowPostActions(true); }}
     />
   );
 
@@ -137,6 +169,7 @@ export default function DiscussionFeedScreen() {
             >
               <Ionicons name="information-circle-outline" size={21} color="#FFF" />
             </Pressable>
+            <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={38} iconColor="#FFF" backgroundColor="rgba(255,255,255,0.16)" />
             <Pressable
               onPress={() => router.push('/(tabs)/profile')}
               accessibilityLabel={t('profile.title')}
@@ -164,19 +197,6 @@ export default function DiscussionFeedScreen() {
           ) : null}
         </View>
 
-        <View style={styles.headerBottomRow}>
-          <View style={styles.feedLabel}>
-            <Ionicons name="sparkles-outline" size={16} color="#BFDBFE" />
-            <Text variant="bodySmall" weight="semiBold" style={styles.feedLabelText}>{t('discussion.title')}</Text>
-          </View>
-          <Pressable
-            onPress={() => setShowGuidelines(true)}
-            style={({ pressed }) => [styles.guidelinesButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="book-outline" size={15} color="#DBEAFE" />
-            <Text variant="caption" weight="semiBold" style={styles.guidelinesButtonText}>{t('discussion.guidelines')}</Text>
-          </Pressable>
-        </View>
       </LinearGradient>
 
       <PageLoaderOverlay visible={loading} label={t('discussion.loading')} />
@@ -197,18 +217,12 @@ export default function DiscussionFeedScreen() {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={renderPost}
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            <View style={styles.listIntro}>
-              <Text variant="bodyLarge" weight="bold" style={{ color: colors.textPrimary }}>{t('discussion.title')}</Text>
-              <Text variant="bodySmall" secondary>{query ? t('discussion.noSearchResults') : t('discussion.guidelines')}</Text>
-            </View>
-          }
         />
       )}
 
       <Modal visible={showGuidelines} transparent animationType="fade" onRequestClose={() => setShowGuidelines(false)}>
         <View style={styles.modalBackdrop}>
-          <Card style={[styles.guidelinesSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.guidelinesSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View style={[styles.modalIcon, { backgroundColor: `${colors.primary}18` }]}>
@@ -247,7 +261,34 @@ export default function DiscussionFeedScreen() {
                 ))}
               </ScrollView>
             )}
-          </Card>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showPostActions} transparent animationType="slide" onRequestClose={() => setShowPostActions(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.postActionsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.modalHandle} />
+            <Text variant="h3" weight="bold">{t('discussion.postActions')}</Text>
+            {selectedPost && (selectedPost.authorId === user?.uid || isAdmin) ? (
+              <>
+                <Pressable style={styles.postActionButton} onPress={() => { setShowPostActions(false); router.push(`/discussion/create?editId=${selectedPost.id}`); }}>
+                  <Ionicons name="create-outline" size={21} color={colors.primary} /><Text variant="body" weight="semiBold">{t('common.edit')}</Text>
+                </Pressable>
+                <Pressable style={styles.postActionButton} onPress={handleDeleteSelectedPost}>
+                  <Ionicons name="trash-outline" size={21} color={colors.error} /><Text variant="body" weight="semiBold" style={{ color: colors.error }}>{t('common.delete')}</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {selectedPost && selectedPost.authorId !== user?.uid && !isAdmin ? (
+              <Pressable style={styles.postActionButton} onPress={() => { setShowPostActions(false); router.push(`/discussion/${selectedPost.id}`); }}>
+                <Ionicons name="flag-outline" size={21} color={colors.warning} /><Text variant="body" weight="semiBold">{t('discussion.reportPost')}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={styles.postActionButton} onPress={() => setShowPostActions(false)}>
+              <Ionicons name="close-outline" size={21} color={colors.textSecondary} /><Text variant="body" weight="semiBold" secondary>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
 
@@ -276,15 +317,11 @@ const styles = StyleSheet.create({
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 15, paddingHorizontal: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   searchInput: { flex: 1, color: '#FFF', paddingVertical: 12, fontSize: 14 },
   clearSearch: { padding: 4 },
-  headerBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  feedLabel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  feedLabelText: { color: '#DBEAFE' },
-  guidelinesButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)' },
-  guidelinesButtonText: { color: '#DBEAFE' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  listIntro: { gap: 3, marginBottom: 2 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2,6,23,0.62)' },
-  guidelinesSheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, maxHeight: '82%', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26, borderWidth: 1 },
+  guidelinesSheet: { width: '100%', maxHeight: '82%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26, borderWidth: 1, elevation: 12 },
+  postActionsSheet: { width: '100%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 30, gap: 6, borderWidth: 1, elevation: 12 },
+  postActionButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 8 },
   modalHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 4, backgroundColor: '#CBD5E1', marginBottom: 18 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 18 },
   modalIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

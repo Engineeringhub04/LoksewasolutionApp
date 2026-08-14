@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { createDiscussion, fetchDiscussion, updateDiscussion } from '@/src/core/firebase/services/discussions';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
@@ -30,6 +31,7 @@ export default function CreateDiscussionScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
+  const { profile, courseInfo, load: loadProfile } = useProfileStore();
   const { isOffline } = useNetworkStatus();
 
   const [title, setTitle] = useState('');
@@ -43,8 +45,9 @@ export default function CreateDiscussionScreen() {
 
   useEffect(() => {
     if (!user) return;
-    fetchUserProfile(user.uid).then((profile) => setIsAdmin(profile?.isAdmin === true)).catch(() => undefined);
-  }, [user]);
+    loadProfile(user.uid).catch(() => undefined);
+    fetchUserProfile(user.uid).then((loadedProfile) => setIsAdmin(loadedProfile?.isAdmin === true)).catch(() => undefined);
+  }, [loadProfile, user]);
 
   useEffect(() => {
     if (!editId) return;
@@ -59,6 +62,7 @@ export default function CreateDiscussionScreen() {
   }, [editId]);
 
   const hasUnsavedContent = title.trim().length > 0 || body.trim().length > 0 || imageUrl.trim().length > 0 || linkUrl.trim().length > 0;
+  const canSubmit = body.trim().length > 0 && (!isAdmin || title.trim().length > 0 || Boolean(editId));
 
   const handleBack = () => {
     if (hasUnsavedContent) setShowDiscardConfirm(true);
@@ -66,12 +70,12 @@ export default function CreateDiscussionScreen() {
   };
 
   const handlePost = async () => {
-    if (!user || !title.trim() || !body.trim()) return;
+    if (!user || !canSubmit) return;
     setPosting(true);
     try {
       if (editId) {
         await updateDiscussion(editId, {
-          title: title.trim(),
+          ...(isAdmin ? { title: title.trim() } : {}),
           body: body.trim(),
           category: category ?? undefined,
           imageUrl: isAdmin && imageUrl.trim() ? imageUrl.trim() : null,
@@ -81,12 +85,16 @@ export default function CreateDiscussionScreen() {
         return;
       }
       await createDiscussion({
-        title: title.trim(),
+        title: isAdmin ? title.trim() : '',
         body: body.trim(),
         category: category ?? undefined,
-        authorName: user.displayName ?? 'Anonymous',
-        authorPhoto: user.photoURL,
+        authorName: profile?.name || user.displayName || 'Anonymous',
+        authorPhoto: profile?.photoURL ?? user.photoURL,
         authorId: user.uid,
+        courseId: courseInfo?.courseId,
+        subcourseId: courseInfo?.subcourseId,
+        courseName: courseInfo?.courseName,
+        subcourseName: courseInfo?.subcourseName,
         imageUrl: isAdmin && imageUrl.trim() ? imageUrl.trim() : null,
         linkUrl: isAdmin && linkUrl.trim() ? linkUrl.trim() : null,
         isAdmin,
@@ -110,7 +118,7 @@ export default function CreateDiscussionScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }} keyboardShouldPersistTaps="handled">
-        <TextField label={t('discussion.postTitle')} value={title} onChangeText={setTitle} />
+        {isAdmin ? <TextField label={`${t('discussion.postTitle')} (${t('discussion.optional')})`} value={title} onChangeText={setTitle} /> : null}
         <View>
           <Text variant="bodySmall" weight="medium" secondary style={{ marginBottom: spacing.xs }}>{t('discussion.category')}</Text>
           <Dropdown options={categories} value={category} onChange={setCategory} />
@@ -130,7 +138,7 @@ export default function CreateDiscussionScreen() {
           numberOfLines={6}
           style={{ minHeight: 120, textAlignVertical: 'top' }}
         />
-        <Button label={editId ? t('common.save') : t('discussion.post')} onPress={handlePost} loading={posting} disabled={isOffline || !title.trim() || !body.trim()} />
+        <Button label={editId ? t('common.save') : t('discussion.post')} onPress={handlePost} loading={posting} disabled={isOffline || !canSubmit} />
       </ScrollView>
 
       <ConfirmDialog
