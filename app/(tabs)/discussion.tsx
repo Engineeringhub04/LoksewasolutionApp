@@ -13,7 +13,7 @@ import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { deleteDiscussion, fetchDiscussions, isDiscussionLiked, toggleLikeDiscussion, reportContent, type DiscussionPost } from '@/src/core/firebase/services/discussions';
-import { fetchDiscussionGuidelines, seedDiscussionGuidelines, type DiscussionGuidelines } from '@/src/core/firebase/services/discussionGuidelines';
+import { fetchDiscussionGuidelines, type DiscussionGuidelines } from '@/src/core/firebase/services/discussionGuidelines';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
@@ -92,17 +92,6 @@ export default function DiscussionFeedScreen() {
       .toLowerCase()
       .includes(normalized));
   }, [data, query]);
-
-  const handleSeedGuidelines = async () => {
-    try {
-      await seedDiscussionGuidelines();
-      const value = await fetchDiscussionGuidelines();
-      setGuidelines(value);
-      showToast(t('discussion.guidelinesSeeded'), 'success');
-    } catch {
-      showToast(t('common.somethingWentWrong'), 'error');
-    }
-  };
 
   const handleToggleLike = async (id: string) => {
     const nowLiked = !likedIds[id];
@@ -278,11 +267,6 @@ export default function DiscussionFeedScreen() {
                 <Text variant="caption" secondary>{t('discussion.title')}</Text>
               </View>
               <View style={styles.modalActions}>
-                {isAdmin ? (
-                  <Pressable onPress={handleSeedGuidelines} accessibilityLabel={t('discussion.seedGuidelines')} style={styles.modalIconButton}>
-                    <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
-                  </Pressable>
-                ) : null}
                 <Pressable onPress={() => setShowGuidelines(false)} accessibilityLabel="Close" style={styles.modalIconButton}>
                   <Ionicons name="close" size={22} color={colors.textPrimary} />
                 </Pressable>
