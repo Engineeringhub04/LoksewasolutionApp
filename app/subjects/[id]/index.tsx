@@ -7,7 +7,13 @@ import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchLearningChapters, fetchLearningSubject, fetchLearningUnits } from '@/src/core/firebase/services/learning';
+import {
+  DEFAULT_LEARNING_COURSE_ID,
+  DEFAULT_LEARNING_SUBCOURSE_ID,
+  fetchLearningChapters,
+  fetchLearningSubject,
+  fetchLearningUnits,
+} from '@/src/core/firebase/services/learning';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { ProgressRing } from '@/src/components/misc/ProgressRing';
@@ -15,17 +21,21 @@ import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
 import { Card } from '@/src/components/cards/Card';
+import { useProfileStore } from '@/src/core/store/profileStore';
 
 export default function SubjectDetailScreen() {
   const { id, unitId } = useLocalSearchParams<{ id: string; unitId?: string }>();
   const { colors, spacing } = useTheme();
   const { t, language } = useTranslation();
   const router = useRouter();
+  const { courseInfo } = useProfileStore();
+  const courseId = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const subcourseId = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const selectedUnitId = typeof unitId === 'string' && unitId.length > 0 ? unitId : null;
 
-  const subject = useAsyncData(() => fetchLearningSubject(id), [id]);
-  const units = useAsyncData(() => fetchLearningUnits(id), [id]);
-  const chapters = useAsyncData(() => fetchLearningChapters(id, selectedUnitId), [id, selectedUnitId]);
+  const subject = useAsyncData(() => fetchLearningSubject(id, courseId, subcourseId), [id, courseId, subcourseId]);
+  const units = useAsyncData(() => fetchLearningUnits(id, courseId, subcourseId), [id, courseId, subcourseId]);
+  const chapters = useAsyncData(() => fetchLearningChapters(id, selectedUnitId, courseId, subcourseId), [id, selectedUnitId, courseId, subcourseId]);
 
   const selectedUnit = useMemo(
     () => (units.data ?? []).find((unit) => unit.id === selectedUnitId) ?? null,

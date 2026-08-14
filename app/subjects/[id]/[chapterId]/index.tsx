@@ -1,17 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { ScrollView, View, Pressable, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchLearningChapters } from '@/src/core/firebase/services/learning';
+import {
+  DEFAULT_LEARNING_COURSE_ID,
+  DEFAULT_LEARNING_SUBCOURSE_ID,
+  fetchLearningChapters,
+} from '@/src/core/firebase/services/learning';
+import { fetchLearningTheory } from '@/src/core/firebase/services/learningContent';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { fetchQuestionsByChapter, type Question } from '@/src/core/firebase/services/questions';
 import { fetchLearningProgress, saveLearningProgress, type LearningProgress } from '@/src/core/firebase/services/learningProgress';
 import { addBookmark, removeBookmark } from '@/src/core/firebase/services/bookmarks';
 import { fetchMyApprovedContentIds, fetchPendingContentPurchase } from '@/src/core/firebase/services/contentPurchases';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
@@ -51,6 +57,9 @@ export default function ChapterTopicsScreen() {
   const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const { courseInfo } = useProfileStore();
+  const courseId = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const subcourseId = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [mode, setMode] = useState<ChapterMode>('practice');
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [progress, setProgress] = useState<LearningProgress | null>(null);
@@ -58,10 +67,14 @@ export default function ChapterTopicsScreen() {
   const [dailyQuestionIds, setDailyQuestionIds] = useState<string[]>([]);
 
   const learningChapters = useAsyncData(
-    () => fetchLearningChapters(id, typeof unitId === 'string' ? unitId : null),
-    [id, unitId]
+    () => fetchLearningChapters(id, typeof unitId === 'string' ? unitId : null, courseId, subcourseId),
+    [id, unitId, courseId, subcourseId]
   );
-  const questions = useAsyncData(() => fetchQuestionsByChapter(id, chapterId), [id, chapterId]);
+  const questions = useAsyncData(() => fetchQuestionsByChapter(id, chapterId, 100, courseId, subcourseId), [id, chapterId, courseId, subcourseId]);
+  const theory = useAsyncData(
+    () => fetchLearningTheory(courseId, subcourseId, id, chapterId),
+    [courseId, subcourseId, id, chapterId],
+  );
   const profile = useAsyncData(
     () => (user?.uid ? fetchUserProfile(user.uid) : Promise.resolve(null)),
     [user?.uid],
@@ -81,7 +94,15 @@ export default function ChapterTopicsScreen() {
     [chapterId, learningChapters.data]
   );
   const title = chapter ? (language === 'ne' ? chapter.titleNe : chapter.title) : t('learning.chapter');
-  const questionItems = useMemo<Question[]>(() => questions.data ?? [], [questions.data]);
+  const allQuestionItems = useMemo<Question[]>(() => questions.data ?? [], [questions.data]);
+  const questionItems = useMemo(
+    () => allQuestionItems.filter((question) => !question.mode || question.mode === 'practice'),
+    [allQuestionItems],
+  );
+  const readQuestionItems = useMemo(
+    () => allQuestionItems.filter((question) => question.mode === 'read'),
+    [allQuestionItems],
+  );
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const attemptedIds = useMemo(() => Object.keys(answers), [answers]);
@@ -428,13 +449,56 @@ export default function ChapterTopicsScreen() {
                   );
                 })
               )
-            ) : (
-              <Card style={{ gap: spacing.sm, borderColor: mode === 'theory' ? '#7186D6' : colors.border, backgroundColor: mode === 'theory' ? '#EEF2FF' : colors.surface }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                  <Ionicons name={mode === 'theory' ? 'school-outline' : 'book-outline'} size={24} color={mode === 'theory' ? '#344A86' : colors.primary} />
-                  <Text variant="h3" weight="bold">{mode === 'theory' ? t('learning.theoryNotes') : t('learning.readingMaterial')}</Text>
+            ) : mode === 'read' ? (
+              readQuestionItems.length === 0 ? (
+                <EmptyState title={t('learning.noReadQuestions')} />
+              ) : (
+                <View style={{ gap: spacing.md }}>
+                  {readQuestionItems.map((question, index) => {
+                    const questionText = language === 'ne' ? question.textNe ?? question.text : question.text;
+                    const options = language === 'ne' ? question.optionsNe ?? question.options : question.options;
+                    const explanation = language === 'ne' ? question.explanationNe ?? question.explanation : question.explanation;
+                    return (
+                      <Card key={question.id} style={{ gap: spacing.sm }}>
+                        <Text variant="bodyLarge" weight="semiBold">{index + 1}. {questionText}</Text>
+                        <View style={{ gap: spacing.xs }}>
+                          {options.map((option, optionIndex) => (
+                            <Text key={`${question.id}-${optionIndex}`} variant="body">{String.fromCharCode(65 + optionIndex)}. {option}</Text>
+                          ))}
+                        </View>
+                        {explanation ? <Text variant="bodySmall" secondary>{explanation}</Text> : null}
+                      </Card>
+                    );
+                  })}
                 </View>
-                <Text variant="body" secondary>{mode === 'theory' ? t('learning.theoryComingSoon') : t('learning.readingComingSoon')}</Text>
+              )
+            ) : (
+              <Card style={{ gap: spacing.sm, borderColor: '#7186D6', backgroundColor: '#EEF2FF' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Ionicons name="school-outline" size={24} color="#344A86" />
+                  <Text variant="h3" weight="bold">{t('learning.theoryNotes')}</Text>
+                </View>
+                {theory.loading ? (
+                  <Skeleton height={72} />
+                ) : theory.error ? (
+                  <ErrorState onRetry={theory.refetch} />
+                ) : theory.data ? (
+                  <>
+                    {theory.data.notes ? <Text variant="body" secondary>{language === 'ne' ? theory.data.notesNe ?? theory.data.notes : theory.data.notes}</Text> : null}
+                    {theory.data.pdfUrl ? (
+                      <Pressable
+                        onPress={() => Linking.openURL(theory.data?.pdfUrl ?? '').catch(() => showToast(t('learning.theoryLinkError'), 'error'))}
+                        style={{ minHeight: 46, borderRadius: radius.md, backgroundColor: '#344A86', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Text variant="body" weight="bold" style={{ color: '#FFFFFF' }}>{t('learning.openTheoryPdf')}</Text>
+                      </Pressable>
+                    ) : (
+                      <Text variant="body" secondary>{t('learning.theoryComingSoon')}</Text>
+                    )}
+                  </>
+                ) : (
+                  <Text variant="body" secondary>{t('learning.theoryComingSoon')}</Text>
+                )}
               </Card>
             )}
           </>

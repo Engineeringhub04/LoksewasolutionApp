@@ -197,12 +197,6 @@ export default function ProfileScreen() {
                 trailingText="Exams > Theory Desk"
                 onPress={() => router.push('/(tabs)/exam')}
               />
-              <MenuRow
-                icon="library-outline"
-                label={t('learning.seedTitle')}
-                trailingText={t('learning.seedCatalog')}
-                onPress={() => router.push('/admin/learning-seed')}
-              />
             </SectionCard>
           </View>
         ) : null}
