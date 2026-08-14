@@ -10,6 +10,7 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function ExamPurchasePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,7 +23,8 @@ export default function ExamPurchasePage() {
   );
 
   return (
-    <SubpageScrollScreen title={exam?.title ?? t('subscription.examPurchase')}>
+    <>
+      <SubpageScrollScreen title={loading ? t('subscription.loading') : exam?.title ?? t('subscription.examPurchase')}>
       {loading ? null : error || !exam ? (
         <DataNotFound onRetry={refetch} />
       ) : (
@@ -53,12 +55,14 @@ export default function ExamPurchasePage() {
 
           <Button
             label={t('subscription.continueToPayment')}
-            onPress={() => router.push({ pathname: '/subscription/checkout', params: { examId: exam.id } })}
+            onPress={() => router.replace({ pathname: '/subscription/checkout', params: { examId: exam.id } })}
             icon={<Ionicons name="arrow-forward" size={18} color={colors.onPrimary} />}
           />
         </View>
       )}
-    </SubpageScrollScreen>
+      </SubpageScrollScreen>
+      <PageLoaderOverlay visible={loading} label={t('subscription.loading')} />
+    </>
   );
 }
 

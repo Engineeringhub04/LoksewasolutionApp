@@ -114,6 +114,11 @@ export async function fetchMyApprovedExamSetIds(uid: string): Promise<string[]> 
   return records.filter((record) => record.status === 'active').map((record) => record.examSetId);
 }
 
+export async function fetchPendingExamPurchase(uid: string, examSetId: string): Promise<ExamPurchaseRecord | null> {
+  const records = await fetchMyExamPurchases(uid);
+  return records.find((record) => record.examSetId === examSetId && record.status === 'pending') ?? null;
+}
+
 export async function fetchExamPurchaseById(id: string): Promise<ExamPurchaseRecord | null> {
   const doc = await getDocument(`${Collections.examPurchases}/${id}`);
   return doc ? parseRecord(doc) : null;
@@ -125,6 +130,11 @@ export async function fetchAllExamPurchases(): Promise<ExamPurchaseRecord[]> {
 }
 
 export async function submitExamPurchase(input: SubmitExamPurchaseInput): Promise<string> {
+  // Keep one active review request per user/exam. The UI also checks before
+  // uploading a receipt, but this service guard protects direct/repeated calls.
+  const existingPending = await fetchPendingExamPurchase(input.uid, input.examSetId);
+  if (existingPending) return existingPending.id;
+
   const id = `${input.uid}_${input.examSetId}_${Date.now()}`;
   await setDocument(`${Collections.examPurchases}/${id}`, {
     uid: input.uid,

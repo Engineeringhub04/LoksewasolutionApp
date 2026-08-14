@@ -25,7 +25,7 @@ import {
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
 import { fetchExamSet } from '@/src/core/firebase/services/examHub';
-import { submitExamPurchase } from '@/src/core/firebase/services/examPurchases';
+import { fetchPendingExamPurchase, submitExamPurchase } from '@/src/core/firebase/services/examPurchases';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -185,13 +185,23 @@ export default function CheckoutScreen() {
     setShowConfirm(false);
     setSubmitting(true);
     try {
+      let submittedExamPurchaseId: string | null = null;
+      if (isExamPurchase && exam) {
+        const existingPending = await fetchPendingExamPurchase(user.uid, exam.id);
+        if (existingPending) {
+          showToast(t('subscription.purchasePending'), 'info');
+          router.replace({ pathname: '/subscription/exam-purchase/[id]', params: { id: existingPending.id, source: 'exam' } } as never);
+          return;
+        }
+      }
+
       const screenshotUrl = await uploadScreenshot();
       if (!screenshotUrl) {
         showToast(t('subscription.uploadScreenshot') + ' required', 'error');
         return;
       }
       if (isExamPurchase && exam) {
-        await submitExamPurchase({
+        submittedExamPurchaseId = await submitExamPurchase({
           uid: user.uid,
           userName: profile?.name ?? user.displayName ?? null,
           userEmail: profile?.email ?? user.email ?? null,
@@ -225,7 +235,11 @@ export default function CheckoutScreen() {
         });
       }
       showToast(t('subscription.submitSuccess'), 'success');
-      router.replace('/subscription');
+      if (submittedExamPurchaseId) {
+        router.replace({ pathname: '/subscription/exam-purchase/[id]', params: { id: submittedExamPurchaseId, source: 'exam' } } as never);
+      } else {
+        router.replace('/subscription');
+      }
     } catch {
       showToast(t('subscription.submitError'), 'error');
     } finally {
