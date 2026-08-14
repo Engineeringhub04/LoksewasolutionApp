@@ -7,13 +7,14 @@
 //   countdown -> disabled button showing mm:ss until the start time
 //   ready     -> "Start" (MCQ) / "View Question" (PDF paper)
 //   rejoin    -> "Re-Join" + an extra Ranking button
-//   locked    -> "To Buy" + a "Not Purchased" tag
+//   locked    -> "To Purchase" + a "Not Purchased" tag
 //
 // A card in the `hidden` state is filtered out by the screen and never rendered.
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
+import { useTranslation } from '@/src/core/i18n';
 import { Text } from '@/src/components/misc/Text';
 import type { ExamCardState, ExamSet } from '@/src/core/firebase/services/examHub';
 import type { AnswerStatus } from '@/src/core/firebase/services/examAnswers';
@@ -65,6 +66,7 @@ export function ExamCard({
   onRankingPress,
 }: ExamCardProps) {
   const { colors, radius, spacing } = useTheme();
+  const { t } = useTranslation();
   const isPdf = set.contentType === 'pdf';
   const isSubmitted = isPdf && !!answerStatus;
 
@@ -77,8 +79,10 @@ export function ExamCard({
         return { label: formatCountdown(state.msRemaining), icon: 'time-outline' as const, disabled: true };
       case 'rejoin':
         return { label: 'Re-Join', icon: 'refresh' as const, disabled: false };
+      case 'pending':
+        return { label: t('subscription.toPurchasePending'), icon: 'time-outline' as const, disabled: false };
       case 'locked':
-        return { label: 'To Purchase', icon: 'lock-closed' as const, disabled: false };
+        return { label: t('subscription.toPurchase'), icon: 'lock-closed' as const, disabled: false };
       default:
         return isPdf
           ? { label: 'View Question', icon: 'document-text' as const, disabled: false }
@@ -165,20 +169,22 @@ export function ExamCard({
               styles.chip,
               state.kind === 'locked'
                 ? { backgroundColor: `${colors.error}14`, borderColor: `${colors.error}44` }
-                : { backgroundColor: '#16A34A14', borderColor: '#16A34A44' },
+                : state.kind === 'pending'
+                  ? { backgroundColor: `${colors.warning}14`, borderColor: `${colors.warning}44` }
+                  : { backgroundColor: '#16A34A14', borderColor: '#16A34A44' },
             ]}
           >
             <Ionicons
-              name={state.kind === 'locked' ? 'lock-closed' : 'checkmark-circle'}
+              name={state.kind === 'locked' ? 'lock-closed' : state.kind === 'pending' ? 'time-outline' : 'checkmark-circle'}
               size={13}
-              color={state.kind === 'locked' ? colors.error : '#16A34A'}
+              color={state.kind === 'locked' ? colors.error : state.kind === 'pending' ? colors.warning : '#16A34A'}
             />
             <Text
               variant="caption"
               weight="bold"
-              style={{ color: state.kind === 'locked' ? colors.error : '#16A34A' }}
+              style={{ color: state.kind === 'locked' ? colors.error : state.kind === 'pending' ? colors.warning : '#16A34A' }}
             >
-              {state.kind === 'locked' ? 'Not Purchased' : 'Active (Purchased)'}
+              {state.kind === 'locked' ? t('subscription.notPurchased') : state.kind === 'pending' ? t('subscription.purchasePending') : t('subscription.activePurchased')}
             </Text>
           </View>
         )}
@@ -220,7 +226,11 @@ export function ExamCard({
               // Question" identity colour) regardless of the section's accent —
               // a submitted card's action must read as a distinct, consistent
               // state everywhere, not blend into whichever board it's on.
-              backgroundColor: primary.disabled ? colors.textDisabled : isSubmitted ? '#16A34A' : accentColor,
+              backgroundColor: primary.disabled
+                ? colors.textDisabled
+                : isSubmitted || state.kind === 'ready' || state.kind === 'rejoin'
+                  ? '#16A34A'
+                  : accentColor,
               borderRadius: radius.md,
               opacity: pressed ? 0.85 : 1,
             },

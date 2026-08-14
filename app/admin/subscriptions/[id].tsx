@@ -12,6 +12,8 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { fetchUserProfile } from '@/src/core/firebase/services/profile';
+import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { showToast } from '@/src/core/store/toastStore';
 import {
@@ -37,8 +39,14 @@ export default function AdminSubscriptionDetailScreen() {
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
     if (!id) return null;
-    const [record, plans] = await Promise.all([fetchSubscriptionById(id), fetchSubscriptionPlans()]);
-    return { record, plans };
+    const record = await fetchSubscriptionById(id);
+    if (!record) return { record: null, plans: [], profile: null, courseInfo: null };
+    const [plans, profile, courseInfo] = await Promise.all([
+      fetchSubscriptionPlans(),
+      fetchUserProfile(record.uid),
+      fetchUserCourseInfo(record.uid),
+    ]);
+    return { record, plans, profile, courseInfo };
   }, [id]);
 
   const [rejectReason, setRejectReason] = useState('');
@@ -51,6 +59,8 @@ export default function AdminSubscriptionDetailScreen() {
 
   const record = data?.record ?? null;
   const plan = data?.plans.find((p) => p.id === record?.planId) ?? null;
+  const userProfile = data?.profile ?? null;
+  const courseInfo = data?.courseInfo ?? null;
   const alreadyReviewed = record?.status === 'active' || record?.status === 'rejected';
 
   const handleApprove = async () => {
@@ -125,6 +135,21 @@ export default function AdminSubscriptionDetailScreen() {
                 {record.adminMessage ? <Text variant="bodySmall" style={{ marginTop: 4, color: statusTag.color }}>{record.adminMessage}</Text> : null}
               </View>
             ) : null}
+
+            <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }] }>
+              {userProfile?.photoURL ? (
+                <Image source={{ uri: userProfile.photoURL }} style={styles.profilePhoto} />
+              ) : (
+                <View style={[styles.profilePhoto, styles.profilePlaceholder, { backgroundColor: `${colors.primary}15` }] }>
+                  <Ionicons name="person" size={24} color={colors.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text variant="bodyLarge" weight="bold">{userProfile?.name || record.userName || '—'}</Text>
+                <Text variant="bodySmall" secondary>{userProfile?.email || record.userEmail || '—'}</Text>
+                <Text variant="caption" secondary>{courseInfo?.courseName || '—'} · {courseInfo?.subcourseName || '—'}</Text>
+              </View>
+            </View>
 
             <View style={[styles.actionPanel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: radius.lg, padding: spacing.md }]}>
               <TextField
@@ -249,6 +274,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusBanner: { borderWidth: 1 },
   actionPanel: { borderWidth: 1.5 },
+  profileCard: { borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  profilePhoto: { width: 58, height: 58, borderRadius: 29 },
+  profilePlaceholder: { alignItems: 'center', justifyContent: 'center' },
   card: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   screenshot: { width: '100%', height: 220, borderRadius: 12 },

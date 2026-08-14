@@ -49,7 +49,6 @@ export default function ExamPurchasePage() {
           <View style={[styles.priceCard, { backgroundColor: colors.primary, borderRadius: radius.lg, padding: spacing.lg }]}>
             <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.8)' }}>{t('subscription.purchasePrice')}</Text>
             <Text variant="h1" weight="bold" style={{ color: '#FFF' }}>Rs. {exam.price} {exam.currency}</Text>
-            <Text variant="caption" style={{ color: 'rgba(255,255,255,0.82)' }}>{t('subscription.priceFromFirestore')}</Text>
           </View>
 
           <Button

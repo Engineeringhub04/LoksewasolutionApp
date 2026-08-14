@@ -207,6 +207,7 @@ export default function ProfileScreen() {
           <SectionCard>
             <MenuRow icon="school-outline" label={t('profile.courseDetails')} trailingText={courseInfo?.courseName ?? null} onPress={() => router.push('/course-details')} />
             <MenuRow icon="diamond-outline" label={t('profile.subscriptionDetails')} onPress={() => router.push('/subscription')} />
+            <MenuRow icon="receipt-outline" label={t('subscription.purchaseDetails')} onPress={() => router.push('/purchase-details')} />
             <MenuRow icon="cloud-upload-outline" label="My Answer Submissions" onPress={() => router.push('/exam-answer/my-submissions')} />
             <MenuRow icon="help-circle-outline" label={t('profile.reportQuestion')} onPress={() => router.push('/report-question')} />
             <MenuRow icon="bookmark-outline" label={t('profile.bookmarks')} onPress={() => router.push('/bookmarks')} />

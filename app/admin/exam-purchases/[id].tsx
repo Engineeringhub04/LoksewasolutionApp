@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
+import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { showToast } from '@/src/core/store/toastStore';
@@ -22,6 +23,7 @@ export default function AdminExamPurchaseDetailScreen() {
   const { t } = useTranslation();
   const reviewer = useAuthStore((state) => state.user);
   const { data: record, loading, error, refetch } = useAsyncData(async () => id ? fetchExamPurchaseById(id) : null, [id]);
+  const { data: userProfile } = useAsyncData(() => record?.uid ? fetchUserProfile(record.uid) : Promise.resolve(null), [record?.uid]);
   const [adminMessage, setAdminMessage] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
@@ -76,6 +78,15 @@ export default function AdminExamPurchaseDetailScreen() {
               {record.adminMessage ? <Text variant="bodySmall" style={{ color: statusTag.color, marginTop: spacing.xs }}>{record.adminMessage}</Text> : null}
             </View>
 
+            <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }] }>
+              {userProfile?.photoURL ? <Image source={{ uri: userProfile.photoURL }} style={styles.profilePhoto} /> : <View style={[styles.profilePhoto, styles.profilePlaceholder, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="person" size={24} color={colors.primary} /></View>}
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text variant="bodyLarge" weight="bold">{userProfile?.name || record.userName || '—'}</Text>
+                <Text variant="bodySmall" secondary>{userProfile?.email || record.userEmail || '—'}</Text>
+                <Text variant="caption" secondary>{record.courseName || '—'} · {record.subcourseName || '—'}</Text>
+              </View>
+            </View>
+
             <View style={[styles.actionPanel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm }]}>
               <TextField label={t('subscription.adminMessageLabel')} helperText={t('subscription.adminMessageHint')} placeholder={t('subscription.adminMessagePlaceholder')} value={adminMessage} onChangeText={setAdminMessage} multiline numberOfLines={3} />
               <Button label={t('subscription.adminApprove')} onPress={() => setShowApprove(true)} loading={busy} />
@@ -125,6 +136,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   status: { borderWidth: 1 },
   actionPanel: { borderWidth: 1.5 },
+  profileCard: { borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  profilePhoto: { width: 58, height: 58, borderRadius: 29 },
+  profilePlaceholder: { alignItems: 'center', justifyContent: 'center' },
   card: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   screenshot: { width: '100%', height: 230, borderRadius: 12 },
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },

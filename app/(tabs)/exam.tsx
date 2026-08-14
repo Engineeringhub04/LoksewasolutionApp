@@ -32,7 +32,7 @@ import {
   type ExamSet,
 } from '@/src/core/firebase/services/examHub';
 import { fetchMyExamAnswersBySet, type ExamAnswer } from '@/src/core/firebase/services/examAnswers';
-import { fetchMyApprovedExamSetIds, seedMissingExamPrices } from '@/src/core/firebase/services/examPurchases';
+import { fetchMyExamPurchases } from '@/src/core/firebase/services/examPurchases';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/exam/ExamCard';
@@ -61,7 +61,7 @@ export default function ExamScreen() {
 
   const [provinceId, setProvinceId] = useState<string>(ALL_PROVINCES);
   const [sectionId, setSectionId] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
+  const [purchaseNavigating, setPurchaseNavigating] = useState(false);
 
   const [rulesVisible, setRulesVisible] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -113,9 +113,18 @@ export default function ExamScreen() {
     [user?.uid]
   );
 
-  const approvedPurchases = useAsyncData(
-    () => (user ? fetchMyApprovedExamSetIds(user.uid) : Promise.resolve([])),
+  const purchases = useAsyncData(
+    () => (user ? fetchMyExamPurchases(user.uid) : Promise.resolve([])),
     [user?.uid]
+  );
+
+  const approvedExamIds = useMemo(
+    () => (purchases.data ?? []).filter((record) => record.status === 'active').map((record) => record.examSetId),
+    [purchases.data]
+  );
+  const pendingExamIds = useMemo(
+    () => (purchases.data ?? []).filter((record) => record.status === 'pending').map((record) => record.examSetId),
+    [purchases.data]
   );
 
   const activeSection = useMemo(
@@ -125,33 +134,20 @@ export default function ExamScreen() {
   const overallSubscriptionActive = profile?.isPremium === true && (!profile.premiumExpiryDate || new Date(profile.premiumExpiryDate).getTime() > Date.now());
   const accentColor = activeSection?.color ?? colors.primary;
 
-  const loading = provinces.loading || sections.loading || sets.loading;
-  const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing || approvedPurchases.refreshing;
+  const loading = provinces.loading || sections.loading || sets.loading || purchases.loading;
+  const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing || purchases.refreshing;
   const onRefresh = useCallback(() => {
     provinces.refresh();
     sections.refresh();
     sets.refresh();
     attempts.refresh();
     myAnswers.refresh();
-    approvedPurchases.refresh();
-  }, [provinces, sections, sets, attempts, myAnswers, approvedPurchases]);
+    purchases.refresh();
+  }, [provinces, sections, sets, attempts, myAnswers, purchases]);
 
   // Returning from the summary/details screens must show the new state (a card
   // flipping to Re-Join, a fresh attempt count) without a manual pull.
   useRefreshOnFocus(onRefresh);
-
-  const handleSeed = async () => {
-    setSeeding(true);
-    try {
-      const result = await seedMissingExamPrices(50);
-      showToast(`Seed Money: ${result.updated} of ${result.total} exam sets updated`, 'success');
-      onRefresh();
-    } catch {
-      showToast('Seeding failed. Check Firestore rules allow writes.', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   /** Cards more than 10 minutes away are filtered out entirely. */
   const visibleCards = useMemo(() => {
@@ -163,11 +159,12 @@ export default function ExamScreen() {
           set,
           now,
           (attemptMap[set.id]?.length ?? 0) > 0,
-          overallSubscriptionActive || (approvedPurchases.data ?? []).includes(set.id)
+          overallSubscriptionActive || approvedExamIds.includes(set.id),
+          pendingExamIds.includes(set.id)
         ),
       }))
       .filter((entry) => entry.state.kind !== 'hidden');
-  }, [sets.data, attempts.data, now, approvedPurchases.data, overallSubscriptionActive]);
+  }, [sets.data, attempts.data, now, approvedExamIds, pendingExamIds, overallSubscriptionActive]);
 
   const openRules = async (set: ExamSet, mode: 'info' | 'start') => {
     setRulesForSet(set);
@@ -217,17 +214,6 @@ export default function ExamScreen() {
               Loksewa Exams Hub
             </Text>
           </View>
-          {profile?.isAdmin ? <Pressable
-            onPress={handleSeed}
-            disabled={seeding}
-            style={({ pressed }) => [styles.seedButton, { opacity: pressed || seeding ? 0.6 : 1 }]}
-            accessibilityLabel="Seed exam data"
-          >
-            <Ionicons name={seeding ? 'cloud-upload' : 'cloud-upload-outline'} size={14} color="#FFF" />
-            <Text variant="caption" weight="bold" style={styles.seedText}>
-              {seeding ? 'Seeding…' : 'Seed Money'}
-            </Text>
-          </Pressable> : null}
         </View>
 
         {/* Province filter */}
@@ -355,7 +341,18 @@ export default function ExamScreen() {
                     onRulesPress={() => void openRules(entry.set, 'info')}
                     onPrimaryPress={() => {
                       if (entry.state.kind === 'locked') {
+                        setPurchaseNavigating(true);
                         router.push({ pathname: '/exam-purchase/[id]', params: { id: entry.set.id } } as never);
+                        return;
+                      }
+                      if (entry.state.kind === 'pending') {
+                        setPurchaseNavigating(true);
+                        const pendingPurchase = (purchases.data ?? []).find((record) => record.examSetId === entry.set.id && record.status === 'pending');
+                        if (pendingPurchase) {
+                          router.push({ pathname: '/subscription/exam-purchase/[id]', params: { id: pendingPurchase.id } } as never);
+                        } else {
+                          setPurchaseNavigating(false);
+                        }
                         return;
                       }
                       if (entry.set.contentType === 'pdf') {
@@ -405,7 +402,7 @@ export default function ExamScreen() {
         </ScrollView>
       )}
 
-      <PageLoaderOverlay visible={loading || seeding} label={seeding ? 'Seeding exam data…' : 'Loading Exams…'} />
+      <PageLoaderOverlay visible={loading || purchaseNavigating} label={purchaseNavigating ? 'Loading…' : 'Loading Exams…'} />
 
       <ExamRulesSheet
         visible={rulesVisible}
@@ -470,17 +467,4 @@ const styles = StyleSheet.create({
   sectionTabIdle: { backgroundColor: 'rgba(255,255,255,0.10)', borderColor: 'rgba(255,255,255,0.35)' },
   banner: { borderWidth: StyleSheet.hairlineWidth, gap: 6 },
   bannerHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  seedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    flexShrink: 0,
-  },
-  seedText: { color: '#FFF' },
 });
