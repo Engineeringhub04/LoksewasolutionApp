@@ -20,6 +20,16 @@ export async function fetchQuestionsBySubject(subjectId: string, max = 50): Prom
   })) as unknown as Question[];
 }
 
+export async function fetchQuestionsByChapter(subjectId: string, chapterId: string, max = 100): Promise<Question[]> {
+  return (await runQuery(Collections.questions, {
+    where: [
+      { field: 'subjectId', op: '==', value: subjectId },
+      { field: 'chapterId', op: '==', value: chapterId },
+    ],
+    limit: max,
+  })) as unknown as Question[];
+}
+
 export async function fetchAllQuestions(max = 200): Promise<Question[]> {
   return (await runQuery(Collections.questions, { limit: max })) as unknown as Question[];
 }

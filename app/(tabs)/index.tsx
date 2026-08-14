@@ -13,10 +13,12 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
+import { useTranslation } from '@/src/core/i18n';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
 import { fetchDevelopers } from '@/src/core/firebase/services/developer';
+import { fetchLearningSubjects } from '@/src/core/firebase/services/learning';
 import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
@@ -33,7 +35,6 @@ import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { demoSubjectsForCourse } from '@/src/components/home/demoSubjects';
 
 interface LinkItem {
   key: string;
@@ -84,6 +85,7 @@ const GUIDE_ACCENT = '#059669';
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const insets = useSafeAreaInsets();
@@ -105,6 +107,7 @@ export default function HomeScreen() {
     if (!user) return [];
     return fetchNotifications(user.uid);
   }, [user?.uid]);
+  const learningSubjects = useAsyncData(fetchLearningSubjects, []);
   const qotdAnswered = useAsyncData(async () => {
     if (!user) return false;
     return hasAnsweredQotdToday(user.uid, courseInfo.data?.courseId ?? null);
@@ -118,7 +121,8 @@ export default function HomeScreen() {
     courseInfo.refreshing ||
     developers.refreshing ||
     notifications.refreshing ||
-    qotdAnswered.refreshing;
+    qotdAnswered.refreshing ||
+    learningSubjects.refreshing;
   const initialLoading = banners.loading || courseInfo.loading || developers.loading;
   const onRefresh = () => {
     banners.refresh();
@@ -126,6 +130,7 @@ export default function HomeScreen() {
     developers.refresh();
     notifications.refresh();
     qotdAnswered.refresh();
+    learningSubjects.refresh();
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
@@ -135,7 +140,7 @@ export default function HomeScreen() {
   useRefreshOnFocus(onRefresh);
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
-  const demoSubjects = useMemo(() => demoSubjectsForCourse(courseInfo.data?.courseId ?? null), [courseInfo.data?.courseId]);
+  const homeSubjects = useMemo(() => (learningSubjects.data ?? []).slice(0, 6), [learningSubjects.data]);
   const recentNotices = useMemo(() => APP_NOTICES.slice(0, 3), []);
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
@@ -212,17 +217,27 @@ export default function HomeScreen() {
             <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>View All</Text>
           </Pressable>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
-          {demoSubjects.map((s) => (
-            <SubjectCardColored
-              key={s.id}
-              name={s.name}
-              icon={s.icon as never}
-              backgroundColor={s.backgroundColor}
-              onPress={() => router.push('/subjects')}
-            />
-          ))}
-        </ScrollView>
+        {learningSubjects.loading ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
+            {[1, 2, 3].map((item) => <Skeleton key={item} width={150} height={118} radius={18} />)}
+          </ScrollView>
+        ) : homeSubjects.length === 0 ? (
+          <View style={{ paddingHorizontal: spacing.screenPadding }}>
+            <EmptyState title={t('learning.noSubjects')} />
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
+            {homeSubjects.map((subject, index) => (
+              <SubjectCardColored
+                key={subject.id}
+                name={language === 'ne' ? subject.titleNe : subject.title}
+                icon={subject.icon as never}
+                backgroundColor={['#2563EB', '#7C3AED', '#059669', '#EA580C'][index % 4]}
+                onPress={() => router.push(`/subjects/${subject.id}`)}
+              />
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* Quick Links */}

@@ -47,6 +47,21 @@ export default function BookmarksScreen() {
     }
   };
 
+  const handleOpen = (item: { type: BookmarkType; refId: string }) => {
+    if (item.type !== 'chapter') return;
+    const parts = item.refId.split('__');
+    if (parts.length < 3) return;
+    const [subjectId, unitId, chapterId] = parts;
+    router.push({
+      pathname: '/subjects/[id]/[chapterId]',
+      params: {
+        id: subjectId,
+        chapterId,
+        ...(unitId && unitId !== 'root' ? { unitId } : {}),
+      },
+    });
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('bookmarks.title')} showThemeToggle />
@@ -57,6 +72,7 @@ export default function BookmarksScreen() {
             { key: 'currentAffairs', label: t('bookmarks.currentAffairs') },
             { key: 'question', label: t('bookmarks.questions') },
             { key: 'discussion', label: t('bookmarks.discussions') },
+            { key: 'chapter', label: t('bookmarks.chapters') },
           ]}
           active={tab}
           onChange={setTab}
@@ -88,10 +104,10 @@ export default function BookmarksScreen() {
           renderItem={({ item }) => (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
+                <Pressable onPress={() => handleOpen(item)} disabled={item.type !== 'chapter'} style={{ flex: 1 }}>
                   <Text variant="body" weight="medium" numberOfLines={1}>{item.title}</Text>
                   {item.preview ? <Text variant="bodySmall" secondary numberOfLines={2}>{item.preview}</Text> : null}
-                </View>
+                </Pressable>
                 <Pressable onPress={() => handleRemove(item.id)} accessibilityLabel={t('bookmarks.removed')}>
                   <Ionicons name="close-circle-outline" size={22} color={colors.textSecondary} />
                 </Pressable>

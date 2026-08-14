@@ -61,6 +61,12 @@ service cloud.firestore {
         allow create: if isOwner(userId);
         allow delete: if isOwner(userId) || isAdmin();
       }
+      match /learning_progress/{progressId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
+      }
       match /notifications/{notificationId} {
         allow read: if isOwner(userId) || isAdmin();
         allow update: if isOwner(userId) && changedOnly(['read']) &&
@@ -80,6 +86,32 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow write: if isAdmin();
         match /topics/{topicId} {
+          allow read: if isSignedIn();
+          allow write: if isAdmin();
+        }
+      }
+      match /units/{unitId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+        match /chapters/{chapterId} {
+          allow read: if isSignedIn();
+          allow write: if isAdmin();
+        }
+      }
+    }
+    // Syllabus-driven learning catalog. It is intentionally separate from the legacy
+    // subjects tree so seeding cannot overwrite existing question content.
+    match /app_learning_subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+      match /chapters/{chapterId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+      match /units/{unitId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+        match /chapters/{chapterId} {
           allow read: if isSignedIn();
           allow write: if isAdmin();
         }
@@ -379,6 +411,34 @@ service cloud.firestore {
          request.resource.data.uid == resource.data.uid &&
          request.resource.data.status == resource.data.status &&
          request.resource.data.amount == resource.data.amount &&
+         changedOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // Individual Subject/Unit/Chapter purchase requests. Users can create and
+    // edit only their own pending payment proof; amount, entitlement and review
+    // status remain admin-controlled.
+    match /app_content_purchases/{docId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount >= 0 &&
+        request.resource.data.method == 'qr' &&
+        request.resource.data.adminMessage == null &&
+        request.resource.data.reviewedAt == null &&
+        request.resource.data.reviewedBy == null;
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         resource.data.uid == request.auth.uid &&
+         resource.data.status == 'pending' &&
+         request.resource.data.uid == resource.data.uid &&
+         request.resource.data.status == resource.data.status &&
+         request.resource.data.amount == resource.data.amount &&
+         request.resource.data.contentId == resource.data.contentId &&
+         request.resource.data.contentType == resource.data.contentType &&
          changedOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
       allow delete: if isAdmin();
     }

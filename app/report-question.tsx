@@ -1,7 +1,7 @@
 // Profile → App Settings → Report Question.
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
@@ -22,8 +22,9 @@ export default function ReportQuestionScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { isOffline } = useNetworkStatus();
+  const { questionRef: initialQuestionRef } = useLocalSearchParams<{ questionRef?: string }>();
 
-  const [questionRef, setQuestionRef] = useState('');
+  const [questionRef, setQuestionRef] = useState(() => (typeof initialQuestionRef === 'string' ? initialQuestionRef : ''));
   const [issue, setIssue] = useState<Issue | null>(null);
   const [description, setDescription] = useState('');
   const [sending, setSending] = useState(false);

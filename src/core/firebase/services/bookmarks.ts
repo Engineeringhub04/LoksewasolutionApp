@@ -2,7 +2,7 @@
 import { runQuery, setDocument, deleteDocument, serverTimestamp, type FirestoreTimestamp } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 
-export type BookmarkType = 'note' | 'currentAffairs' | 'question' | 'discussion';
+export type BookmarkType = 'note' | 'currentAffairs' | 'question' | 'discussion' | 'chapter';
 
 export interface Bookmark {
   id: string;
