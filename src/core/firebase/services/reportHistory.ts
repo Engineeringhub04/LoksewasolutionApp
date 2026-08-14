@@ -3,6 +3,7 @@ import {
   getDocument,
   runQuery,
   serverTimestamp,
+  updateDocument,
 } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 import { getCurrentUser } from '@/src/core/firebase/session';
@@ -122,6 +123,25 @@ export async function fetchMyReportHistory(uid: string): Promise<ReportHistoryRe
     where: [{ field: 'reporterId', op: '==', value: uid }],
   });
   return newestFirst(docs.map(parseRecord));
+}
+
+/** Admin-only moderation list; Firestore rules enforce the administrator check. */
+export async function fetchAllReportHistory(): Promise<ReportHistoryRecord[]> {
+  const docs = await runQuery(Collections.reportHistory);
+  return newestFirst(docs.map(parseRecord));
+}
+
+/** Updates only moderation fields; Firestore rules restrict this write to admins. */
+export async function updateReportHistoryReview(
+  id: string,
+  status: Exclude<ReportStatus, 'pending'>,
+  adminMessage: string | null,
+): Promise<void> {
+  await updateDocument(`${Collections.reportHistory}/${id}`, {
+    status,
+    adminMessage: adminMessage?.trim() || null,
+    reviewedAt: serverTimestamp(),
+  });
 }
 
 export async function fetchReportHistory(id: string): Promise<ReportHistoryRecord | null> {
