@@ -118,15 +118,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Discussion board: users may create their own posts/comments and adjust
-    // counters through the narrow operations used by the app.
+    // Discussion board. User-owned fields remain editable only by the owner;
+    // admin metadata and moderation fields remain admin-controlled.
     match /discussions/{discussionId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() &&
         request.resource.data.authorId == request.auth.uid &&
         request.resource.data.likeCount == 0 &&
-        request.resource.data.commentCount == 0;
+        request.resource.data.commentCount == 0 &&
+        request.resource.data.isSeed == false &&
+        (request.resource.data.isAdmin == false || isAdmin());
       allow update: if isAdmin() ||
+        (isSignedIn() && resource.data.authorId == request.auth.uid &&
+          changedOnly(['title', 'body', 'category', 'imageUrl', 'linkUrl', 'editedAt'])) ||
         (isSignedIn() && (
           (changedOnly(['likeCount']) &&
             (request.resource.data.likeCount == resource.data.likeCount + 1 ||
@@ -141,10 +145,46 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
-        allow update: if isAdmin();
+        allow update: if isAdmin() ||
+          (isSignedIn() && resource.data.authorId == request.auth.uid &&
+            changedOnly(['body', 'editedAt']));
         allow delete: if isAdmin() ||
           (isSignedIn() && resource.data.authorId == request.auth.uid);
+
+        match /replies/{replyId} {
+          allow read: if isSignedIn();
+          allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+          allow update: if isAdmin() ||
+            (isSignedIn() && resource.data.authorId == request.auth.uid &&
+              changedOnly(['body', 'editedAt']));
+          allow delete: if isAdmin() ||
+            (isSignedIn() && resource.data.authorId == request.auth.uid);
+        }
       }
+
+      match /reactions/{userId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && request.auth.uid == userId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+        allow update: if false;
+      }
+    }
+
+    match /app_discussion_guidelines/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Private report history. Users can create/read only their own pending reports;
+    // review status and admin messages are console/admin controlled.
+    match /app_report_history/{reportId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.reporterId == request.auth.uid);
+      allow create: if isSignedIn() &&
+        request.resource.data.reporterId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.adminMessage == null;
+      allow update, delete: if isAdmin();
     }
 
     // Legacy flat collections retained for data already created by the app.

@@ -1,13 +1,15 @@
 // Support submissions: Contact Us, Feedback, Report a Problem, Report a Question.
 //
 // These used to write to Firestore (contactMessages / reports). They now go to a
-// Google Form instead — see AppConfig.messaging.googleForm for why. Nothing here
-// touches Firestore any more, so support traffic no longer consumes the app's
-// database quota.
+// Google Form instead — see AppConfig.messaging.googleForm for why. Contact,
+// feedback and app-problem traffic therefore does not consume Firestore quota.
+// Question reports additionally create a private Firestore history copy for the
+// in-app report history page.
 //
 // The exported signatures are unchanged from the previous Firestore-backed
 // service so every existing screen keeps working.
 import { submitToGoogleForm } from './googleForm';
+import { createReportHistory } from '@/src/core/firebase/services/reportHistory';
 
 /** Contact Us — free-text message from the user. */
 export async function submitContactMessage(message: string): Promise<void> {
@@ -51,10 +53,20 @@ export async function submitQuestionReport(
   issue: string,
   description: string
 ): Promise<void> {
-  await submitToGoogleForm({
-    type: 'report',
-    questionReference: questionRef,
-    issueCategory: `question / ${issue}`,
-    message: description,
-  });
+  await Promise.all([
+    submitToGoogleForm({
+      type: 'report',
+      questionReference: questionRef,
+      issueCategory: `question / ${issue}`,
+      message: description,
+    }),
+    createReportHistory({
+      source: 'question',
+      targetType: 'question',
+      targetId: questionRef,
+      targetTitle: questionRef,
+      reason: issue,
+      description,
+    }),
+  ]);
 }

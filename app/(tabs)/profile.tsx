@@ -210,6 +210,7 @@ export default function ProfileScreen() {
             <MenuRow icon="receipt-outline" label={t('subscription.purchaseDetails')} onPress={() => router.push('/purchase-details')} />
             <MenuRow icon="cloud-upload-outline" label="My Answer Submissions" onPress={() => router.push('/exam-answer/my-submissions')} />
             <MenuRow icon="help-circle-outline" label={t('profile.reportQuestion')} onPress={() => router.push('/report-question')} />
+            <MenuRow icon="flag-outline" label={t('discussion.yourReportHistory')} onPress={() => router.push('/report-history')} />
             <MenuRow icon="bookmark-outline" label={t('profile.bookmarks')} onPress={() => router.push('/bookmarks')} />
             <MenuRow icon="shield-checkmark-outline" label={t('profile.privacyPolicy')} onPress={() => router.push('/privacy-policy')} />
             <MenuRow icon="analytics-outline" label={t('profile.analytics')} onPress={() => router.push('/analytics')} />
