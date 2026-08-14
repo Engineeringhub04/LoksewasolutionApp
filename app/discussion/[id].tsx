@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, FlatList, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
@@ -7,20 +7,34 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { fetchDiscussion, fetchComments, fetchReplies, addComment, addReply, deleteComment, deleteReply, deleteDiscussion, toggleLikeDiscussion, isDiscussionLiked, reportContent, type Reply } from '@/src/core/firebase/services/discussions';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { ErrorState } from '@/src/components/feedback/ErrorState';
+import { fetchDiscussion, fetchComments, fetchReplies, addComment, addReply, deleteComment, deleteReply, deleteDiscussion, toggleLikeDiscussion, isDiscussionLiked, isCommentLiked, toggleCommentLike, reportContent, type Reply, type Comment } from '@/src/core/firebase/services/discussions';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
-import { IconButton } from '@/src/components/buttons/IconButton';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { Text } from '@/src/components/misc/Text';
 import { CommentCard } from '@/src/components/cards/CommentCard';
 import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
 import { TextField } from '@/src/components/inputs/TextField';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
-import { BottomSheet } from '@/src/components/feedback/BottomSheet';
-import { Button } from '@/src/components/buttons/Button';
-import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DiscussionActionMenu, type DiscussionActionMenuItem } from '@/src/components/discussion/DiscussionActionMenu';
+import { DiscussionReportModal, type DiscussionReportTarget } from '@/src/components/discussion/DiscussionReportModal';
+
+type MenuTarget =
+  | { kind: 'post' }
+  | { kind: 'comment'; comment: Comment }
+  | { kind: 'reply'; commentId: string; reply: Reply };
+
+type ConfirmAction =
+  | { kind: 'editPost' }
+  | { kind: 'deletePost' }
+  | { kind: 'deleteComment'; commentId: string }
+  | { kind: 'deleteReply'; commentId: string; replyId: string }
+  | { kind: 'report'; target: DiscussionReportTarget };
+
+type LikeState = { liked: boolean; delta: number };
 
 function formatTimestamp(value: { toDate?: () => Date } | null | undefined, withTime = false): string {
   if (!value?.toDate) return '';
@@ -38,17 +52,20 @@ export default function DiscussionDetailScreen() {
   const comments = useAsyncData(() => fetchComments(id), [id]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [replyText, setReplyText] = useState('');
   const [liked, setLiked] = useState(false);
   const [posting, setPosting] = useState(false);
-  const [showReportSheet, setShowReportSheet] = useState(false);
-  const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment'; id: string; authorName?: string | null; authorPhoto?: string | null; preview?: string | null } | null>(null);
-  const [showDeletePostConfirm, setShowDeletePostConfirm] = useState(false);
-  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
-  const [deleteReplyTarget, setDeleteReplyTarget] = useState<{ commentId: string; replyId: string } | null>(null);
-  const [openReplyId, setOpenReplyId] = useState<string | null>(null);
-  const [repliesByComment, setRepliesByComment] = useState<Record<string, Reply[]>>({});
-  const [replyText, setReplyText] = useState('');
   const [replying, setReplying] = useState(false);
+  const [repliesByComment, setRepliesByComment] = useState<Record<string, Reply[]>>({});
+  const [openReplyId, setOpenReplyId] = useState<string | null>(null);
+  const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 16 });
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [reportTarget, setReportTarget] = useState<DiscussionReportTarget | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [commentLikes, setCommentLikes] = useState<Record<string, LikeState>>({});
+  const [replyLikes, setReplyLikes] = useState<Record<string, LikeState>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -56,13 +73,45 @@ export default function DiscussionDetailScreen() {
     isDiscussionLiked(id).then(setLiked).catch(() => undefined);
   }, [id, user]);
 
-  const handleToggleLike = async () => {
+  useEffect(() => {
+    const currentComments = comments.data ?? [];
+    let active = true;
+    Promise.all(currentComments.map(async (comment) => [comment.id, await isCommentLiked(id, comment.id).catch(() => false)] as const))
+      .then((entries) => {
+        if (!active) return;
+        setCommentLikes(Object.fromEntries(entries.map(([commentId, isLiked]) => [commentId, { liked: isLiked, delta: 0 }])));
+      });
+    return () => { active = false; };
+  }, [comments.data, id]);
+
+  const loadReplies = async (commentId: string) => {
+    const nextReplies = await fetchReplies(id, commentId);
+    setRepliesByComment((prev) => ({ ...prev, [commentId]: nextReplies }));
+    const entries = await Promise.all(nextReplies.map(async (reply) => [reply.id, await isCommentLiked(id, commentId, reply.id).catch(() => false)] as const));
+    setReplyLikes((prev) => ({
+      ...prev,
+      ...Object.fromEntries(entries.map(([replyId, isLiked]) => [`${commentId}:${replyId}`, { liked: isLiked, delta: 0 }])),
+    }));
+  };
+
+  const handleTogglePostLike = async () => {
     const next = !liked;
     setLiked(next);
     try {
       await toggleLikeDiscussion(id, next);
     } catch {
       setLiked(!next);
+    }
+  };
+
+  const handleToggleCommentLike = async (commentId: string, next: boolean, replyId?: string) => {
+    const key = replyId ? `${commentId}:${replyId}` : commentId;
+    const setter = replyId ? setReplyLikes : setCommentLikes;
+    setter((prev) => ({ ...prev, [key]: { liked: next, delta: (prev[key]?.delta ?? 0) + (next ? 1 : -1) } }));
+    try {
+      await toggleCommentLike(id, commentId, next, replyId);
+    } catch {
+      setter((prev) => ({ ...prev, [key]: { liked: !next, delta: (prev[key]?.delta ?? 0) + (next ? -1 : 1) } }));
     }
   };
 
@@ -87,8 +136,7 @@ export default function DiscussionDetailScreen() {
     try {
       await addReply(id, commentId, { body: replyText.trim(), authorName: user.displayName ?? 'Anonymous', authorPhoto: user.photoURL, authorId: user.uid });
       setReplyText('');
-      const nextReplies = await fetchReplies(id, commentId);
-      setRepliesByComment((prev) => ({ ...prev, [commentId]: nextReplies }));
+      await loadReplies(commentId);
       showToast(t('discussion.replyPosted'), 'success');
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
@@ -97,65 +145,32 @@ export default function DiscussionDetailScreen() {
     }
   };
 
-  const openReport = (target: typeof reportTarget) => {
+  const openReport = (target: DiscussionReportTarget) => {
     setReportTarget(target);
-    setShowReportSheet(true);
+    setShowReportModal(true);
   };
 
-  const handleReport = async () => {
+  const handleReport = async (reason: string) => {
     if (!reportTarget) return;
-    setShowReportSheet(false);
+    setReportSubmitting(true);
     try {
-      await reportContent(reportTarget.type, reportTarget.id, 'user-reported', { title: discussion.data?.title, preview: reportTarget.preview ?? discussion.data?.body, authorName: reportTarget.authorName ?? discussion.data?.authorName, authorPhoto: reportTarget.authorPhoto ?? discussion.data?.authorPhoto });
+      await reportContent(reportTarget.type, reportTarget.id, reason, {
+        title: discussion.data?.title,
+        preview: reportTarget.preview ?? discussion.data?.body,
+        authorName: reportTarget.authorName ?? discussion.data?.authorName,
+        authorPhoto: reportTarget.authorPhoto ?? discussion.data?.authorPhoto,
+      });
+      setShowReportModal(false);
+      setReportTarget(null);
       showToast(t('discussion.postReported'), 'success');
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
     } finally {
-      setReportTarget(null);
+      setReportSubmitting(false);
     }
   };
 
-  const handlePostMenu = () => {
-    if (!discussion.data) return;
-    const post = discussion.data;
-    const isOwner = user?.uid === post.authorId;
-    if (isOwner || isAdmin) {
-      Alert.alert(t('discussion.postMenu'), undefined, [
-        { text: t('common.edit'), onPress: () => router.push({ pathname: '/discussion/create', params: { editId: id } }) },
-        { text: t('common.delete'), style: 'destructive', onPress: () => setShowDeletePostConfirm(true) },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]);
-    } else {
-      openReport({ type: 'post', id, authorName: post.authorName, authorPhoto: post.authorPhoto, preview: post.body });
-    }
-  };
-
-  const handleCommentMenu = (comment: { id: string; authorId?: string; authorName: string; authorPhoto?: string | null; body: string }) => {
-    const canManage = user?.uid === comment.authorId || isAdmin;
-    if (canManage) {
-      Alert.alert(t('discussion.commentOptions'), undefined, [
-        { text: t('common.delete'), style: 'destructive', onPress: () => setDeleteCommentId(comment.id) },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]);
-    } else {
-      openReport({ type: 'comment', id: comment.id, authorName: comment.authorName, authorPhoto: comment.authorPhoto, preview: comment.body });
-    }
-  };
-
-  const handleReplyMenu = (commentId: string, reply: Reply) => {
-    const canManage = user?.uid === reply.authorId || isAdmin;
-    if (canManage) {
-      Alert.alert(t('discussion.commentOptions'), undefined, [
-        { text: t('common.delete'), style: 'destructive', onPress: () => setDeleteReplyTarget({ commentId, replyId: reply.id }) },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]);
-    } else {
-      openReport({ type: 'comment', id: reply.id, authorName: reply.authorName, authorPhoto: reply.authorPhoto, preview: reply.body });
-    }
-  };
-
-  const handleDeletePost = async () => {
-    setShowDeletePostConfirm(false);
+  const performDeletePost = async () => {
     try {
       await deleteDiscussion(id);
       router.replace('/(tabs)/discussion');
@@ -164,77 +179,204 @@ export default function DiscussionDetailScreen() {
     }
   };
 
-  const handleDeleteComment = async () => {
-    if (!deleteCommentId) return;
+  const performDeleteComment = async (commentId: string) => {
     try {
-      await deleteComment(id, deleteCommentId);
+      await deleteComment(id, commentId);
       comments.refetch();
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
-    } finally {
-      setDeleteCommentId(null);
     }
   };
 
-  const handleDeleteReply = async () => {
-    if (!deleteReplyTarget) return;
+  const performDeleteReply = async (commentId: string, replyId: string) => {
     try {
-      await deleteReply(id, deleteReplyTarget.commentId, deleteReplyTarget.replyId);
-      const next = await fetchReplies(id, deleteReplyTarget.commentId);
-      setRepliesByComment((prev) => ({ ...prev, [deleteReplyTarget.commentId]: next }));
+      await deleteReply(id, commentId, replyId);
+      await loadReplies(commentId);
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
-    } finally {
-      setDeleteReplyTarget(null);
     }
   };
 
-  const toggleReplies = async (commentId: string) => {
-    if (openReplyId === commentId) {
-      setOpenReplyId(null);
-      return;
-    }
-    setOpenReplyId(commentId);
-    if (!repliesByComment[commentId]) {
-      try {
-        const nextReplies = await fetchReplies(id, commentId);
-        setRepliesByComment((prev) => ({ ...prev, [commentId]: nextReplies }));
-      } catch {
-        showToast(t('common.somethingWentWrong'), 'error');
-      }
+  const confirmTitle = useMemo(() => {
+    if (!confirmAction) return '';
+    if (confirmAction.kind === 'editPost') return t('discussion.confirmEditTitle');
+    if (confirmAction.kind === 'report') return t('discussion.confirmReportTitle');
+    return confirmAction.kind === 'deletePost' ? t('discussion.deleteConfirm') : t('discussion.deleteCommentConfirm');
+  }, [confirmAction, t]);
+
+  const confirmMessage = useMemo(() => {
+    if (!confirmAction) return '';
+    if (confirmAction.kind === 'editPost') return t('discussion.confirmEditMessage');
+    if (confirmAction.kind === 'report') return t('discussion.confirmReportMessage');
+    return t('discussion.deleteConfirmMessage');
+  }, [confirmAction, t]);
+
+  const handleConfirmAction = () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!action) return;
+    if (action.kind === 'editPost') {
+      router.push({ pathname: '/discussion/create', params: { editId: id } });
+    } else if (action.kind === 'deletePost') {
+      void performDeletePost();
+    } else if (action.kind === 'deleteComment') {
+      void performDeleteComment(action.commentId);
+    } else if (action.kind === 'deleteReply') {
+      void performDeleteReply(action.commentId, action.replyId);
+    } else {
+      openReport(action.target);
     }
   };
+
+  const handlePostMenu = (anchor: { top: number; right: number }) => {
+    setMenuAnchor(anchor);
+    setMenuTarget({ kind: 'post' });
+  };
+
+  const handleCommentMenu = (comment: Comment, anchor: { top: number; right: number }) => {
+    setMenuAnchor(anchor);
+    setMenuTarget({ kind: 'comment', comment });
+  };
+
+  const handleReplyMenu = (commentId: string, reply: Reply, anchor: { top: number; right: number }) => {
+    setMenuAnchor(anchor);
+    setMenuTarget({ kind: 'reply', commentId, reply });
+  };
+
+  const menuActions: DiscussionActionMenuItem[] = useMemo(() => {
+    if (!menuTarget || !discussion.data) return [];
+    if (menuTarget.kind === 'post') {
+      const post = discussion.data;
+      return user?.uid === post.authorId || isAdmin
+        ? [
+            { label: t('common.edit'), icon: 'create-outline', onPress: () => setConfirmAction({ kind: 'editPost' }) },
+            { label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deletePost' }) },
+          ]
+        : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'post', id, authorName: post.authorName, authorPhoto: post.authorPhoto, preview: post.body } }) }];
+    }
+    if (menuTarget.kind === 'comment') {
+      const comment = menuTarget.comment;
+      return user?.uid === comment.authorId || isAdmin
+        ? [{ label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deleteComment', commentId: comment.id }) }]
+        : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'comment', id: comment.id, authorName: comment.authorName, authorPhoto: comment.authorPhoto, preview: comment.body } }) }];
+    }
+    const reply = menuTarget.reply;
+    return user?.uid === reply.authorId || isAdmin
+      ? [{ label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deleteReply', commentId: menuTarget.commentId, replyId: reply.id }) }]
+      : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'comment', id: reply.id, authorName: reply.authorName, authorPhoto: reply.authorPhoto, preview: reply.body } }) }];
+  }, [discussion.data, id, isAdmin, menuTarget, t, user?.uid]);
 
   if (discussion.loading) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }}><TopAppBar title={t('discussion.commentsTitle')} /><View style={{ padding: spacing.screenPadding, gap: spacing.sm }}><Skeleton height={170} /><Skeleton height={72} /><Skeleton height={72} /></View></View>;
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <TopAppBar title={t('discussion.commentsTitle')} actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} />} />
+        <PageLoaderOverlay visible label={t('discussion.loadingComments')} />
+      </View>
+    );
   }
   if (discussion.error || !discussion.data) {
     return <View style={{ flex: 1, backgroundColor: colors.background }}><TopAppBar title={t('discussion.commentsTitle')} /><ErrorState onRetry={discussion.refetch} /></View>;
   }
 
   const post = discussion.data;
+  const commentComposer = user ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, paddingBottom: insets.bottom + spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface }}>
+      <TextField value={commentText} onChangeText={setCommentText} placeholder={t('discussion.writeComment')} containerStyle={{ flex: 1 }} />
+      <Pressable
+        onPress={handlePostComment}
+        disabled={posting || !commentText.trim()}
+        accessibilityLabel={t('common.submit')}
+        style={({ pressed }) => [{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: posting || !commentText.trim() ? 0.45 : 1 }, pressed && { transform: [{ scale: 0.92 }] }]}
+      >
+        {posting ? <ActivityIndicator size="small" color={colors.onPrimary} /> : <Text style={{ color: colors.onPrimary }}>➤</Text>}
+      </Pressable>
+    </View>
+  ) : null;
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <TopAppBar title={t('discussion.commentsTitle')} actions={<IconButton name={effective === 'dark' ? 'sunny-outline' : 'moon-outline'} accessibilityLabel={t('discussion.toggleTheme')} onPress={() => setMode(effective === 'dark' ? 'light' : 'dark')} />} />
+      <TopAppBar title={t('discussion.commentsTitle')} actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} />} />
       <FlatList
         data={comments.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, paddingTop: spacing.sm, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={discussion.refreshing || comments.refreshing} onRefresh={() => { discussion.refresh(); comments.refresh(); }} />}
-        ListHeaderComponent={<View style={{ marginBottom: spacing.md }}><DiscussionPostCard authorName={post.authorName} authorPhoto={post.authorPhoto} timestamp={formatTimestamp(post.createdAt, true)} title={post.title} preview={post.body} courseName={post.courseName} subcourseName={post.subcourseName} imageUrl={post.imageUrl} linkUrl={post.linkUrl} isAdmin={post.isAdmin} isSeed={post.isSeed} likeCount={post.likeCount} commentCount={comments.data?.length ?? 0} liked={liked} onPress={() => undefined} onToggleLike={handleToggleLike} onMenuPress={handlePostMenu} /><Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.lg }}>{t('discussion.comments')}</Text></View>}
+        ListHeaderComponent={
+          <View style={{ marginBottom: spacing.md }}>
+            <DiscussionPostCard
+              authorName={post.authorName}
+              authorPhoto={post.authorPhoto}
+              timestamp={formatTimestamp(post.createdAt, true)}
+              title={post.title}
+              preview={post.body}
+              courseName={post.courseName}
+              subcourseName={post.subcourseName}
+              imageUrl={post.imageUrl}
+              linkUrl={post.linkUrl}
+              isAdmin={post.isAdmin}
+              isSeed={post.isSeed}
+              likeCount={post.likeCount}
+              commentCount={comments.data?.length ?? 0}
+              liked={liked}
+              onPress={() => undefined}
+              onToggleLike={handleTogglePostLike}
+              onMenuPress={handlePostMenu}
+            />
+            <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.lg }}>{t('discussion.comments')}</Text>
+          </View>
+        }
         renderItem={({ item }) => {
+          const commentLike = commentLikes[item.id] ?? { liked: false, delta: 0 };
           const replies = repliesByComment[item.id] ?? [];
           return (
             <View style={{ marginBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: spacing.xs }}>
-              <CommentCard authorName={item.authorName} authorPhoto={item.authorPhoto} body={item.body} timestamp={formatTimestamp(item.createdAt)} onMenuPress={() => handleCommentMenu(item)} />
+              <CommentCard
+                authorName={item.authorName}
+                authorPhoto={item.authorPhoto ?? (item.authorId === user?.uid ? user?.photoURL : null)}
+                body={item.body}
+                timestamp={formatTimestamp(item.createdAt)}
+                likeCount={item.likeCount + commentLike.delta}
+                liked={commentLike.liked}
+                onToggleLike={() => handleToggleCommentLike(item.id, !commentLike.liked)}
+                onMenuPress={(anchor) => handleCommentMenu(item, anchor)}
+              />
               <View style={{ flexDirection: 'row', gap: spacing.md, marginLeft: spacing.xl, marginBottom: spacing.xs }}>
-                <Text variant="caption" style={{ color: colors.primary }} onPress={() => toggleReplies(item.id)}>{openReplyId === item.id ? t('discussion.hideReplies') : t('discussion.viewReplies')}</Text>
-                <Text variant="caption" style={{ color: colors.primary }} onPress={() => { setOpenReplyId(item.id); }}>{t('discussion.reply')}</Text>
+                <Text variant="caption" style={{ color: colors.primary }} onPress={() => { if (openReplyId === item.id) setOpenReplyId(null); else { setOpenReplyId(item.id); void loadReplies(item.id); } }}>{openReplyId === item.id ? t('discussion.hideReplies') : t('discussion.viewReplies')}</Text>
+                <Text variant="caption" style={{ color: colors.primary }} onPress={() => { setOpenReplyId(item.id); void loadReplies(item.id); }}>{t('discussion.reply')}</Text>
               </View>
               {openReplyId === item.id ? (
                 <View style={{ marginLeft: spacing.lg, paddingLeft: spacing.sm, borderLeftWidth: 2, borderLeftColor: colors.border, gap: spacing.xs }}>
-                  {replies.map((reply) => <CommentCard key={reply.id} authorName={reply.authorName} authorPhoto={reply.authorPhoto} body={reply.body} timestamp={formatTimestamp(reply.createdAt)} indent onMenuPress={() => handleReplyMenu(item.id, reply)} />)}
-                  {user ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}><TextField value={replyText} onChangeText={setReplyText} placeholder={t('discussion.writeReply')} containerStyle={{ flex: 1 }} /><IconButton name={replying ? 'hourglass-outline' : 'send'} accessibilityLabel={t('common.submit')} onPress={() => handlePostReply(item.id)} disabled={replying || !replyText.trim()} /></View> : null}
+                  {replies.map((reply) => {
+                    const replyKey = `${item.id}:${reply.id}`;
+                    const replyLike = replyLikes[replyKey] ?? { liked: false, delta: 0 };
+                    return (
+                      <CommentCard
+                        key={reply.id}
+                        authorName={reply.authorName}
+                        authorPhoto={reply.authorPhoto ?? (reply.authorId === user?.uid ? user?.photoURL : null)}
+                        body={reply.body}
+                        timestamp={formatTimestamp(reply.createdAt)}
+                        likeCount={reply.likeCount + replyLike.delta}
+                        liked={replyLike.liked}
+                        indent
+                        onToggleLike={() => handleToggleCommentLike(item.id, !replyLike.liked, reply.id)}
+                        onMenuPress={(anchor) => handleReplyMenu(item.id, reply, anchor)}
+                      />
+                    );
+                  })}
+                  {user ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      <TextField value={replyText} onChangeText={setReplyText} placeholder={t('discussion.writeReply')} containerStyle={{ flex: 1 }} />
+                      <Pressable
+                        onPress={() => handlePostReply(item.id)}
+                        disabled={replying || !replyText.trim()}
+                        accessibilityLabel={t('common.submit')}
+                        style={{ width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: replying || !replyText.trim() ? 0.45 : 1 }}
+                      >
+                        {replying ? <ActivityIndicator size="small" color={colors.onPrimary} /> : <Text style={{ color: colors.onPrimary }}>➤</Text>}
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -242,11 +384,24 @@ export default function DiscussionDetailScreen() {
         }}
         ListEmptyComponent={<View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}><Text variant="body" secondary>{t('discussion.noComments')}</Text></View>}
       />
-      {user ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, paddingBottom: insets.bottom + spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface }}><TextField value={commentText} onChangeText={setCommentText} placeholder={t('discussion.writeComment')} containerStyle={{ flex: 1 }} /><IconButton name={posting ? 'hourglass-outline' : 'send'} accessibilityLabel={t('common.submit')} onPress={handlePostComment} disabled={posting || !commentText.trim()} /></View> : null}
-      <BottomSheet visible={showReportSheet} onClose={() => { setShowReportSheet(false); setReportTarget(null); }}><Text variant="h3" weight="semiBold" style={{ marginBottom: spacing.md }}>{t('discussion.reportReasonTitle')}</Text><Button label={t('common.confirm')} onPress={handleReport} /></BottomSheet>
-      <ConfirmDialog visible={showDeletePostConfirm} title={t('discussion.deleteConfirm')} destructive onConfirm={handleDeletePost} onCancel={() => setShowDeletePostConfirm(false)} />
-      <ConfirmDialog visible={!!deleteCommentId} title={t('discussion.deleteCommentConfirm')} destructive onConfirm={handleDeleteComment} onCancel={() => setDeleteCommentId(null)} />
-      <ConfirmDialog visible={!!deleteReplyTarget} title={t('discussion.deleteCommentConfirm')} destructive onConfirm={handleDeleteReply} onCancel={() => setDeleteReplyTarget(null)} />
+      {commentComposer}
+      <DiscussionActionMenu visible={Boolean(menuTarget)} top={menuAnchor.top} right={menuAnchor.right} actions={menuActions} onClose={() => setMenuTarget(null)} />
+      <ConfirmDialog
+        visible={Boolean(confirmAction)}
+        title={confirmTitle}
+        message={confirmMessage}
+        destructive={confirmAction?.kind === 'deletePost' || confirmAction?.kind === 'deleteComment' || confirmAction?.kind === 'deleteReply' || confirmAction?.kind === 'report'}
+        confirmLabel={confirmAction?.kind === 'editPost' ? t('common.edit') : confirmAction?.kind === 'report' ? t('discussion.submitReport') : t('common.delete')}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <DiscussionReportModal
+        visible={showReportModal}
+        target={reportTarget}
+        submitting={reportSubmitting}
+        onClose={() => { setShowReportModal(false); setReportTarget(null); }}
+        onSubmit={handleReport}
+      />
     </KeyboardAvoidingView>
   );
 }
