@@ -258,18 +258,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /app_subscription_settings/{docId} {
-      // This document contains the existing public/manual configuration used by
-      // both clients. A non-empty gateway secret makes the whole document
-      // unreadable from the client, preventing accidental secret exposure.
-      // Empty secret fields (as in the current config) are safe to read.
-      allow read: if isSignedIn() &&
-        (!resource.data.keys().hasAny(['esewa']) ||
-         !resource.data.esewa.keys().hasAny(['secretKey']) ||
-         resource.data.esewa.secretKey == '') &&
-        (!resource.data.keys().hasAny(['khalti']) ||
-         !resource.data.khalti.keys().hasAny(['secretKey']) ||
-         resource.data.khalti.secretKey == '');
-      allow write: if isAdmin();
+      // Public settings contain only display-safe fields: gateway enabled flags,
+      // optional public merchant identifiers, and manual QR payment details.
+      // Secret keys must live in `private` or an external secret manager.
+      allow read: if isSignedIn() && docId == 'public';
+      allow read: if isAdmin() && docId == 'private';
+      // Admins can inspect the legacy document while migrating it, but normal
+      // users can never read `config` because it may contain secretKey fields.
+      allow read: if isAdmin() && docId == 'config';
+      allow create, update: if isAdmin() && (docId == 'public' || docId == 'private');
+      allow delete: if isAdmin() && (docId == 'public' || docId == 'private');
     }
     match /app_coupon_codes/{code} {
       allow read: if isSignedIn();
