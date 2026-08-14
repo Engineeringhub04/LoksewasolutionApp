@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchReportHistory, updateReportHistoryReview, type ReportStatus } from '@/src/core/firebase/services/reportHistory';
+import { fetchReportHistory, updateReportHistoryReview, type ReportHistoryRecord, type ReportStatus } from '@/src/core/firebase/services/reportHistory';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { showToast } from '@/src/core/store/toastStore';
@@ -17,6 +17,19 @@ import { Card } from '@/src/components/cards/Card';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+
+function formatDate(value: ReportHistoryRecord['createdAt'] | string | null | undefined): string {
+  if (!value) return '—';
+  if (typeof value === 'string') return value ? new Date(value).toLocaleString() : '—';
+  return value.toDate().toLocaleString();
+}
+
+function targetLabel(record: ReportHistoryRecord, t: (key: string) => string): string {
+  if (record.targetType === 'question') return t('discussion.reportTargetQuestion');
+  if (record.targetType === 'post') return t('discussion.reportTargetPost');
+  if (record.targetType === 'reply') return t('discussion.reportTargetReply');
+  return t('discussion.reportTargetComment');
+}
 
 export default function AdminReportHistoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,7 +61,7 @@ export default function AdminReportHistoryDetailScreen() {
     setPendingStatus(null);
     setBusy(true);
     try {
-      await updateReportHistoryReview(record.id, pendingStatus, adminMessage.trim() || record.adminMessage);
+      await updateReportHistoryReview(record.id, pendingStatus, adminMessage.trim() || null);
       showToast(t('discussion.reportUpdated'), 'success');
       setAdminMessage('');
       await refetch();
@@ -69,8 +82,8 @@ export default function AdminReportHistoryDetailScreen() {
               <Text variant="caption" secondary>{sourceLabel} · {record.reason}</Text>
             </View>
 
-            <Card>
-              <Text variant="caption" secondary>{t('discussion.reporterDetails')}</Text>
+            <Card style={styles.sectionCard}>
+              <View style={styles.sectionHeading}><Ionicons name="person-circle-outline" size={19} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reporterDetails')}</Text></View>
               <View style={styles.profileRow}>
                 {profile?.photoURL || record.reporterPhoto ? <Image source={{ uri: profile?.photoURL || record.reporterPhoto || undefined }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="person" size={22} color={colors.primary} /></View>}
                 <View style={{ flex: 1, gap: 3 }}>
@@ -81,19 +94,23 @@ export default function AdminReportHistoryDetailScreen() {
               </View>
             </Card>
 
-            <Card>
-              <Text variant="caption" secondary>{t('discussion.reportedContent')}</Text>
-              <Text variant="h3" weight="bold" style={{ marginTop: spacing.xs }}>{record.targetTitle || sourceLabel}</Text>
-              <Text variant="caption" secondary style={{ marginTop: spacing.xs }}>{t('discussion.targetKind')}: {record.targetType} · ID: {record.targetId}</Text>
+            <Card style={styles.sectionCard}>
+              <View style={styles.sectionHeading}><Ionicons name="document-text-outline" size={19} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportedContent')}</Text></View>
+              <View style={[styles.targetTag, { backgroundColor: `${colors.primary}14` }]}>
+                <Ionicons name={record.targetType === 'question' ? 'help-circle-outline' : 'chatbubble-ellipses-outline'} size={15} color={colors.primary} />
+                <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{targetLabel(record, t)}</Text>
+              </View>
+              <Text variant="h3" weight="bold" style={{ marginTop: spacing.sm }}>{record.targetTitle || sourceLabel}</Text>
               {record.targetPreview ? <Text variant="body" secondary style={{ marginTop: spacing.sm }}>{record.targetPreview}</Text> : null}
               {record.targetAuthorName ? <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{t('discussion.reportedBy')} {record.targetAuthorName}</Text> : null}
+              <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{t('discussion.targetKind')}: {targetLabel(record, t)} · ID: {record.targetId}</Text>
             </Card>
 
-            <Card>
-              <Text variant="caption" secondary>{t('discussion.reportMessage')}</Text>
-              <Text variant="bodyLarge" weight="semiBold" style={{ marginTop: spacing.xs }}>{record.reason}</Text>
+            <Card style={styles.sectionCard}>
+              <View style={styles.sectionHeading}><Ionicons name="information-circle-outline" size={19} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportMessage')}</Text></View>
+              <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.sm }}>{record.reason}</Text>
               <Text variant="body" secondary style={{ marginTop: spacing.sm }}>{record.description || '—'}</Text>
-              <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{record.createdAt?.toDate().toLocaleString() ?? '—'}</Text>
+              <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{formatDate(record.createdAt)}</Text>
             </Card>
 
             <View style={[styles.actionPanel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: radius.lg, padding: spacing.md }]}>
@@ -106,18 +123,27 @@ export default function AdminReportHistoryDetailScreen() {
               </View>
             </View>
 
-            {record.adminMessage ? <Card><Text variant="caption" secondary>{t('discussion.previousAdminMessage')}</Text><Text variant="body" style={{ marginTop: spacing.xs }}>{record.adminMessage}</Text></Card> : null}
+            {record.adminResponses.length ? (
+              <View style={[styles.responsePanel, { backgroundColor: '#8A3F0A', borderRadius: radius.lg, padding: spacing.md }]}>
+                <View style={styles.sectionHeading}><Ionicons name="shield-checkmark" size={19} color="#FFD7B0" /><Text variant="bodyLarge" weight="bold" style={{ color: '#FFD7B0' }}>{t('discussion.adminResponseHistory')}</Text></View>
+                <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                  {record.adminResponses.map((response, index) => (
+                    <View key={response.id} style={[styles.responseItem, { backgroundColor: index === record.adminResponses.length - 1 ? '#A85212' : '#743308', borderRadius: radius.md, padding: spacing.sm }]}>
+                      <View style={styles.responseMeta}>
+                        <Text variant="caption" weight="bold" style={{ color: '#FFD7B0' }}>{response.status === 'resolved' ? t('discussion.reportResolved') : response.status === 'dismissed' ? t('discussion.reportDismissed') : t('discussion.reportReviewed')}</Text>
+                        <Text variant="caption" style={{ color: '#FFE9D6' }}>{formatDate(response.createdAt)}</Text>
+                      </View>
+                      <Text variant="body" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>{response.message}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
         )}
       </SubpageScrollScreen>
       <PageLoaderOverlay visible={loading || busy} label={t('common.loading')} />
-      <ConfirmDialog
-        visible={Boolean(pendingStatus)}
-        title={t('discussion.confirmReportUpdate')}
-        message={t('discussion.confirmReportUpdateMessage')}
-        onConfirm={handleReview}
-        onCancel={() => setPendingStatus(null)}
-      />
+      <ConfirmDialog visible={Boolean(pendingStatus)} title={t('discussion.confirmReportUpdate')} message={t('discussion.confirmReportUpdateMessage')} onConfirm={handleReview} onCancel={() => setPendingStatus(null)} />
     </>
   );
 }
@@ -125,9 +151,14 @@ export default function AdminReportHistoryDetailScreen() {
 const styles = StyleSheet.create({
   statusBanner: { gap: 6, borderWidth: 1 },
   statusTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionCard: { gap: 2 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 10 },
   avatar: { width: 52, height: 52, borderRadius: 26 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  targetTag: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginTop: 10 },
   actionPanel: { borderWidth: 1 },
+  responsePanel: { gap: 2 },
+  responseItem: { borderWidth: 1, borderColor: '#C56A2A' },
+  responseMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
 });
-
