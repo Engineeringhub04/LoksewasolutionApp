@@ -17,15 +17,15 @@
 //
 // Full docs shape:
 //
-// app_subscription_settings/public
-//     activeMode: 'manual'
-//     esewa: { enabled, merchantCode }
-//     khalti: { enabled, publicKey }
-//     manual: { qrImageUrl, bankDetails, instructions }
-//   app_subscription_settings/private (admin/backend only)
-//     esewa: { secretKey }
-//     khalti: { secretKey }
+// app_subscription_settings/config
+//   activeMode: 'manual'
+//   esewa: { enabled, merchantCode }
+//   khalti: { enabled, publicKey }
+//   manual: { qrImageUrl, bankDetails, instructions }
 //   updatedAt
+//
+// Provider secret keys are intentionally not part of the client-readable
+// config document. Production keys belong in a secure backend/secret manager.
 //
 // app_subscription_plans/{planId}
 //   id, name, billingCycle: 'monthly' | 'yearly' | 'free', price, currency,
@@ -146,8 +146,7 @@ export interface CouponCode {
 
 // ===================== Settings (eSewa / Khalti enable flags) =====================
 
-const PUBLIC_SETTINGS_DOC = `${Collections.subscriptionSettings}/public`;
-const LEGACY_SETTINGS_DOC = `${Collections.subscriptionSettings}/config`;
+const SETTINGS_DOC = `${Collections.subscriptionSettings}/config`;
 
 const DEFAULT_SETTINGS: SubscriptionSettings = {
   activeMode: 'manual',
@@ -196,32 +195,26 @@ function normalizeSettings(...documents: (Record<string, unknown> | null)[]): Su
   };
 }
 
-async function tryGetDocument(path: string): Promise<Record<string, unknown> | null> {
+export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
   try {
-    return await getDocument(path);
+    const doc = await getDocument(SETTINGS_DOC);
+    return doc ? normalizeSettings(doc) : DEFAULT_SETTINGS;
   } catch {
-    return null;
+    // Rules or a temporary network failure must not crash checkout. The UI can
+    // still show a safe empty state while the admin fixes the config document.
+    return DEFAULT_SETTINGS;
   }
 }
 
-export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
-  // New installations use the safe public document. The legacy fallback keeps
-  // existing projects working after secretKey is removed from config.
-  const publicDoc = await tryGetDocument(PUBLIC_SETTINGS_DOC);
-  const legacyDoc = await tryGetDocument(LEGACY_SETTINGS_DOC);
-  if (!publicDoc && !legacyDoc) return DEFAULT_SETTINGS;
-  return normalizeSettings(legacyDoc, publicDoc);
-}
-
-/** Admin-only: update public flags/details. Secret keys belong in private backend config. */
+/** Admin-only: update flags and manual details in the existing config document. */
 export async function updateSubscriptionSettings(patch: Partial<SubscriptionSettings>): Promise<void> {
-  await setDocument(PUBLIC_SETTINGS_DOC, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  await setDocument(SETTINGS_DOC, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 // ===================== Manual payment details =====================
-// QR URL, bank details, and instructions are read from the public settings doc.
+// QR URL, bank details, and instructions are read from config.manual.
 
-/** Admin-only helper; writes manual payment details to the public settings doc. */
+/** Admin-only helper; writes manual payment details to config.manual. */
 export async function updateBankDetails(patch: Partial<BankDetails>): Promise<void> {
   const settings = await fetchSubscriptionSettings();
   await updateSubscriptionSettings({

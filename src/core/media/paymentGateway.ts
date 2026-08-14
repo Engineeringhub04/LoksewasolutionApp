@@ -16,8 +16,9 @@ export const ESEWA_TEST = {
 };
 
 // Khalti does not publish one shared secret key. A merchant must create a
-// sandbox account at https://test-admin.khalti.com and store its secret key
-// in app_subscription_settings/config.khalti.secretKey.
+// sandbox account at https://test-admin.khalti.com. Its secret key must be
+// used only by a secure backend and must never be stored in client-readable
+// Firestore config or bundled in the mobile app.
 export const KHALTI_TEST = {
   initiateUrl: 'https://dev.khalti.com/api/v2/epayment/initiate/',
 };

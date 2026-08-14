@@ -258,16 +258,23 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /app_subscription_settings/{docId} {
-      // Public settings contain only display-safe fields: gateway enabled flags,
-      // optional public merchant identifiers, and manual QR payment details.
-      // Secret keys must live in `private` or an external secret manager.
-      allow read: if isSignedIn() && docId == 'public';
-      allow read: if isAdmin() && docId == 'private';
-      // Admins can inspect the legacy document while migrating it, but normal
-      // users can never read `config` because it may contain secretKey fields.
-      allow read: if isAdmin() && docId == 'config';
-      allow create, update: if isAdmin() && (docId == 'public' || docId == 'private');
-      allow delete: if isAdmin() && (docId == 'public' || docId == 'private');
+      // Keep the existing `config` document. It is readable only after secretKey
+      // fields have been removed. Firestore cannot return only selected fields,
+      // so a document containing a secret must never be client-readable.
+      allow read: if isSignedIn() && docId == 'config' &&
+        (!resource.data.keys().hasAny(['esewa']) ||
+         !resource.data.esewa.keys().hasAny(['secretKey'])) &&
+        (!resource.data.keys().hasAny(['khalti']) ||
+         !resource.data.khalti.keys().hasAny(['secretKey']));
+      // Prevent future accidental reintroduction of provider secrets into the
+      // client-readable config document. Store production secrets only in a
+      // secure backend/secret manager.
+      allow create, update: if isAdmin() && docId == 'config' &&
+        (!request.resource.data.keys().hasAny(['esewa']) ||
+         !request.resource.data.esewa.keys().hasAny(['secretKey'])) &&
+        (!request.resource.data.keys().hasAny(['khalti']) ||
+         !request.resource.data.khalti.keys().hasAny(['secretKey']));
+      allow delete: if isAdmin() && docId == 'config';
     }
     match /app_coupon_codes/{code} {
       allow read: if isSignedIn();

@@ -36,15 +36,15 @@ The app already has the following working pieces:
 
 The important bug was that checkout read `app_subscription_settings/config`, while that document could contain secret fields. The Firestore rule therefore rejected the read for normal users, and the service silently returned empty defaults. As a result, `manual.bankDetails`, `manual.qrImageUrl`, and `manual.instructions` were not rendered.
 
-The new implementation reads the safe `app_subscription_settings/public` document first and normalizes only public fields. It retains a best-effort legacy fallback for old projects after the legacy document has been cleaned, but ordinary users are never allowed to read the secret-bearing `config` document.
+The implementation reads the already-existing `app_subscription_settings/config` document and normalizes only the client-safe fields needed by checkout. Because Firestore reads return the complete document rather than selected fields, `secretKey` fields must be removed from `config` before normal users can read it. No new `public` document is required for this project.
 
 ## 4. Data model
 
-### 4.1 Public settings document
+### 4.1 Existing settings document
 
-Path: `app_subscription_settings/public`
+Path: `app_subscription_settings/config`
 
-This document is readable by signed-in users and writable only by admins.
+This is the existing document already used by the project. It remains the single source of truth for the checkout settings. Signed-in users may read it only after provider `secretKey` fields have been removed; only admins may create, update, or delete it.
 
 ```json
 {
@@ -68,25 +68,11 @@ This document is readable by signed-in users and writable only by admins.
 
 `bankDetails` and `instructions` are intentionally stored as newline-separated text because the client can render each line as a separate visual row or timeline step. If an admin stores numbered lines such as `1.`, `2.`, and `3.`, the checkout removes the numbering before displaying its own timeline numbers.
 
-### 4.2 Private settings document
+### 4.2 Secret storage boundary
 
-Path: `app_subscription_settings/private`
+The current Firebase Spark application must not store provider secrets in the client-readable `config` document. There is no `private` Firestore document in the current checkout architecture. When a secure gateway backend is later implemented, production secrets must be held in that backend's secret manager or protected environment, never in a document returned to the mobile client.
 
-This document is reserved for admin inspection and future server-side use. It is not read by the mobile checkout.
-
-```json
-{
-  "esewa": {
-    "secretKey": "server-only secret"
-  },
-  "khalti": {
-    "secretKey": "server-only secret"
-  },
-  "updatedAt": "server timestamp"
-}
-```
-
-At present, because the project uses Firebase Spark and has no secure server runtime, this document must not be used as a substitute for a backend. A Firestore document that is readable by an administrator is not automatically a safe payment-secret vault for a mobile client.
+A Firestore document that is readable by an administrator is not automatically a safe payment-secret vault for a mobile client. The mobile app currently needs only the boolean flags and public identifiers; it never needs eSewa or Khalti secret keys.
 
 ### 4.3 Subscription request document
 
@@ -136,7 +122,7 @@ This is a feature-availability toggle, not proof that a provider payment has bee
 
 ### 6.1 Data loading
 
-The checkout must load plans and settings together. If `app_subscription_settings/public` is unavailable, the app must preserve the manual flow without crashing and show a safe empty-state rather than fabricated bank data. The REST transformer must recursively deserialize Firestore `mapValue` fields so `manual.qrImageUrl`, `manual.bankDetails`, and `manual.instructions` remain normal JavaScript fields.
+The checkout must load plans and settings together. If `app_subscription_settings/config` is unavailable, the app must preserve the manual flow without crashing and show a safe empty-state rather than fabricated bank data. The REST transformer must recursively deserialize Firestore `mapValue` fields so `manual.qrImageUrl`, `manual.bankDetails`, and `manual.instructions` remain normal JavaScript fields.
 
 ### 6.2 Bank details
 
@@ -195,9 +181,9 @@ Firebase Spark cannot deploy Cloud Functions. When a secure gateway is approved,
 
 | Area | Requirement |
 |---|---|
-| Public Firestore settings | Only enabled flags, public identifiers, QR URL, bank details, and instructions |
+| Client-readable Firestore settings | The existing `config` document contains only enabled flags, public identifiers, QR URL, bank details, and instructions |
 | Secret storage | Production keys only in a server-side secret manager or protected backend environment |
-| Firestore rules | Signed-in users read only `app_subscription_settings/public`; admins may manage public/private documents; ordinary users cannot read legacy `config` |
+| Firestore rules | Signed-in users read the existing `app_subscription_settings/config` only when it contains no provider secret fields; admins manage the config document |
 | Payment amount | Backend calculates amount from a trusted plan record |
 | Verification | Backend performs provider lookup/status verification |
 | Idempotency | Provider transaction/order IDs cannot be accepted twice |
@@ -208,7 +194,7 @@ Firebase Spark cannot deploy Cloud Functions. When a secure gateway is approved,
 
 ## 9. Migration and Firebase Console setup
 
-Before testing the updated app, an admin should create or update the document `app_subscription_settings/public` in Firestore. Copy only the public/manual fields from the existing `config` document. Do not copy `esewa.secretKey` or `khalti.secretKey` into `public`.
+Before testing the updated app, use the already-existing document `app_subscription_settings/config` in Firestore. Do not create a new `public` document. First remove the nested `esewa.secretKey` and `khalti.secretKey` fields from `config`; Firestore cannot hide selected fields during a normal document read, so leaving them there would either block the read under the hardened rules or expose secrets if the rule were weakened.
 
 Recommended initial free-plan configuration:
 
@@ -225,7 +211,7 @@ Recommended initial free-plan configuration:
 }
 ```
 
-After confirming the app reads `public`, remove secrets from any client-readable legacy document. Keep the old `config` document only for controlled admin migration, or delete it after all admin tools have moved to the public/private structure. The app's safe normalizer ignores all secret fields even if a legacy response contains them.
+After removing the secrets, keep the existing `config` document and update only its safe fields. Set `esewa.enabled` and `khalti.enabled` to `false` while the secure provider backends are unavailable; manual QR values remain in the same `manual` map. The app's normalizer also ignores any unexpected secret-shaped fields if an admin response contains them, but the rules still require that secrets be removed before a normal-user read.
 
 ## 10. Testing and acceptance criteria
 
@@ -233,7 +219,7 @@ After confirming the app reads `public`, remove secrets from any client-readable
 
 1. Sign in as a normal user.
 2. Open a paid subscription plan and choose QR Method.
-3. Confirm that bank details, QR image, and instructions match `app_subscription_settings/public`.
+3. Confirm that bank details, QR image, and instructions match `app_subscription_settings/config`.
 4. Confirm the QR skeleton appears before the image finishes loading.
 5. Tap the QR image and verify fullscreen preview, zoom in, zoom out, and close.
 6. Enter no transaction ID and confirm submission is blocked with a required-field message.
@@ -251,9 +237,9 @@ After confirming the app reads `public`, remove secrets from any client-readable
 
 ### Security acceptance test
 
-1. As a normal user, attempt to read `app_subscription_settings/private` and legacy `config`; both must be denied.
-2. As a normal user, read `app_subscription_settings/public`; the public document must load.
-3. Inspect the public document and confirm no `secretKey` fields exist.
+1. With `secretKey` fields still present, confirm a normal-user read of the existing `app_subscription_settings/config` is denied by the hardened rules.
+2. Remove the nested `esewa.secretKey` and `khalti.secretKey` fields from that existing `config` document, then confirm a signed-in normal user can read it.
+3. Confirm the same `config` document still contains the `manual` map and no `secretKey` fields.
 4. Search the mobile source and release configuration for production secret keys before enabling any real gateway.
 5. Confirm a client cannot directly set `status: active`, `isPremium`, `reviewedBy`, or provider verification fields.
 

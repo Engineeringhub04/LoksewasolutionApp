@@ -58,10 +58,10 @@ export const Collections = {
   examAnswers: 'app_exam_answers',
 
   // ===== Subscription =====
-  // Settings documents use ids 'public' and 'private'. Public holds enabled
-  // flags, manual QR/bank details, and instructions; private is reserved for
-  // admin/backend-only provider secrets. The legacy 'config' document is kept
-  // only for migration and must not be client-readable.
+  // Existing single settings document (id: 'config') holds enabled flags,
+  // manual QR/bank details, and instructions. Provider secret keys must be
+  // removed from this client-readable document and stored only in a secure
+  // backend/secret manager when gateway integration is implemented.
   subscriptionSettings: 'app_subscription_settings',
   // Plan catalog — Free / Monthly / Yearly cards shown on the Subscription page.
   subscriptionPlans: 'app_subscription_plans',
