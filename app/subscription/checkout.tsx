@@ -1,8 +1,8 @@
 // Subscription → Checkout. Reached from a plan card's "Subscribe Now".
 //
 // Three payment methods are always shown: eSewa, Khalti, QR (Manual).
-//  - eSewa/Khalti availability is independently controlled by the public
-//    app_subscription_settings/{public} enabled flags; false shows Coming Soon.
+//  - eSewa/Khalti availability is independently controlled by the existing
+//    app_subscription_settings/config enabled flags; false shows Coming Soon.
 //  - QR (Manual) never has an on/off switch — it is the zero-budget fallback.
 // Selecting eSewa/Khalti shows only a gateway action. Manual receipt fields are
 // rendered for QR only. Provider secrets are never fetched by this screen.
@@ -51,13 +51,18 @@ export default function CheckoutScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const authInitializing = useAuthStore((s) => s.initializing);
   const { profile } = useProfileStore();
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
     const [plans, settings] = await Promise.all([fetchSubscriptionPlans(), fetchSubscriptionSettings()]);
     const plan = plans.find((p) => p.id === planId) ?? null;
     return { plan, settings, bank: settings.manual };
-  }, [planId]);
+  }, [planId, user?.uid, authInitializing], {
+    // Firestore config reads are authenticated. Waiting for session hydration is
+    // essential because the hook otherwise caches an empty fallback forever.
+    enabled: !authInitializing && !!user?.uid,
+  });
 
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [transactionRef, setTransactionRef] = useState('');

@@ -10,7 +10,7 @@
 // "auto vs manual" switch anymore — each method decides for itself.
 //
 // Real eSewa/Khalti merchant credentials require provider onboarding and a
-// secure backend. The public settings document therefore contains only the
+// secure backend. The existing config document therefore contains only the
 // independent enabled flags and public identifiers. Keep the flags false until
 // the corresponding provider backend and verification flow are ready. The
 // manual QR method remains the fully operational zero-budget fallback.
@@ -199,9 +199,13 @@ export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings>
   try {
     const doc = await getDocument(SETTINGS_DOC);
     return doc ? normalizeSettings(doc) : DEFAULT_SETTINGS;
-  } catch {
-    // Rules or a temporary network failure must not crash checkout. The UI can
-    // still show a safe empty state while the admin fixes the config document.
+  } catch (error) {
+    // Keep the screen resilient for normal users, but do not hide the root cause
+    // during development. In particular, a config containing secretKey fields
+    // is intentionally denied by Firestore rules until it is cleaned.
+    if (__DEV__) {
+      console.warn('[SubscriptionSettings] Failed to read app_subscription_settings/config', error);
+    }
     return DEFAULT_SETTINGS;
   }
 }
