@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchMyReportHistory, type ReportHistoryRecord } from '@/src/core/firebase/services/reportHistory';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
@@ -20,6 +21,7 @@ export default function ReportHistoryScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const uid = useAuthStore((state) => state.user?.uid);
+  const isAdmin = useProfileStore((state) => state.profile?.isAdmin === true);
   const [track, setTrack] = useState<Track>('all');
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(
     () => uid ? fetchMyReportHistory(uid) : Promise.resolve([]),
@@ -39,6 +41,13 @@ export default function ReportHistoryScreen() {
             <Ionicons name="flag-outline" size={24} color={colors.primary} />
             <Text variant="bodySmall" secondary style={{ flex: 1 }}>{t('discussion.reportHistorySubtitle')}</Text>
           </View>
+          {isAdmin ? (
+            <Pressable onPress={() => router.push('/admin/report-history')} style={[styles.controlButton, { backgroundColor: colors.primary, borderRadius: radius.md, padding: spacing.md }]}>
+              <Ionicons name="shield-checkmark-outline" size={19} color={colors.onPrimary} />
+              <Text variant="bodySmall" weight="bold" style={{ color: colors.onPrimary, flex: 1 }}>{t('discussion.reportDetailsControl')}</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.onPrimary} />
+            </Pressable>
+          ) : null}
           <View style={[styles.track, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.md, padding: 4 }]}>
             {TRACKS.map((item) => {
               const active = track === item;
@@ -83,4 +92,5 @@ const styles = StyleSheet.create({
   icon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   status: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  controlButton: { flexDirection: 'row', alignItems: 'center', gap: 9 },
 });

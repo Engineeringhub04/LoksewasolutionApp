@@ -8,6 +8,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Avatar } from '@/src/components/misc/Avatar';
 import { Card } from '@/src/components/cards/Card';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { ImageViewer } from '@/src/components/media/ImageViewer';
 
 export interface DiscussionPostCardProps {
   authorName: string;
@@ -59,6 +60,7 @@ export function DiscussionPostCard({
   const { t } = useTranslation();
   const scale = useSharedValue(1);
   const [pendingLink, setPendingLink] = useState<string | null>(null);
+  const [showImageViewer, setShowImageViewer] = useState(false);
   const menuRef = useRef<View>(null);
 
   useEffect(() => {
@@ -142,10 +144,14 @@ export function DiscussionPostCard({
         </Text>
 
         {imageUrl ? (
-          <View style={[styles.mediaFrame, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.md }]}>
+          <Pressable
+            onPress={() => setShowImageViewer(true)}
+            accessibilityLabel={t('discussion.openImage')}
+            style={({ pressed }) => [styles.mediaFrame, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.md }, pressed && styles.pressed]}
+          >
             <Image source={{ uri: imageUrl }} style={styles.media} resizeMode="cover" />
-            <View style={styles.mediaLabel}><Ionicons name="image-outline" size={13} color="#FFF" /><Text variant="caption" style={{ color: '#FFF' }}>Media</Text></View>
-          </View>
+            <View style={styles.mediaLabel}><Ionicons name="scan-outline" size={13} color="#FFF" /><Text variant="caption" style={{ color: '#FFF' }}>{t('discussion.tapToZoom')}</Text></View>
+          </Pressable>
         ) : null}
         {linkUrl ? (
           <Pressable
@@ -177,6 +183,7 @@ export function DiscussionPostCard({
         onConfirm={openLink}
         onCancel={() => setPendingLink(null)}
       />
+      {imageUrl ? <ImageViewer visible={showImageViewer} uri={imageUrl} onClose={() => setShowImageViewer(false)} /> : null}
     </>
   );
 }
