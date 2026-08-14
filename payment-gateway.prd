@@ -1,0 +1,257 @@
+# Payment Gateway Product Requirements Document
+
+**Product:** Loksewa Solution subscription payments  
+**Document:** `payment-gateway.prd`  
+**Status:** Manual QR payment active; eSewa/Khalti gateway work planned  
+**Owner:** Loksewa Solution engineering team  
+**Last updated:** 2026-08-14
+
+## 1. Purpose and decision
+
+Loksewa Solution needs a reliable subscription checkout that works on the Firebase Spark plan and does not expose payment secrets inside the mobile application or client-readable Firestore documents. The current product decision is to keep **manual QR/bank transfer as the only fully operational payment method**. eSewa and Khalti must be controlled by independent Firestore boolean flags, but they must remain visibly **Coming Soon / Under Construction** until a secure provider-backed backend and valid merchant credentials are available.
+
+This decision prioritizes payment correctness and user safety over a partially working gateway. A user must never be told that a payment is verified merely because a client-side redirect or form opened.
+
+## 2. Product goals
+
+| Goal | Requirement | Success condition |
+|---|---|---|
+| Manual payment reliability | Show bank details, QR image, and admin instructions from Firestore | A signed-in user sees the configured values without a `DataNotFound` fallback |
+| Safe gateway toggles | eSewa and Khalti are independently controlled by `enabled: true/false` | `false` displays Coming Soon; `true` enables the method card according to its current implementation state |
+| Secure secrets | Never expose production secret keys to the mobile client | No production secret appears in public Firestore documents, app bundle, or client logs |
+| Reviewable payment requests | Require transaction reference and receipt screenshot for manual QR submissions | Invalid manual submissions cannot be submitted; admin can review the stored request |
+| Clear user experience | Provide premium bank card, timeline instructions, QR loading feedback, upload progress, and fullscreen image preview | User receives visible feedback for loading, upload, preview, and validation states |
+| Zero-budget compatibility | Continue working without Cloud Functions or paid Firebase services | Manual QR flow works on Firebase Spark with existing free-tier upload setup |
+
+## 3. Current state
+
+The app already has the following working pieces:
+
+1. Subscription plans are loaded from `app_subscription_plans`.
+2. Subscription requests are stored in `app_subscriptions` and reviewed by admins.
+3. Manual QR submission supports transaction reference, screenshot URL, optional customer message, and admin review.
+4. Screenshot files are uploaded through the existing unsigned Cloudinary upload flow, and only the resulting HTTPS URL is saved to Firestore.
+5. eSewa and Khalti method cards already exist in checkout and are controlled independently by database flags.
+6. Gateway methods do not show the manual transaction form; the manual form is QR-only.
+
+The important bug was that checkout read `app_subscription_settings/config`, while that document could contain secret fields. The Firestore rule therefore rejected the read for normal users, and the service silently returned empty defaults. As a result, `manual.bankDetails`, `manual.qrImageUrl`, and `manual.instructions` were not rendered.
+
+The implementation reads the already-existing `app_subscription_settings/config` document and normalizes only the client-safe fields needed by checkout. Because Firestore reads return the complete document rather than selected fields, `secretKey` fields must be removed from `config` before normal users can read it. No new `public` document is required for this project.
+
+## 4. Data model
+
+### 4.1 Existing settings document
+
+Path: `app_subscription_settings/config`
+
+This is the existing document already used by the project. It remains the single source of truth for the checkout settings. Signed-in users may read it only after provider `secretKey` fields have been removed; only admins may create, update, or delete it.
+
+```json
+{
+  "activeMode": "manual",
+  "esewa": {
+    "enabled": false,
+    "merchantCode": ""
+  },
+  "khalti": {
+    "enabled": false,
+    "publicKey": ""
+  },
+  "manual": {
+    "qrImageUrl": "https://example.com/public-qr-image.png",
+    "bankDetails": "Bank: Example Bank\nAccount Name: Loksewa Solution\nAccount Number: 0000000000\nBranch: Kathmandu",
+    "instructions": "Scan the QR or transfer the exact plan amount.\nCopy the transaction ID shown after payment.\nUpload the payment screenshot.\nSubmit for admin verification."
+  },
+  "updatedAt": "server timestamp"
+}
+```
+
+`bankDetails` and `instructions` are intentionally stored as newline-separated text because the client can render each line as a separate visual row or timeline step. If an admin stores numbered lines such as `1.`, `2.`, and `3.`, the checkout removes the numbering before displaying its own timeline numbers.
+
+### 4.2 Secret storage boundary
+
+The current Firebase Spark application must not store provider secrets in the client-readable `config` document. There is no `private` Firestore document in the current checkout architecture. When a secure gateway backend is later implemented, production secrets must be held in that backend's secret manager or protected environment, never in a document returned to the mobile client.
+
+A Firestore document that is readable by an administrator is not automatically a safe payment-secret vault for a mobile client. The mobile app currently needs only the boolean flags and public identifiers; it never needs eSewa or Khalti secret keys.
+
+### 4.3 Subscription request document
+
+Path: `app_subscriptions/{requestId}`
+
+```json
+{
+  "uid": "firebase-user-id",
+  "userName": "User name",
+  "userEmail": "user@example.com",
+  "planId": "plan-monthly",
+  "planName": "Monthly",
+  "billingCycle": "monthly",
+  "amount": 499,
+  "currency": "NPR",
+  "method": "qr",
+  "status": "pending",
+  "transactionRef": "TXN123456789",
+  "screenshotUrl": "https://res.cloudinary.com/...",
+  "customerMessage": null,
+  "adminMessage": null,
+  "submittedAt": "ISO timestamp",
+  "reviewedAt": null,
+  "reviewedBy": null,
+  "rejectionReason": null,
+  "couponCode": null,
+  "createdAt": "server timestamp",
+  "updatedAt": "server timestamp"
+}
+```
+
+A manual request must contain a non-empty `transactionRef` and a screenshot URL. The app validates both before opening the confirmation dialog, and Firestore rules restrict user edits to the permitted owner fields.
+
+## 5. Toggle behavior
+
+The `esewa.enabled` and `khalti.enabled` flags are independent. Manual QR has no disable switch because it is the fallback payment method.
+
+| Database flag | Checkout card | User action |
+|---|---|---|
+| `enabled: false` | Dimmed card with Coming Soon badge | Tap shows a friendly availability toast; no gateway opens |
+| `enabled: true` | Active selectable card | eSewa may open its configured test/demo checkout; Khalti remains under construction until secure backend support is added |
+| Missing or invalid flag | Treated as `false` | Safe Coming Soon behavior |
+
+This is a feature-availability toggle, not proof that a provider payment has been verified. An admin must not set a flag to `true` in production until the corresponding provider account, callback, verification, and operational support are ready.
+
+## 6. Manual QR checkout requirements
+
+### 6.1 Data loading
+
+The checkout must load plans and settings together. If `app_subscription_settings/config` is unavailable, the app must preserve the manual flow without crashing and show a safe empty-state rather than fabricated bank data. The REST transformer must recursively deserialize Firestore `mapValue` fields so `manual.qrImageUrl`, `manual.bankDetails`, and `manual.instructions` remain normal JavaScript fields.
+
+### 6.2 Bank details
+
+Bank details must use a visually distinct card with an institution icon, a secure/configured indicator, line-separated account details, and a copy-all action. The UI must not hardcode a bank account number or placeholder account.
+
+### 6.3 Instructions
+
+The configured newline-separated instruction text must render as a numbered vertical timeline. Each step has a numbered dot, connecting rail, and readable text. The database remains the source of truth; the UI only controls presentation.
+
+### 6.4 QR image
+
+While the QR image is loading, a skeleton placeholder must remain visible. When loaded, the QR image can be tapped for fullscreen preview. The user can also use the download action where device permissions and platform support allow it.
+
+### 6.5 Receipt upload
+
+The screenshot picker must show the selected preview. During Cloudinary upload, the UI must show a determinate progress bar when progress events are available and a percentage label. The upload must finish before the request is written to Firestore, and the saved value must be an HTTPS hosted URL rather than a local device URI.
+
+### 6.6 Validation
+
+`Transaction ID / Reference *` is required. The submit action remains disabled until both transaction reference and screenshot are present. The submit handler repeats validation before opening the confirmation dialog so programmatic or stale UI states cannot bypass it.
+
+### 6.7 Fullscreen preview
+
+Tapping either the selected payment screenshot or QR image opens a dark fullscreen modal. The preview supports close, zoom out, zoom in, and a visible zoom percentage. The current implementation uses bounded scale controls from 100% to 400%; future work may add pinch gestures after cross-platform testing.
+
+## 7. Future secure eSewa/Khalti architecture
+
+The mobile app must not directly initiate production payments with a provider secret. The target architecture is:
+
+```text
+Mobile app
+  -> authenticated HTTPS backend endpoint
+      -> provider initiate API using server-side secret
+          -> provider hosted checkout
+              -> HTTPS return/callback
+                  -> backend verifies transaction with provider
+                      -> backend writes verified result
+                          -> Firestore subscription request/status
+```
+
+The backend must generate an idempotent order identifier, calculate the amount from the server-side plan record, call the provider, and return only a hosted checkout URL or safe session payload to the app. It must never trust an amount, plan price, success flag, or user premium status sent by the mobile client.
+
+### eSewa requirements
+
+The future eSewa integration must use the provider's current ePay documentation, signed request fields, HTTPS success/failure URLs, and server-side status verification. Official test credentials may be used for development, but test success must not be treated as production readiness. Production merchant code and secret must be held by the backend only.
+
+### Khalti requirements
+
+The future Khalti integration must use a merchant or sandbox account, initiate payment server-side, receive the provider's `pidx` and payment URL, redirect the user, and call the lookup endpoint server-side after return. A returned redirect alone is not payment verification. The backend must validate amount, order ID, and final status before updating a subscription.
+
+### Backend choices
+
+Firebase Spark cannot deploy Cloud Functions. When a secure gateway is approved, the team must either enable an appropriate paid backend plan or choose a separate serverless backend that supports HTTPS endpoints, encrypted secret storage, logs, rate limiting, and provider-compliant outbound requests. A free-tier backend may reduce cost, but it does not remove the need for merchant accounts, secrets, monitoring, or legal/provider onboarding.
+
+## 8. Security requirements
+
+| Area | Requirement |
+|---|---|
+| Client-readable Firestore settings | The existing `config` document contains only enabled flags, public identifiers, QR URL, bank details, and instructions |
+| Secret storage | Production keys only in a server-side secret manager or protected backend environment |
+| Firestore rules | Signed-in users read the existing `app_subscription_settings/config` only when it contains no provider secret fields; admins manage the config document |
+| Payment amount | Backend calculates amount from a trusted plan record |
+| Verification | Backend performs provider lookup/status verification |
+| Idempotency | Provider transaction/order IDs cannot be accepted twice |
+| Subscription activation | Only admin review or verified backend result can set active/premium state |
+| Client logs | No secret key, authorization header, or full provider response in logs |
+| Uploads | Accept only hosted HTTPS receipt URLs from the configured uploader |
+| User edits | Owner may edit only transaction reference, screenshot URL, customer message, and updated timestamp within the existing time window |
+
+## 9. Migration and Firebase Console setup
+
+Before testing the updated app, use the already-existing document `app_subscription_settings/config` in Firestore. Do not create a new `public` document. First remove the nested `esewa.secretKey` and `khalti.secretKey` fields from `config`; Firestore cannot hide selected fields during a normal document read, so leaving them there would either block the read under the hardened rules or expose secrets if the rule were weakened.
+
+Recommended initial free-plan configuration:
+
+```json
+{
+  "activeMode": "manual",
+  "esewa": { "enabled": false, "merchantCode": "" },
+  "khalti": { "enabled": false, "publicKey": "" },
+  "manual": {
+    "qrImageUrl": "YOUR_PUBLIC_QR_IMAGE_URL",
+    "bankDetails": "YOUR BANK NAME\nYOUR ACCOUNT NAME\nYOUR ACCOUNT NUMBER\nYOUR BRANCH",
+    "instructions": "Pay the exact amount.\nCopy the transaction ID.\nUpload the screenshot.\nSubmit for admin verification."
+  }
+}
+```
+
+After removing the secrets, keep the existing `config` document and update only its safe fields. Set `esewa.enabled` and `khalti.enabled` to `false` while the secure provider backends are unavailable; manual QR values remain in the same `manual` map. The app's normalizer also ignores any unexpected secret-shaped fields if an admin response contains them, but the rules still require that secrets be removed before a normal-user read.
+
+## 10. Testing and acceptance criteria
+
+### Manual QR acceptance test
+
+1. Sign in as a normal user.
+2. Open a paid subscription plan and choose QR Method.
+3. Confirm that bank details, QR image, and instructions match `app_subscription_settings/config`.
+4. Confirm the QR skeleton appears before the image finishes loading.
+5. Tap the QR image and verify fullscreen preview, zoom in, zoom out, and close.
+6. Enter no transaction ID and confirm submission is blocked with a required-field message.
+7. Choose a screenshot and confirm it can be previewed fullscreen.
+8. Submit with a valid transaction ID and screenshot; confirm upload progress is visible and the request is created as `pending`.
+9. Confirm the admin can review and approve/reject the request.
+
+### Toggle acceptance test
+
+1. Set `esewa.enabled` to `false`; verify the card is dimmed and tapping shows Coming Soon.
+2. Set `esewa.enabled` to `true`; verify the card becomes selectable and the gateway action is shown.
+3. Set `khalti.enabled` to `false`; verify the same disabled behavior independently.
+4. Set `khalti.enabled` to `true`; verify the card becomes selectable but the user receives the friendly under-construction message until a secure backend is available.
+5. Verify an admin account receives diagnostic gateway messages while a normal user does not see secret/configuration details.
+
+### Security acceptance test
+
+1. With `secretKey` fields still present, confirm a normal-user read of the existing `app_subscription_settings/config` is denied by the hardened rules.
+2. Remove the nested `esewa.secretKey` and `khalti.secretKey` fields from that existing `config` document, then confirm a signed-in normal user can read it.
+3. Confirm the same `config` document still contains the `manual` map and no `secretKey` fields.
+4. Search the mobile source and release configuration for production secret keys before enabling any real gateway.
+5. Confirm a client cannot directly set `status: active`, `isPremium`, `reviewedBy`, or provider verification fields.
+
+## 11. Out of scope for the current zero-budget release
+
+Production gateway settlement, automated subscription activation from provider callbacks, refunds, recurring billing, chargebacks, webhooks, provider reconciliation dashboards, and merchant reporting are not part of the current Spark/manual-QR release. These require provider onboarding and a secure backend.
+
+## 12. References
+
+[1]: https://firebase.google.com/pricing "Firebase pricing and Spark/Blaze plan information"
+[2]: https://developer.esewa.com.np/pages/Test-credentials "eSewa official test credentials"
+[3]: https://docs.khalti.com/getting-started/ "Khalti official getting started and merchant/payment flow"
+[4]: https://developer.esewa.com.np/ "eSewa official developer documentation"
+[5]: https://docs.khalti.com/khalti-epayment/ "Khalti official ePayment documentation"
+

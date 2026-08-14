@@ -58,10 +58,10 @@ export const Collections = {
   examAnswers: 'app_exam_answers',
 
   // ===== Subscription =====
-  // Single settings document (id: 'config') holding the gateway mode
-  // (auto/manual toggle), eSewa/Khalti/Fonepay merchant keys, QR/bank image
-  // URL, and manual-payment instructions text. One doc, not a collection,
-  // because there is only ever one active configuration.
+  // Existing single settings document (id: 'config') holds enabled flags,
+  // manual QR/bank details, and instructions. Provider secret keys must be
+  // removed from this client-readable document and stored only in a secure
+  // backend/secret manager when gateway integration is implemented.
   subscriptionSettings: 'app_subscription_settings',
   // Plan catalog — Free / Monthly / Yearly cards shown on the Subscription page.
   subscriptionPlans: 'app_subscription_plans',

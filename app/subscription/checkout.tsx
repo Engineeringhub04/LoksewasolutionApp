@@ -1,15 +1,12 @@
 // Subscription → Checkout. Reached from a plan card's "Subscribe Now".
 //
 // Three payment methods are always shown: eSewa, Khalti, QR (Manual).
-//  - eSewa/Khalti render as live, tappable cards ONLY when their `enabled`
-//    flag is true in app_subscription_settings/config; otherwise they're
-//    dimmed with a "Coming Soon" badge and tapping shows a toast.
-//  - QR (Manual) never has an on/off switch — it's always available.
-// Selecting eSewa/Khalti shows a single "Continue to Payment Gateway"
-// button that opens the provider's hosted checkout (wired to their official
-// sandbox/test credentials — see paymentGateway.ts). Selecting QR opens the
-// bank-transfer/QR form that was previously the only flow.
-import React, { useState } from 'react';
+//  - eSewa/Khalti availability is independently controlled by the public
+//    app_subscription_settings/{public} enabled flags; false shows Coming Soon.
+//  - QR (Manual) never has an on/off switch — it is the zero-budget fallback.
+// Selecting eSewa/Khalti shows only a gateway action. Manual receipt fields are
+// rendered for QR only. Provider secrets are never fetched by this screen.
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Image, Pressable, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -27,7 +24,7 @@ import {
   validateCoupon,
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
-import { createEsewaCheckoutHtml, openKhaltiCheckout } from '@/src/core/media/paymentGateway';
+import { createEsewaCheckoutHtml } from '@/src/core/media/paymentGateway';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -66,6 +63,9 @@ export default function CheckoutScreen() {
   const [transactionRef, setTransactionRef] = useState('');
   const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
   const [customerMessage, setCustomerMessage] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [couponApplied, setCouponApplied] = useState<{ code: string; discountedAmount: number; label: string } | null>(null);
@@ -77,12 +77,17 @@ export default function CheckoutScreen() {
   const [gatewayUrl, setGatewayUrl] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrLoaded, setQrLoaded] = useState(false);
+
   const [downloadingQr, setDownloadingQr] = useState(false);
 
   const plan = data?.plan ?? null;
   const settings = data?.settings ?? null;
   const bank = data?.bank ?? null;
   const finalAmount = couponApplied ? couponApplied.discountedAmount : (plan?.price ?? 0);
+
+  useEffect(() => {
+    setQrLoaded(false);
+  }, [bank?.qrImageUrl]);
 
   const esewaReady = !!settings?.esewa.enabled;
   const khaltiReady = !!settings?.khalti.enabled;
@@ -151,8 +156,9 @@ export default function CheckoutScreen() {
   const uploadScreenshot = async (): Promise<string | null> => {
     if (!screenshotUri) return null;
     setUploadingScreenshot(true);
+    setUploadProgress(0);
     try {
-      return await uploadImageToCloudinary(screenshotUri);
+      return await uploadImageToCloudinary(screenshotUri, setUploadProgress);
     } finally {
       setUploadingScreenshot(false);
     }
@@ -160,6 +166,14 @@ export default function CheckoutScreen() {
 
   const handleSubmitManual = async () => {
     if (!user?.uid || !plan || !method) return;
+    if (!transactionRef.trim()) {
+      showToast(t('subscription.transactionRefRequired'), 'error');
+      return;
+    }
+    if (!screenshotUri) {
+      showToast(t('subscription.screenshotRequired'), 'error');
+      return;
+    }
     setShowConfirm(false);
     setSubmitting(true);
     try {
@@ -204,26 +218,14 @@ export default function CheckoutScreen() {
           successUrl: redirectUrl,
           failureUrl: redirectUrl,
           merchantCode: settings?.esewa.merchantCode,
-          secretKey: settings?.esewa.secretKey,
         });
         setGatewayHtml(html);
         setGatewayUrl(null);
       } else if (method === 'khalti') {
-        if (!settings?.khalti.secretKey) {
-          showGatewayIssue('Khalti sandbox secret key is not configured in app_subscription_settings/config.');
-          return;
-        }
-        const result = await openKhaltiCheckout({
-          amount: finalAmount,
-          purchaseOrderName: plan.name,
-          returnUrl: redirectUrl,
-          websiteUrl: 'https://loksewasolution.app',
-          customerName: profile?.name ?? user?.displayName ?? null,
-          customerEmail: profile?.email ?? user?.email ?? null,
-          secretKey: settings.khalti.secretKey,
-        });
-        setGatewayUrl(result.paymentUrl);
-        setGatewayHtml(null);
+        // Khalti initiation requires a provider secret and a backend. The
+        // client intentionally does not read or ship that secret.
+        showGatewayIssue('Khalti payment is under construction until a secure merchant backend is configured.');
+        return;
       }
     } catch (error) {
       const message = error instanceof Error && error.message.startsWith('KHALTI_')
@@ -332,6 +334,7 @@ export default function CheckoutScreen() {
                   onDownload={handleDownloadQr}
                   downloading={downloadingQr}
                   onCopyField={handleCopyBankField}
+                  onPreviewQr={() => { setImageScale(1); setPreviewImageUri(bank?.qrImageUrl ?? null); }}
                 />
 
                 <ReceiptSubmitForm
@@ -339,7 +342,9 @@ export default function CheckoutScreen() {
                   onTransactionRefChange={setTransactionRef}
                   screenshotUri={screenshotUri}
                   onPickScreenshot={handlePickScreenshot}
+                  onOpenScreenshot={() => { setImageScale(1); setPreviewImageUri(screenshotUri); }}
                   uploadingScreenshot={uploadingScreenshot}
+                  uploadProgress={uploadProgress}
                   customerMessage={customerMessage}
                   onCustomerMessageChange={setCustomerMessage}
                   submitting={submitting}
@@ -352,6 +357,29 @@ export default function CheckoutScreen() {
         )}
       </SubpageScrollScreen>
       <PageLoaderOverlay visible={loading} label={t('subscription.loading')} />
+
+      <Modal visible={!!previewImageUri} transparent animationType="fade" onRequestClose={() => setPreviewImageUri(null)}>
+        <View style={styles.imageModal}>
+          <View style={styles.imageModalHeader}>
+            <Text variant="bodyLarge" weight="bold" style={{ color: '#FFF' }}>{t('subscription.uploadScreenshot')}</Text>
+            <Pressable onPress={() => setPreviewImageUri(null)} hitSlop={12}>
+              <Ionicons name="close" size={28} color="#FFF" />
+            </Pressable>
+          </View>
+          <View style={styles.imageStage}>
+            <Image source={{ uri: previewImageUri ?? undefined }} style={[styles.fullscreenImage, { transform: [{ scale: imageScale }] }]} resizeMode="contain" />
+          </View>
+          <View style={styles.zoomControls}>
+            <Pressable style={styles.zoomButton} onPress={() => setImageScale((value) => Math.max(1, value - 0.25))}>
+              <Ionicons name="remove" size={24} color="#FFF" />
+            </Pressable>
+            <Text variant="bodySmall" weight="bold" style={{ color: '#FFF' }}>{Math.round(imageScale * 100)}%</Text>
+            <Pressable style={styles.zoomButton} onPress={() => setImageScale((value) => Math.min(4, value + 0.25))}>
+              <Ionicons name="add" size={24} color="#FFF" />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={!!gatewayHtml || !!gatewayUrl} animationType="slide" onRequestClose={closeGateway}>
         <View style={styles.gatewayModal}>
@@ -498,6 +526,7 @@ function QrSection({
   onDownload,
   downloading,
   onCopyField,
+  onPreviewQr,
 }: {
   bank: import('@/src/core/firebase/services/subscription').BankDetails | null;
   qrLoaded: boolean;
@@ -505,6 +534,7 @@ function QrSection({
   onDownload: () => void;
   downloading: boolean;
   onCopyField: (value: string) => void;
+  onPreviewQr: () => void;
 }) {
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
@@ -515,7 +545,7 @@ function QrSection({
         <View style={[styles.qrBox, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }] }>
           <Text variant="bodyLarge" weight="bold">{t('subscription.scanQrTitle')}</Text>
           <Text variant="bodySmall" secondary style={{ marginTop: 4, marginBottom: spacing.sm }}>{t('subscription.scanQrHint')}</Text>
-          <View style={styles.qrImageWrap}>
+          <Pressable onPress={onPreviewQr} style={styles.qrImageWrap}>
             {!qrLoaded ? <Skeleton width={220} height={220} radius={16} style={styles.qrSkeletonOverlay} /> : null}
             <Image
               source={{ uri: bank.qrImageUrl }}
@@ -523,7 +553,7 @@ function QrSection({
               resizeMode="contain"
               onLoadEnd={onQrLoad}
             />
-          </View>
+          </Pressable>
           <Pressable onPress={onDownload} disabled={downloading} style={[styles.downloadRow, { borderColor: colors.primary }] }>
             <Ionicons name={downloading ? 'cloud-download' : 'download-outline'} size={16} color={colors.primary} />
             <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>
@@ -534,25 +564,60 @@ function QrSection({
       ) : null}
 
       {bank?.bankDetails ? (
-        <View style={[styles.bankBox, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md }] }>
-          <Text variant="bodySmall" weight="bold" secondary style={{ marginBottom: spacing.xs }}>{t('subscription.bankDetails')}</Text>
-          <Text variant="bodySmall" style={{ lineHeight: 22 }}>{bank.bankDetails}</Text>
-          <Pressable onPress={() => onCopyField(bank.bankDetails)} hitSlop={8} style={[styles.copyDetailsRow, { borderColor: colors.primary }] }>
+        <View style={[styles.bankBox, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
+          <View style={styles.bankHeader}>
+            <View style={[styles.bankIconRing, { backgroundColor: `${colors.primary}18` }]}>
+              <Ionicons name="business-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyLarge" weight="bold">{t('subscription.bankDetails')}</Text>
+              <Text variant="caption" secondary>{t('subscription.bankDetailsHint')}</Text>
+            </View>
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
+          </View>
+          <View style={[styles.bankDetailsContent, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, marginTop: spacing.md }]}>
+            {bank.bankDetails.split(/\r?\n/).map((line, index) => (
+              <View key={`${line}-${index}`} style={styles.bankLine}>
+                <View style={[styles.bankBullet, { backgroundColor: colors.primary }]} />
+                <Text variant="bodySmall" style={{ flex: 1, lineHeight: 21 }}>{line}</Text>
+              </View>
+            ))}
+          </View>
+          <Pressable onPress={() => onCopyField(bank.bankDetails)} hitSlop={8} style={[styles.copyDetailsRow, { borderColor: colors.primary }]}>
             <Ionicons name="copy-outline" size={16} color={colors.primary} />
-            <Text variant="caption" weight="semiBold" style={{ color: colors.primary }}>Copy bank details</Text>
+            <Text variant="caption" weight="semiBold" style={{ color: colors.primary }}>{t('subscription.copyBankDetails')}</Text>
           </Pressable>
         </View>
       ) : null}
 
       {bank?.instructions ? (
-        <View style={[styles.instructionsBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: spacing.lg }] }>
+        <View style={[styles.instructionsBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: spacing.lg }]}>
           <View style={styles.instructionsHeader}>
-            <View style={[styles.instructionsIconRing, { backgroundColor: `${colors.primary}20` }] }>
-              <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+            <View style={[styles.instructionsIconRing, { backgroundColor: `${colors.primary}20` }]}>
+              <Ionicons name="list-outline" size={18} color={colors.primary} />
             </View>
-            <Text variant="bodyLarge" weight="bold">{t('subscription.instructions')}</Text>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyLarge" weight="bold">{t('subscription.instructions')}</Text>
+              <Text variant="caption" secondary>{t('subscription.followSteps')}</Text>
+            </View>
           </View>
-          <Text variant="bodySmall" secondary style={{ lineHeight: 22, marginTop: spacing.sm }}>{bank.instructions}</Text>
+          <View style={{ marginTop: spacing.md }}>
+            {bank.instructions.split(/\r?\n/).map((instruction, index, items) => {
+              const step = instruction.trim().replace(/^\d+[.)-]\s*/, '');
+              if (!step) return null;
+              return (
+                <View key={`${step}-${index}`} style={styles.timelineRow}>
+                  <View style={styles.timelineRail}>
+                    <View style={[styles.timelineDot, { backgroundColor: colors.primary }]}>
+                      <Text variant="caption" weight="bold" style={{ color: '#FFF' }}>{index + 1}</Text>
+                    </View>
+                    {index < items.length - 1 ? <View style={[styles.timelineLine, { backgroundColor: `${colors.primary}35` }]} /> : null}
+                  </View>
+                  <Text variant="bodySmall" style={{ flex: 1, lineHeight: 21, paddingBottom: spacing.md }}>{step}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       ) : null}
     </>
@@ -564,7 +629,9 @@ function ReceiptSubmitForm({
   onTransactionRefChange,
   screenshotUri,
   onPickScreenshot,
+  onOpenScreenshot,
   uploadingScreenshot,
+  uploadProgress,
   customerMessage,
   onCustomerMessageChange,
   submitting,
@@ -575,7 +642,9 @@ function ReceiptSubmitForm({
   onTransactionRefChange: (v: string) => void;
   screenshotUri: string | null;
   onPickScreenshot: () => void;
+  onOpenScreenshot: () => void;
   uploadingScreenshot: boolean;
+  uploadProgress: number;
   customerMessage: string;
   onCustomerMessageChange: (v: string) => void;
   submitting: boolean;
@@ -588,7 +657,7 @@ function ReceiptSubmitForm({
   return (
     <View style={{ gap: spacing.md }}>
       <TextField
-        label={t('subscription.transactionRef')}
+        label={`${t('subscription.transactionRef')} *`}
         helperText={t('subscription.transactionRefHint')}
         placeholder={t('subscription.transactionRefPlaceholder')}
         value={transactionRef}
@@ -602,7 +671,20 @@ function ReceiptSubmitForm({
           <Text variant="caption" style={{ color: colors.error }}>*</Text>
         </View>
         <Text variant="caption" secondary>{t('subscription.uploadScreenshotHint')}</Text>
-        {screenshotUri ? <Image source={{ uri: screenshotUri }} style={styles.screenshotPreview} resizeMode="cover" /> : null}
+        {screenshotUri ? (
+          <Pressable onPress={onOpenScreenshot}>
+            <Image source={{ uri: screenshotUri }} style={styles.screenshotPreview} resizeMode="cover" />
+            <Text variant="caption" secondary style={{ textAlign: 'center', marginTop: 4 }}>{t('subscription.tapToZoom')}</Text>
+          </Pressable>
+        ) : null}
+        {uploadingScreenshot ? (
+          <View style={{ gap: 6 }}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+              <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.round(uploadProgress * 100)}%` }]} />
+            </View>
+            <Text variant="caption" secondary>{t('subscription.uploadingScreenshot')} {Math.round(uploadProgress * 100)}%</Text>
+          </View>
+        ) : null}
         <Button
           label={screenshotUri ? t('common.edit') : t('subscription.uploadScreenshot')}
           variant="secondary"
@@ -644,6 +726,23 @@ const styles = StyleSheet.create({
   instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   instructionsIconRing: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   screenshotPreview: { width: '100%', height: 180, borderRadius: 12 },
+  progressTrack: { height: 8, borderRadius: 999, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 999 },
+  bankHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bankIconRing: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  bankDetailsContent: { padding: 12, gap: 8 },
+  bankLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  bankBullet: { width: 7, height: 7, borderRadius: 4, marginTop: 7 },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 42 },
+  timelineRail: { width: 32, alignItems: 'center' },
+  timelineDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  timelineLine: { width: 2, flex: 1, minHeight: 18, marginTop: 3 },
+  imageModal: { flex: 1, backgroundColor: 'rgba(3, 7, 18, 0.98)' },
+  imageModalHeader: { height: 62, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  imageStage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  fullscreenImage: { width: '100%', height: '82%' },
+  zoomControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22, paddingBottom: 28 },
+  zoomButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' },
   gatewayModal: { flex: 1, backgroundColor: '#FFF' },
   gatewayHeader: { height: 58, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#D1D5DB' },
 });

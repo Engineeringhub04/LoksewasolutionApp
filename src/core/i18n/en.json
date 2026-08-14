@@ -519,6 +519,12 @@
     "adminMessageLabel": "Message to user (optional)",
     "adminMessageHint": "Shown back to the user alongside the approval/rejection.",
     "adminMessagePlaceholder": "e.g. Thanks! Your payment matched perfectly.",
-    "adminReReviewHint": "You can change this decision any time — approving/rejecting again updates the status."
+    "adminReReviewHint": "You can change this decision any time — approving/rejecting again updates the status.",
+    "bankDetailsHint": "Use these details for a direct transfer.",
+    "copyBankDetails": "Copy all bank details",
+    "followSteps": "Complete these steps after payment.",
+    "uploadingScreenshot": "Uploading screenshot",
+    "transactionRefRequired": "Transaction ID / Reference is required.",
+    "screenshotRequired": "Payment screenshot is required."
   }
 }

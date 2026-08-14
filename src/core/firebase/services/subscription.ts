@@ -9,23 +9,23 @@
 // live, tappable card that opens the gateway. There is no single global
 // "auto vs manual" switch anymore — each method decides for itself.
 //
-// Real eSewa/Khalti merchant credentials require a registered business
-// (PAN/VAT + business verification), which the app doesn't have yet — so
-// `esewa.enabled` / `khalti.enabled` should stay `false` in production until
-// that exists. The checkout screen is fully wired for the redirect flow
-// using the OFFICIAL SANDBOX/UAT test credentials (see the checkout screen's
-// TEST_KEYS constant) so the whole flow can be exercised end-to-end before
-// going live — just flip `enabled: true` and swap the test keys for live
-// ones in Firestore.
+// Real eSewa/Khalti merchant credentials require provider onboarding and a
+// secure backend. The public settings document therefore contains only the
+// independent enabled flags and public identifiers. Keep the flags false until
+// the corresponding provider backend and verification flow are ready. The
+// manual QR method remains the fully operational zero-budget fallback.
 //
 // Full docs shape:
 //
 // app_subscription_settings/config
-//   activeMode: 'auto' | 'manual'
-//   esewa: { enabled, merchantCode, secretKey }
-//   khalti: { enabled, publicKey, secretKey }
+//   activeMode: 'manual'
+//   esewa: { enabled, merchantCode }
+//   khalti: { enabled, publicKey }
 //   manual: { qrImageUrl, bankDetails, instructions }
 //   updatedAt
+//
+// Provider secret keys are intentionally not part of the client-readable
+// config document. Production keys belong in a secure backend/secret manager.
 //
 // app_subscription_plans/{planId}
 //   id, name, billingCycle: 'monthly' | 'yearly' | 'free', price, currency,
@@ -79,13 +79,11 @@ export interface SubscriptionPlan {
 export interface GatewayKeys {
   enabled: boolean;
   merchantCode: string;
-  secretKey: string;
 }
 
 export interface KhaltiKeys {
   enabled: boolean;
   publicKey: string;
-  secretKey: string;
 }
 
 export type GatewayMode = 'auto' | 'manual';
@@ -152,38 +150,71 @@ const SETTINGS_DOC = `${Collections.subscriptionSettings}/config`;
 
 const DEFAULT_SETTINGS: SubscriptionSettings = {
   activeMode: 'manual',
-  esewa: { enabled: false, merchantCode: '', secretKey: '' },
-  khalti: { enabled: false, publicKey: '', secretKey: '' },
+  esewa: { enabled: false, merchantCode: '' },
+  khalti: { enabled: false, publicKey: '' },
   manual: { qrImageUrl: '', bankDetails: '', instructions: '' },
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * Converts only client-safe fields. Secret keys are deliberately discarded even
+ * if an old config document still contains them.
+ */
+function normalizeSettings(...documents: (Record<string, unknown> | null)[]): SubscriptionSettings {
+  const merged = documents.reduce<Record<string, unknown>>((result, document) => ({ ...result, ...(document ?? {}) }), {});
+  const esewa = documents.reduce<Record<string, unknown>>((result, document) => ({ ...result, ...asRecord(document?.esewa) }), {});
+  const khalti = documents.reduce<Record<string, unknown>>((result, document) => ({ ...result, ...asRecord(document?.khalti) }), {});
+  const manual = documents.reduce<Record<string, unknown>>((result, document) => ({ ...result, ...asRecord(document?.manual) }), {});
+
+  return {
+    activeMode: merged.activeMode === 'auto' ? 'auto' : 'manual',
+    esewa: {
+      enabled: asBoolean(esewa.enabled),
+      merchantCode: asString(esewa.merchantCode),
+    },
+    khalti: {
+      enabled: asBoolean(khalti.enabled),
+      publicKey: asString(khalti.publicKey),
+    },
+    manual: {
+      qrImageUrl: asString(manual.qrImageUrl),
+      bankDetails: asString(manual.bankDetails),
+      instructions: asString(manual.instructions),
+    },
+  };
+}
 
 export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
   try {
     const doc = await getDocument(SETTINGS_DOC);
-    if (!doc) return DEFAULT_SETTINGS;
-    return {
-      activeMode: doc.activeMode === 'auto' ? 'auto' : 'manual',
-      esewa: { ...DEFAULT_SETTINGS.esewa, ...(doc.esewa as object) },
-      khalti: { ...DEFAULT_SETTINGS.khalti, ...(doc.khalti as object) },
-      manual: { ...DEFAULT_SETTINGS.manual, ...(doc.manual as object) },
-    };
+    return doc ? normalizeSettings(doc) : DEFAULT_SETTINGS;
   } catch {
-    // Secret-bearing or temporarily unavailable settings must not block the
-    // manual QR checkout flow. Gateway cards safely fall back to disabled.
+    // Rules or a temporary network failure must not crash checkout. The UI can
+    // still show a safe empty state while the admin fixes the config document.
     return DEFAULT_SETTINGS;
   }
 }
 
-/** Admin-only: toggle eSewa/Khalti on or off, or update their merchant keys. */
+/** Admin-only: update flags and manual details in the existing config document. */
 export async function updateSubscriptionSettings(patch: Partial<SubscriptionSettings>): Promise<void> {
   await setDocument(SETTINGS_DOC, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 // ===================== Manual payment details =====================
-// QR URL, bank details, and instructions are read from
-// app_subscription_settings/config.manual by the checkout screen.
+// QR URL, bank details, and instructions are read from config.manual.
 
-/** Admin-only helper; writes manual payment details back into config.manual. */
+/** Admin-only helper; writes manual payment details to config.manual. */
 export async function updateBankDetails(patch: Partial<BankDetails>): Promise<void> {
   const settings = await fetchSubscriptionSettings();
   await updateSubscriptionSettings({
