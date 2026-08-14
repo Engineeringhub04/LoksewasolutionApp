@@ -62,6 +62,9 @@ export interface ExamSet {
   sectionId: string;
 
   title: string;
+  /** Database-controlled amount used only when a pro set is purchased. */
+  price: number;
+  currency: string;
   /** When the exam opens. Cards appear 10 minutes before this. */
   startTime: Date | null;
   totalQuestions: number;
@@ -212,6 +215,8 @@ function parseExamSet(doc: Record<string, unknown>): ExamSet {
     provinceId: str(doc.provinceId),
     sectionId: str(doc.sectionId),
     title: str(doc.title),
+    price: num(doc.price, 50),
+    currency: str(doc.currency, 'NPR'),
     startTime: toDate(doc.startTime),
     totalQuestions: num(doc.totalQuestions),
     durationMinutes: num(doc.durationMinutes, 5),

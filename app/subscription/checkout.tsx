@@ -24,6 +24,8 @@ import {
   validateCoupon,
   type PaymentMethod,
 } from '@/src/core/firebase/services/subscription';
+import { fetchExamSet } from '@/src/core/firebase/services/examHub';
+import { submitExamPurchase } from '@/src/core/firebase/services/examPurchases';
 import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToCloudinary } from '@/src/core/media/cloudinary';
@@ -45,19 +47,24 @@ const QR_DOWNLOAD_NAME = 'Ls-qr.png';
 const PAYMENT_RETURN_URL = 'https://loksewasolution.app/payment-return';
 
 export default function CheckoutScreen() {
-  const { planId } = useLocalSearchParams<{ planId: string }>();
+  const { planId, examId } = useLocalSearchParams<{ planId?: string; examId?: string }>();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const authInitializing = useAuthStore((s) => s.initializing);
-  const { profile } = useProfileStore();
+  const { profile, courseInfo } = useProfileStore();
 
+  const isExamPurchase = !!examId;
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [plans, settings] = await Promise.all([fetchSubscriptionPlans(), fetchSubscriptionSettings()]);
+    const [plans, settings, exam] = await Promise.all([
+      fetchSubscriptionPlans(),
+      fetchSubscriptionSettings(),
+      examId ? fetchExamSet(examId) : Promise.resolve(null),
+    ]);
     const plan = plans.find((p) => p.id === planId) ?? null;
-    return { plan, settings, bank: settings.manual };
-  }, [planId, user?.uid, authInitializing], {
+    return { plan, exam, settings, bank: settings.manual };
+  }, [planId, examId, user?.uid, authInitializing], {
     // Firestore config reads are authenticated. Waiting for session hydration is
     // essential because the hook otherwise caches an empty fallback forever.
     enabled: !authInitializing && !!user?.uid,
@@ -84,9 +91,12 @@ export default function CheckoutScreen() {
   const [downloadingQr, setDownloadingQr] = useState(false);
 
   const plan = data?.plan ?? null;
+  const exam = data?.exam ?? null;
   const settings = data?.settings ?? null;
   const bank = data?.bank ?? null;
-  const finalAmount = couponApplied ? couponApplied.discountedAmount : (plan?.price ?? 0);
+  const purchasable = isExamPurchase ? exam : plan;
+  const finalAmount = couponApplied ? couponApplied.discountedAmount : (exam?.price ?? plan?.price ?? 0);
+  const checkoutTitle = exam?.title ?? plan?.name ?? t('subscription.title');
 
   useEffect(() => {
     setQrLoaded(false);
@@ -98,7 +108,7 @@ export default function CheckoutScreen() {
 
 
   const handleApplyCoupon = async () => {
-    if (!couponInput.trim() || !plan) return;
+    if (!couponInput.trim() || !plan || isExamPurchase) return;
     setValidatingCoupon(true);
     setCouponError(null);
     try {
@@ -162,7 +172,7 @@ export default function CheckoutScreen() {
   };
 
   const handleSubmitManual = async () => {
-    if (!user?.uid || !plan || !method) return;
+    if (!user?.uid || !purchasable || !method) return;
     if (!transactionRef.trim()) {
       showToast(t('subscription.transactionRefRequired'), 'error');
       return;
@@ -179,20 +189,39 @@ export default function CheckoutScreen() {
         showToast(t('subscription.uploadScreenshot') + ' required', 'error');
         return;
       }
-      await submitPayment({
-        uid: user.uid,
-        userName: profile?.name ?? user.displayName ?? null,
-        userEmail: profile?.email ?? user.email ?? null,
-        planId: plan.id,
-        planName: plan.name,
-        billingCycle: plan.billingCycle,
-        amount: finalAmount,
-        method,
-        transactionRef: transactionRef.trim(),
-        screenshotUrl,
-        customerMessage: customerMessage.trim() || null,
-        couponCode: couponApplied?.code ?? null,
-      });
+      if (isExamPurchase && exam) {
+        await submitExamPurchase({
+          uid: user.uid,
+          userName: profile?.name ?? user.displayName ?? null,
+          userEmail: profile?.email ?? user.email ?? null,
+          courseId: exam.courseId,
+          courseName: courseInfo?.courseName ?? null,
+          subcourseId: exam.subcourseId,
+          subcourseName: courseInfo?.subcourseName ?? null,
+          examSetId: exam.id,
+          examTitle: exam.title,
+          examContentType: exam.contentType,
+          amount: finalAmount,
+          transactionRef: transactionRef.trim(),
+          screenshotUrl,
+          customerMessage: customerMessage.trim() || null,
+        });
+      } else if (plan) {
+        await submitPayment({
+          uid: user.uid,
+          userName: profile?.name ?? user.displayName ?? null,
+          userEmail: profile?.email ?? user.email ?? null,
+          planId: plan.id,
+          planName: plan.name,
+          billingCycle: plan.billingCycle,
+          amount: finalAmount,
+          method,
+          transactionRef: transactionRef.trim(),
+          screenshotUrl,
+          customerMessage: customerMessage.trim() || null,
+          couponCode: couponApplied?.code ?? null,
+        });
+      }
       showToast(t('subscription.submitSuccess'), 'success');
       router.replace('/subscription');
     } catch {
@@ -204,7 +233,7 @@ export default function CheckoutScreen() {
 
   /** Opens only the provider checkout. Receipt ID/screenshot submission is QR-only. */
   const handleOpenGateway = async () => {
-    if (!plan || !method || method === 'qr') return;
+    if (isExamPurchase || !plan || !method || method === 'qr') return;
     if (!settingsAvailable) {
       showToast(t('subscription.settingsUnavailableToast'), 'info');
       return;
@@ -225,9 +254,9 @@ export default function CheckoutScreen() {
     }
   };
 
-  if (!loading && (error || !plan)) {
+  if (!loading && (error || !purchasable)) {
     return (
-      <SubpageScrollScreen title={t('subscription.title')}>
+      <SubpageScrollScreen title={checkoutTitle}>
         <DataNotFound onRetry={refetch} />
       </SubpageScrollScreen>
     );
@@ -235,22 +264,22 @@ export default function CheckoutScreen() {
 
   return (
     <>
-      <SubpageScrollScreen title={plan?.name ?? t('subscription.title')}>
-        {loading || !plan ? null : (
+      <SubpageScrollScreen title={checkoutTitle}>
+        {loading || !purchasable ? null : (
           <>
             {/* Plan summary */}
             <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
               <View style={styles.row}>
-                <Text variant="bodyLarge" weight="bold" style={{ flex: 1 }}>{plan.name}</Text>
+                <Text variant="bodyLarge" weight="bold" style={{ flex: 1 }}>{checkoutTitle}</Text>
                 <Text variant="h3" weight="bold" style={{ color: colors.primary }}>Rs. {finalAmount}</Text>
               </View>
-              {couponApplied ? (
+              {couponApplied && !isExamPurchase && plan ? (
                 <Text variant="caption" secondary style={{ textDecorationLine: 'line-through' }}>Rs. {plan.price}</Text>
               ) : null}
             </View>
 
             {/* Coupon */}
-            <CouponSection
+            {!isExamPurchase ? <CouponSection
               couponInput={couponInput}
               onCouponInputChange={setCouponInput}
               couponApplied={couponApplied}
@@ -258,7 +287,7 @@ export default function CheckoutScreen() {
               validating={validatingCoupon}
               onApply={handleApplyCoupon}
               onRemove={() => { setCouponApplied(null); setCouponInput(''); setCouponError(null); }}
-            />
+            /> : null}
 
             {/* Method picker */}
             <View style={{ gap: spacing.sm }}>

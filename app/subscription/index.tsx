@@ -23,6 +23,7 @@ import {
   type SubscriptionPlan,
   type SubscriptionRecord,
 } from '@/src/core/firebase/services/subscription';
+import { fetchMyExamPurchases, type ExamPurchaseRecord } from '@/src/core/firebase/services/examPurchases';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
@@ -42,8 +43,12 @@ export default function SubscriptionScreen() {
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     if (!user?.uid) return null;
     await expireIfPastDue(user.uid).catch(() => {});
-    const [plans, history] = await Promise.all([fetchSubscriptionPlans(), fetchMySubscriptionHistory(user.uid)]);
-    return { plans, history };
+    const [plans, history, examPurchases] = await Promise.all([
+      fetchSubscriptionPlans(),
+      fetchMySubscriptionHistory(user.uid),
+      fetchMyExamPurchases(user.uid),
+    ]);
+    return { plans, history, examPurchases };
   }, [user?.uid]);
 
   const goToPayment = (plan: SubscriptionPlan) => {
@@ -51,6 +56,7 @@ export default function SubscriptionScreen() {
   };
 
   const history = data?.history ?? [];
+  const examPurchases = data?.examPurchases ?? [];
   const activeRecord = history.find((r) => r.status === 'active') ?? null;
 
   return (
@@ -65,11 +71,14 @@ export default function SubscriptionScreen() {
               <Text variant="bodySmall" secondary style={{ flex: 1 }}>{t('subscription.subtitle')}</Text>
             </View>
 
-            {history.length > 0 ? (
+            {history.length > 0 || examPurchases.length > 0 ? (
               <View style={{ gap: spacing.sm }}>
                 <Text variant="bodySmall" weight="semiBold" secondary>{t('subscription.yourRequests')}</Text>
                 {history.map((record) => (
                   <RequestHistoryCard key={record.id} record={record} onPress={() => router.push(`/subscription/${record.id}`)} />
+                ))}
+                {examPurchases.map((record) => (
+                  <ExamPurchaseHistoryCard key={record.id} record={record} onPress={() => router.push(`/subscription/exam-purchase/${record.id}`)} />
                 ))}
               </View>
             ) : null}
@@ -144,6 +153,35 @@ function RequestHistoryCard({ record, onPress }: { record: SubscriptionRecord; o
   );
 
   return <Pressable onPress={onPress}>{content}</Pressable>;
+}
+
+function ExamPurchaseHistoryCard({ record, onPress }: { record: ExamPurchaseRecord; onPress: () => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const { t } = useTranslation();
+  const tag = record.status === 'active'
+    ? { label: t('subscription.tagApproved'), color: colors.success, icon: 'checkmark-circle' as const }
+    : record.status === 'rejected'
+      ? { label: t('subscription.tagRejected'), color: colors.error, icon: 'close-circle' as const }
+      : { label: t('subscription.pendingReview'), color: colors.warning, icon: 'time' as const };
+
+  return (
+    <Pressable onPress={onPress} style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text variant="bodyLarge" weight="bold">{record.examTitle || t('subscription.examPurchase')}</Text>
+          <Text variant="caption" secondary style={{ marginTop: 4 }}>
+            {t('subscription.examDetails')} · Rs. {record.amount} · {record.submittedAt ? formatDate(record.submittedAt) : '—'}
+          </Text>
+        </View>
+        <View style={[styles.tag, { backgroundColor: `${tag.color}17` }]}>
+          <Ionicons name={tag.icon} size={12} color={tag.color} />
+          <Text variant="caption" weight="bold" style={{ color: tag.color }}>{tag.label}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+      </View>
+      {record.adminMessage ? <Text variant="caption" style={{ marginTop: spacing.xs, color: colors.primary }}>{record.adminMessage}</Text> : null}
+    </Pressable>
+  );
 }
 
 // ===================== Plan Card =====================
