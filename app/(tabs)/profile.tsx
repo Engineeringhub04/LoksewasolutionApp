@@ -115,6 +115,12 @@ export default function ProfileScreen() {
         displayName={displayName}
         photoURL={photoURL}
         subcourseName={courseInfo?.subcourseName ?? null}
+        planLabel={
+          profile?.isPremium
+            ? profile.premiumPlanName ?? (profile.premiumBillingCycle === 'yearly' ? 'Premium Yearly' : 'Premium Monthly')
+            : t('subscription.freePlan')
+        }
+        isPremiumPlan={!!profile?.isPremium}
         languageLabel={language === 'en' ? 'ENGLISH' : 'नेपाली'}
         languageShortLabel={language === 'en' ? 'EN' : 'ने'}
         onToggleLanguage={toggleLanguage}

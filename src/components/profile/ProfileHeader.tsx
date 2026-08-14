@@ -37,7 +37,7 @@ const COLLAPSE_DISTANCE = 150;
 /** Avatar glow colour — green in BOTH the expanded and collapsed header. */
 const GLOW_GREEN = '#22C55E';
 
-export const PROFILE_HEADER_EXPANDED_HEIGHT_BASE = 252;
+export const PROFILE_HEADER_EXPANDED_HEIGHT_BASE = 278;
 export const PROFILE_HEADER_COLLAPSED_HEIGHT_BASE = 64;
 
 /** Call with insets.top to get the actual on-screen expanded header height. */
@@ -50,6 +50,9 @@ interface ProfileHeaderProps {
   displayName: string | null;
   photoURL: string | null | undefined;
   subcourseName: string | null;
+  /** "Free Plan" or the active premium plan's name (e.g. "Premium Monthly") — shown just below the subcourse pill. */
+  planLabel: string;
+  isPremiumPlan: boolean;
   /** Short code for the ACTIVE language, e.g. 'EN' / 'ने'. */
   languageShortLabel: string;
   /** Full label for the ACTIVE language, e.g. 'ENGLISH' / 'नेपाली'. */
@@ -65,6 +68,8 @@ export function ProfileHeader({
   displayName,
   photoURL,
   subcourseName,
+  planLabel,
+  isPremiumPlan,
   languageShortLabel,
   languageLabel,
   onToggleLanguage,
@@ -160,6 +165,13 @@ export function ProfileHeader({
             </Text>
           </View>
         ) : null}
+
+        <View style={[styles.planPill, isPremiumPlan ? styles.planPillPremium : styles.planPillFree]}>
+          {isPremiumPlan ? <Ionicons name="diamond" size={11} color="#7C2D12" style={{ marginRight: 4 }} /> : null}
+          <Text variant="caption" weight="bold" style={isPremiumPlan ? styles.planTextPremium : styles.planTextFree} numberOfLines={1}>
+            {planLabel}
+          </Text>
+        </View>
       </Animated.View>
 
       {/* ===== COLLAPSED (while scrolling) ===== */}
@@ -281,6 +293,19 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   subcourseText: { color: '#FFF' },
+  planPill: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  planPillFree: { backgroundColor: 'rgba(255,255,255,0.16)' },
+  planPillPremium: { backgroundColor: '#FBBF24' },
+  planTextFree: { color: 'rgba(255,255,255,0.85)' },
+  planTextPremium: { color: '#7C2D12' },
 
   // Collapsed
   collapsedContent: {

@@ -46,6 +46,17 @@ export interface UserProfile {
    * an admin editing Firestore directly. Gates the Admin Answer Review desk.
    */
   isAdmin: boolean;
+  /**
+   * Read-only here too — only approveSubscription()/expireIfPastDue() in
+   * subscription.ts ever write these fields, mirrored from the approved
+   * app_subscriptions record so the Profile screen can show "Premium
+   * Monthly" / "Premium Yearly" / "Free Plan" with a single document read
+   * instead of querying subscriptions on every profile view.
+   */
+  isPremium: boolean;
+  premiumPlanName: string | null;
+  premiumBillingCycle: 'monthly' | 'yearly' | 'free' | null;
+  premiumExpiryDate: string | null;
 }
 
 export const EMPTY_STATS: UserStats = { testsTaken: 0, streak: 0, rank: 0, points: 0 };
@@ -108,6 +119,10 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
     subcourseId: (doc.subcourseId as string | undefined) ?? null,
     stats: toStats(doc.stats),
     isAdmin: doc.role === 'admin',
+    isPremium: doc.isPremium === true,
+    premiumPlanName: (doc.premiumPlanName as string | undefined) ?? null,
+    premiumBillingCycle: (doc.premiumBillingCycle as 'monthly' | 'yearly' | 'free' | undefined) ?? null,
+    premiumExpiryDate: (doc.premiumExpiryDate as string | undefined) ?? null,
   };
 }
 

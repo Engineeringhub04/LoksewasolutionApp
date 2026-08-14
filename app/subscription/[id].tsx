@@ -1,8 +1,8 @@
-// Subscription → View Details (for a rejected request). Only linked from the
-// Rejected card on the main Subscription page, and only visible there for 1
-// day after review (see isRejectionStillVisible in subscription.ts) — this
-// screen itself has no such gate since a direct link staying resolvable is
-// harmless, but nothing in the app links here after the window closes.
+// Subscription → View Details (for a rejected request). Linked from the
+// Rejected tag on a request-history card on the main Subscription page. The
+// full request history stays visible forever now (see fetchMySubscriptionHistory
+// in subscription.ts), so this screen has no time-based visibility window —
+// a rejected request's details are always reachable from its history card.
 import React from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -42,6 +42,9 @@ export default function SubscriptionDetailScreen() {
               </View>
               {record.rejectionReason ? (
                 <Text variant="body" style={{ marginTop: spacing.sm, color: colors.error }}>{record.rejectionReason}</Text>
+              ) : null}
+              {record.adminMessage ? (
+                <Text variant="bodySmall" style={{ marginTop: spacing.xs, color: colors.error }}>{record.adminMessage}</Text>
               ) : null}
             </View>
 

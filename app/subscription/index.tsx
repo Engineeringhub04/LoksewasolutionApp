@@ -1,20 +1,16 @@
 // Profile → App Settings → Subscription Details.
 //
-// Shows 3 plan cards (Free / Monthly / Yearly), the currently accepted
-// payment methods, and — depending on the user's current subscription
-// record — either a "choose a plan" state, a Pending review card, a
-// Rejected card (visible for 1 day per PRD), or an Active/Expired card.
-//
-// Real eSewa/Khalti auto-payment needs a verified business merchant
-// account, which this app doesn't have yet (see subscription.ts header
-// comment). Until then `subscriptionSettings.activeMode` decides which flow
-// renders — Auto or Manual — and an admin flips that one field to go live
-// later without a code change.
+// Shows the current plan status (pending/active/rejected/expired — each
+// request stays visible forever with a status tag, never removed), the
+// available plan cards (each with its own colour identity from Firestore,
+// animated entrance), and a centered "We Accept" strip with the eSewa /
+// Khalti / Fonepay logos on a soft tinted background.
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -23,11 +19,9 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { showToast } from '@/src/core/store/toastStore';
 import {
   fetchSubscriptionPlans,
-  fetchSubscriptionSettings,
-  fetchMySubscription,
+  fetchMySubscriptionHistory,
   expireIfPastDue,
-  isRejectionStillVisible,
-  seedSubscriptionData,
+  seedBankDetails,
   type SubscriptionPlan,
   type SubscriptionRecord,
 } from '@/src/core/firebase/services/subscription';
@@ -37,10 +31,13 @@ import { Button } from '@/src/components/buttons/Button';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
-import { PaymentMethodBadges } from '@/src/components/subscription/PaymentMethodBadges';
+
+const ESEWA_LOGO = 'https://i.ibb.co/HLpHmnQz/esewa-icon-large.png';
+const KHALTI_LOGO = 'https://i.ibb.co/tMHZRHKQ/Khalti-Logo-New-3.png';
+const FONEPAY_LOGO = 'https://i.ibb.co/YBT7bXZQ/fonepay-logo-png-seeklogo-385625.png';
 
 export default function SubscriptionScreen() {
-  const { colors, spacing, radius, gradients } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -51,19 +48,15 @@ export default function SubscriptionScreen() {
   const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     if (!user?.uid) return null;
     await expireIfPastDue(user.uid).catch(() => {});
-    const [plans, settings, mySub] = await Promise.all([
-      fetchSubscriptionPlans(),
-      fetchSubscriptionSettings(),
-      fetchMySubscription(user.uid),
-    ]);
-    return { plans, settings, mySub };
+    const [plans, history] = await Promise.all([fetchSubscriptionPlans(), fetchMySubscriptionHistory(user.uid)]);
+    return { plans, history };
   }, [user?.uid]);
 
   const handleSeed = async () => {
     setShowSeedConfirm(false);
     setSeeding(true);
     try {
-      await seedSubscriptionData();
+      await seedBankDetails();
       showToast(t('subscription.seedSuccess'), 'success');
       refetch();
     } catch {
@@ -77,10 +70,8 @@ export default function SubscriptionScreen() {
     router.push({ pathname: '/subscription/checkout', params: { planId: plan.id } });
   };
 
-  const mySub = data?.mySub ?? null;
-  const isActive = mySub?.status === 'active';
-  const isPending = mySub?.status === 'pending';
-  const isRejectedVisible = mySub?.status === 'rejected' && isRejectionStillVisible(mySub.reviewedAt);
+  const history = data?.history ?? [];
+  const activeRecord = history.find((r) => r.status === 'active') ?? null;
 
   return (
     <>
@@ -91,43 +82,44 @@ export default function SubscriptionScreen() {
           <>
             <View style={[styles.hero, { backgroundColor: `${colors.primary}14`, borderRadius: radius.lg, padding: spacing.md }]}>
               <Ionicons name="diamond" size={26} color={colors.primary} />
-              <Text variant="bodySmall" secondary style={{ flex: 1 }}>
-                {t('subscription.subtitle')}
-              </Text>
+              <Text variant="bodySmall" secondary style={{ flex: 1 }}>{t('subscription.subtitle')}</Text>
             </View>
 
-            {isPending && mySub ? <PendingCard record={mySub} /> : null}
-            {isRejectedVisible && mySub ? <RejectedCard record={mySub} /> : null}
-            {isActive && mySub ? <ActiveCard record={mySub} /> : null}
-            {mySub?.status === 'expired' ? <ExpiredCard /> : null}
+            {history.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <Text variant="bodySmall" weight="semiBold" secondary>{t('subscription.yourRequests')}</Text>
+                {history.map((record) => (
+                  <RequestHistoryCard key={record.id} record={record} onPressRejected={() => router.push(`/subscription/${record.id}`)} />
+                ))}
+              </View>
+            ) : null}
 
             <View style={{ gap: spacing.md }}>
-              {(data?.plans ?? []).map((plan) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  isCurrent={isActive && mySub?.planId === plan.id}
-                  onSubscribe={() => goToPayment(plan)}
-                  gradients={gradients}
-                />
+              {(data?.plans ?? []).map((plan, index) => (
+                <Animated.View key={plan.id} entering={FadeInDown.delay(index * 90).duration(400)}>
+                  <PlanCard
+                    plan={plan}
+                    isCurrent={!!activeRecord && activeRecord.planId === plan.id}
+                    onSubscribe={() => goToPayment(plan)}
+                  />
+                </Animated.View>
               ))}
             </View>
 
-            <PaymentMethodBadges settings={data?.settings ?? null} />
+            <WeAcceptSection />
 
             {profile?.isAdmin ? (
               <View style={[styles.adminBox, { borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm }]}>
                 <Pressable onPress={() => router.push('/admin/subscriptions')} style={[styles.row, { gap: spacing.sm }]}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
-                  <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary, flex: 1 }}>
-                    {t('subscription.adminReviewTitle')}
-                  </Text>
+                  <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary, flex: 1 }}>{t('subscription.adminReviewTitle')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </Pressable>
 
                 <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
                 <Button label={t('subscription.seedButton')} variant="secondary" loading={seeding} onPress={() => setShowSeedConfirm(true)} />
+                <Text variant="caption" secondary>{t('subscription.seedButtonHint')}</Text>
               </View>
             ) : null}
           </>
@@ -146,24 +138,56 @@ export default function SubscriptionScreen() {
   );
 }
 
+// ===================== Request history card (status tag, never removed) =====================
+
+function RequestHistoryCard({ record, onPressRejected }: { record: SubscriptionRecord; onPressRejected: () => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const { t } = useTranslation();
+
+  const tag =
+    record.status === 'active'
+      ? { label: t('subscription.tagApproved'), color: colors.success, icon: 'checkmark-circle' as const }
+      : record.status === 'rejected'
+        ? { label: t('subscription.tagRejected'), color: colors.error, icon: 'close-circle' as const }
+        : record.status === 'expired'
+          ? { label: t('subscription.tagExpired'), color: colors.textSecondary, icon: 'time' as const }
+          : { label: t('subscription.tagNew'), color: colors.warning, icon: 'sparkles' as const };
+
+  const content = (
+    <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
+      <View style={styles.row}>
+        <Text variant="bodyLarge" weight="bold" style={{ flex: 1 }}>{record.planName}</Text>
+        <View style={[styles.tag, { backgroundColor: `${tag.color}17` }]}>
+          <Ionicons name={tag.icon} size={12} color={tag.color} />
+          <Text variant="caption" weight="bold" style={{ color: tag.color }}>{tag.label}</Text>
+        </View>
+      </View>
+      <Text variant="caption" secondary style={{ marginTop: 4 }}>
+        Rs. {record.amount} · {record.method.toUpperCase()} {record.submittedAt ? `· ${formatDate(record.submittedAt)}` : ''}
+      </Text>
+      {record.status === 'rejected' && record.rejectionReason ? (
+        <Text variant="bodySmall" style={{ marginTop: 6, color: colors.error }}>{record.rejectionReason}</Text>
+      ) : null}
+      {record.status === 'active' && record.expiryDate ? (
+        <Text variant="bodySmall" secondary style={{ marginTop: 6 }}>{t('subscription.expiresOn')}: {formatDate(record.expiryDate)}</Text>
+      ) : null}
+    </View>
+  );
+
+  if (record.status === 'rejected') {
+    return <Pressable onPress={onPressRejected}>{content}</Pressable>;
+  }
+  return content;
+}
+
 // ===================== Plan Card =====================
 
-function PlanCard({
-  plan,
-  isCurrent,
-  onSubscribe,
-  gradients,
-}: {
-  plan: SubscriptionPlan;
-  isCurrent: boolean;
-  onSubscribe: () => void;
-  gradients: ReturnType<typeof useTheme>['gradients'];
-}) {
+function PlanCard({ plan, isCurrent, onSubscribe }: { plan: SubscriptionPlan; isCurrent: boolean; onSubscribe: () => void }) {
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const isFree = plan.billingCycle === 'free';
   const isYearly = plan.billingCycle === 'yearly';
-  const cardGradient = isFree ? (['#64748B', '#475569'] as const) : (gradients.premiumGold as unknown as [string, string]);
+  const cardGradient: [string, string] = isFree ? ['#64748B', '#475569'] : [plan.colorFrom || '#F59E0B', plan.colorTo || '#D97706'];
 
   const priceSuffix = plan.billingCycle === 'monthly' ? t('subscription.perMonth') : plan.billingCycle === 'yearly' ? t('subscription.perYear') : '';
 
@@ -190,9 +214,7 @@ function PlanCard({
         </View>
 
         <View style={styles.priceRow}>
-          <Text variant="display" weight="bold" style={{ color: '#FFF' }}>
-            {isFree ? t('subscription.free') : `Rs. ${plan.price}`}
-          </Text>
+          <Text variant="display" weight="bold" style={{ color: '#FFF' }}>{isFree ? t('subscription.free') : `Rs. ${plan.price}`}</Text>
           {priceSuffix ? <Text variant="body" style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>{priceSuffix}</Text> : null}
         </View>
 
@@ -216,6 +238,7 @@ function PlanCard({
           </View>
         ) : (
           <Pressable onPress={onSubscribe} style={[styles.subscribeBtn, { backgroundColor: '#FFF', borderRadius: radius.md }]}>
+            <Ionicons name="diamond-outline" size={16} color={colors.textPrimary} style={{ marginRight: 6 }} />
             <Text variant="bodyLarge" weight="bold" style={{ color: colors.textPrimary }}>{t('subscription.subscribeNow')}</Text>
           </Pressable>
         )}
@@ -224,97 +247,19 @@ function PlanCard({
   );
 }
 
-// ===================== Status Cards =====================
+// ===================== We Accept section =====================
 
-function PendingCard({ record }: { record: SubscriptionRecord }) {
-  const { colors, spacing, radius } = useTheme();
-  const { t } = useTranslation();
-  const router = useRouter();
-  return (
-    <View style={[cardStyles.box, { backgroundColor: `${colors.warning}14`, borderColor: colors.warning, borderRadius: radius.lg, padding: spacing.md }]}>
-      <View style={styles.row}>
-        <Ionicons name="time-outline" size={20} color={colors.warning} />
-        <Text variant="bodyLarge" weight="bold" style={{ color: colors.warning, flex: 1 }}>{t('subscription.pendingTitle')}</Text>
-      </View>
-      <Text variant="bodySmall" secondary style={{ marginTop: spacing.xs }}>{t('subscription.pendingMessage')}</Text>
-      <View style={{ marginTop: spacing.sm, gap: 4 }}>
-        <InfoLine label={t('subscription.pendingPlan')} value={record.planName} />
-        <InfoLine label={t('subscription.pendingAmount')} value={`Rs. ${record.amount}`} />
-        <InfoLine label={t('subscription.pendingMethod')} value={record.method} />
-        {record.transactionRef ? <InfoLine label={t('subscription.pendingRef')} value={record.transactionRef} /> : null}
-      </View>
-      <Pressable onPress={() => router.push('/contact-us')} style={{ marginTop: spacing.sm }}>
-        <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>
-          {t('subscription.contactForFastApproval')}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function RejectedCard({ record }: { record: SubscriptionRecord }) {
-  const { colors, spacing, radius } = useTheme();
-  const { t } = useTranslation();
-  const router = useRouter();
-  return (
-    <View style={[cardStyles.box, { backgroundColor: `${colors.error}14`, borderColor: colors.error, borderRadius: radius.lg, padding: spacing.md }]}>
-      <View style={styles.row}>
-        <Ionicons name="close-circle-outline" size={20} color={colors.error} />
-        <Text variant="bodyLarge" weight="bold" style={{ color: colors.error, flex: 1 }}>{t('subscription.rejectedTitle')}</Text>
-      </View>
-      <Text variant="bodySmall" secondary style={{ marginTop: spacing.xs }}>{t('subscription.rejectedMessage')}</Text>
-      {record.rejectionReason ? (
-        <Text variant="bodySmall" style={{ marginTop: spacing.xs, color: colors.error }}>
-          {t('subscription.rejectedReason')}: {record.rejectionReason}
-        </Text>
-      ) : null}
-      <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.sm }]}>
-        <Button label={t('subscription.viewDetails')} variant="secondary" onPress={() => router.push(`/subscription/${record.id}`)} style={{ flex: 1 }} />
-        <Button label={t('subscription.contactSupport')} onPress={() => router.push('/contact-us')} style={{ flex: 1 }} />
-      </View>
-    </View>
-  );
-}
-
-function ActiveCard({ record }: { record: SubscriptionRecord }) {
+function WeAcceptSection() {
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   return (
-    <View style={[cardStyles.box, { backgroundColor: `${colors.success}14`, borderColor: colors.success, borderRadius: radius.lg, padding: spacing.md }]}>
-      <View style={styles.row}>
-        <Ionicons name="shield-checkmark" size={20} color={colors.success} />
-        <Text variant="bodyLarge" weight="bold" style={{ color: colors.success, flex: 1 }}>{t('subscription.activeTitle')}</Text>
+    <View style={[styles.weAcceptBox, { backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, padding: spacing.lg }]}>
+      <Text variant="bodySmall" weight="bold" secondary style={styles.weAcceptTitle}>{t('subscription.weAccept')}</Text>
+      <View style={styles.weAcceptLogos}>
+        <Image source={{ uri: ESEWA_LOGO }} style={styles.weAcceptLogo} resizeMode="contain" />
+        <Image source={{ uri: KHALTI_LOGO }} style={styles.weAcceptLogo} resizeMode="contain" />
+        <Image source={{ uri: FONEPAY_LOGO }} style={styles.weAcceptLogo} resizeMode="contain" />
       </View>
-      <View style={{ marginTop: spacing.sm, gap: 4 }}>
-        <InfoLine label={t('subscription.pendingPlan')} value={record.planName} />
-        {record.startDate ? <InfoLine label={t('subscription.activeSince')} value={formatDate(record.startDate)} /> : null}
-        {record.expiryDate ? <InfoLine label={t('subscription.expiresOn')} value={formatDate(record.expiryDate)} /> : null}
-      </View>
-      <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{t('subscription.autoRenewNote')}</Text>
-    </View>
-  );
-}
-
-function ExpiredCard() {
-  const { colors, spacing, radius } = useTheme();
-  const { t } = useTranslation();
-  return (
-    <View style={[cardStyles.box, { backgroundColor: `${colors.textSecondary}14`, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
-      <View style={styles.row}>
-        <Ionicons name="alert-circle-outline" size={20} color={colors.textSecondary} />
-        <Text variant="bodyLarge" weight="bold" style={{ flex: 1 }}>{t('subscription.expiredTitle')}</Text>
-      </View>
-      <Text variant="bodySmall" secondary style={{ marginTop: spacing.xs }}>{t('subscription.expiredMessage')}</Text>
-    </View>
-  );
-}
-
-function InfoLine({ label, value }: { label: string; value: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.row}>
-      <Text variant="caption" secondary style={{ width: 110 }}>{label}</Text>
-      <Text variant="bodySmall" weight="semiBold" style={{ flex: 1, color: colors.textPrimary }}>{value}</Text>
     </View>
   );
 }
@@ -330,6 +275,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   divider: { height: StyleSheet.hairlineWidth },
   adminBox: { borderWidth: StyleSheet.hairlineWidth },
+  historyCard: { borderWidth: StyleSheet.hairlineWidth },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
   planCardWrap: { overflow: 'hidden' },
   planCard: { gap: 2 },
   planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
@@ -338,9 +285,9 @@ const styles = StyleSheet.create({
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 4 },
   currentPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12 },
-  subscribeBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 13 },
-});
-
-const cardStyles = StyleSheet.create({
-  box: { borderWidth: 1 },
+  subscribeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 13 },
+  weAcceptBox: { alignItems: 'center' },
+  weAcceptTitle: { letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+  weAcceptLogos: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22 },
+  weAcceptLogo: { width: 56, height: 32 },
 });

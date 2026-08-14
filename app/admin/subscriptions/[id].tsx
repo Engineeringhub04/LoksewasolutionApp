@@ -1,11 +1,14 @@
-// Admin — review a single pending subscription request. Approve activates
-// the subscription immediately (writes isPremium + premiumExpiryDate onto
-// the user doc); Reject tags it 'rejected' with a reason the user sees on
-// their Subscription page for 1 day.
+// Admin — review a single subscription request. Approve activates the
+// subscription immediately (writes isPremium + premiumPlanName +
+// premiumExpiryDate onto the user doc); Reject tags it 'rejected' with a
+// reason the user sees on their Subscription page. Either action keeps the
+// request permanently visible in the admin list — this screen just updates
+// its status/tag, never deletes it.
 import React, { useState } from 'react';
 import { View, StyleSheet, Image, Modal, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -17,6 +20,7 @@ import {
   rejectSubscription,
   fetchSubscriptionPlans,
 } from '@/src/core/firebase/services/subscription';
+import { downloadImageToDevice } from '@/src/core/media/imageDownload';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
@@ -39,22 +43,25 @@ export default function AdminSubscriptionDetailScreen() {
   }, [id]);
 
   const [rejectReason, setRejectReason] = useState('');
+  const [adminMessage, setAdminMessage] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [downloadingScreenshot, setDownloadingScreenshot] = useState(false);
 
   const record = data?.record ?? null;
   const plan = data?.plans.find((p) => p.id === record?.planId) ?? null;
+  const alreadyReviewed = record?.status === 'active' || record?.status === 'rejected';
 
   const handleApprove = async () => {
     if (!record || !user?.uid) return;
     setShowApproveConfirm(false);
     setBusy(true);
     try {
-      await approveSubscription(record.id, user.uid, plan?.durationDays ?? 30);
+      await approveSubscription(record.id, user.uid, plan?.durationDays ?? 30, adminMessage.trim() || null);
       showToast(t('subscription.adminApproveSuccess'), 'success');
-      router.back();
+      refetch();
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
     } finally {
@@ -67,15 +74,44 @@ export default function AdminSubscriptionDetailScreen() {
     setShowRejectDialog(false);
     setBusy(true);
     try {
-      await rejectSubscription(record.id, user.uid, rejectReason.trim() || 'Payment could not be verified.');
+      await rejectSubscription(record.id, user.uid, rejectReason.trim() || 'Payment could not be verified.', adminMessage.trim() || null);
       showToast(t('subscription.adminRejectSuccess'), 'success');
-      router.back();
+      refetch();
     } catch {
       showToast(t('common.somethingWentWrong'), 'error');
     } finally {
       setBusy(false);
     }
   };
+
+  const handleCopyUrl = async () => {
+    if (!record?.screenshotUrl) return;
+    await Clipboard.setStringAsync(record.screenshotUrl);
+    showToast('Copied', 'success');
+  };
+
+  const handleDownloadScreenshot = async () => {
+    if (!record?.screenshotUrl) return;
+    setDownloadingScreenshot(true);
+    try {
+      const result = await downloadImageToDevice(record.screenshotUrl, `receipt-${record.id}.png`);
+      showToast(result.saved ? 'Screenshot saved' : 'Download cancelled', result.saved ? 'success' : 'info');
+    } catch {
+      showToast('Could not download the screenshot.', 'error');
+    } finally {
+      setDownloadingScreenshot(false);
+    }
+  };
+
+  const statusTag = record
+    ? record.status === 'active'
+      ? { label: t('subscription.tagApproved'), color: colors.success }
+      : record.status === 'rejected'
+        ? { label: t('subscription.tagRejected'), color: colors.error }
+        : record.status === 'expired'
+          ? { label: t('subscription.tagExpired'), color: colors.textSecondary }
+          : { label: t('subscription.tagNew'), color: colors.warning }
+    : null;
 
   return (
     <>
@@ -84,6 +120,13 @@ export default function AdminSubscriptionDetailScreen() {
           <DataNotFound onRetry={refetch} />
         ) : (
           <>
+            {statusTag ? (
+              <View style={[styles.statusBanner, { backgroundColor: `${statusTag.color}14`, borderColor: statusTag.color, borderRadius: radius.lg, padding: spacing.md }]}>
+                <Text variant="bodyLarge" weight="bold" style={{ color: statusTag.color }}>{statusTag.label}</Text>
+                {record.adminMessage ? <Text variant="bodySmall" style={{ marginTop: 4, color: statusTag.color }}>{record.adminMessage}</Text> : null}
+              </View>
+            ) : null}
+
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <Row label={t('subscription.adminUser')} value={record.userName ?? record.userEmail ?? record.uid} />
               <Divider />
@@ -91,7 +134,7 @@ export default function AdminSubscriptionDetailScreen() {
               <Divider />
               <Row label={t('subscription.pendingAmount')} value={`Rs. ${record.amount}`} />
               <Divider />
-              <Row label={t('subscription.pendingMethod')} value={record.method} />
+              <Row label={t('subscription.pendingMethod')} value={record.method.toUpperCase()} />
               <Divider />
               <Row label={t('subscription.pendingRef')} value={record.transactionRef ?? '—'} />
               {record.couponCode ? (
@@ -102,6 +145,12 @@ export default function AdminSubscriptionDetailScreen() {
               ) : null}
               <Divider />
               <Row label={t('subscription.adminSubmittedOn')} value={record.submittedAt ? new Date(record.submittedAt).toLocaleString() : '—'} />
+              {record.customerMessage ? (
+                <>
+                  <Divider />
+                  <Row label={t('subscription.customMessageLabel')} value={record.customerMessage} />
+                </>
+              ) : null}
             </View>
 
             {record.screenshotUrl ? (
@@ -110,12 +159,33 @@ export default function AdminSubscriptionDetailScreen() {
                 <Pressable onPress={() => setFullscreen(true)}>
                   <Image source={{ uri: record.screenshotUrl }} style={styles.screenshot} resizeMode="cover" />
                 </Pressable>
+
+                <View style={[styles.urlRow, { borderColor: colors.border, borderRadius: radius.md }]}>
+                  <Text variant="caption" secondary numberOfLines={1} style={{ flex: 1, paddingHorizontal: spacing.sm }}>{record.screenshotUrl}</Text>
+                  <Pressable onPress={handleCopyUrl} hitSlop={8} style={styles.urlIconBtn}>
+                    <Ionicons name="copy-outline" size={16} color={colors.primary} />
+                  </Pressable>
+                  <Pressable onPress={handleDownloadScreenshot} disabled={downloadingScreenshot} hitSlop={8} style={styles.urlIconBtn}>
+                    <Ionicons name={downloadingScreenshot ? 'cloud-download' : 'download-outline'} size={16} color={colors.primary} />
+                  </Pressable>
+                </View>
               </View>
             ) : null}
+
+            <TextField
+              label={t('subscription.adminMessageLabel')}
+              helperText={t('subscription.adminMessageHint')}
+              placeholder={t('subscription.adminMessagePlaceholder')}
+              value={adminMessage}
+              onChangeText={setAdminMessage}
+              multiline
+              numberOfLines={3}
+            />
 
             <View style={{ gap: spacing.sm }}>
               <Button label={t('subscription.adminApprove')} onPress={() => setShowApproveConfirm(true)} loading={busy} />
               <Button label={t('subscription.adminReject')} variant="danger" onPress={() => setShowRejectDialog(true)} loading={busy} />
+              {alreadyReviewed ? <Text variant="caption" secondary style={{ textAlign: 'center' }}>{t('subscription.adminReReviewHint')}</Text> : null}
             </View>
           </>
         )}
@@ -152,9 +222,7 @@ export default function AdminSubscriptionDetailScreen() {
 
       <Modal visible={fullscreen} transparent animationType="fade" onRequestClose={() => setFullscreen(false)}>
         <Pressable style={styles.fullscreenOverlay} onPress={() => setFullscreen(false)}>
-          {record?.screenshotUrl ? (
-            <Image source={{ uri: record.screenshotUrl }} style={styles.fullscreenImage} resizeMode="contain" />
-          ) : null}
+          {record?.screenshotUrl ? <Image source={{ uri: record.screenshotUrl }} style={styles.fullscreenImage} resizeMode="contain" /> : null}
         </Pressable>
       </Modal>
     </>
@@ -166,7 +234,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.md }}>
       <Text variant="bodySmall" secondary style={{ width: 100 }}>{label}</Text>
-      <Text variant="bodyLarge" weight="semiBold" style={{ flex: 1 }} numberOfLines={2}>{value}</Text>
+      <Text variant="bodyLarge" weight="semiBold" style={{ flex: 1 }} numberOfLines={3}>{value}</Text>
     </View>
   );
 }
@@ -178,9 +246,12 @@ function Divider() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusBanner: { borderWidth: 1 },
   card: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   screenshot: { width: '100%', height: 220, borderRadius: 12 },
+  urlRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingVertical: 8 },
+  urlIconBtn: { padding: 8 },
   modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modalCard: { width: '88%' },
   fullscreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
