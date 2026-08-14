@@ -13,6 +13,16 @@ export const Collections = {
   learningChapters: (subjectId: string) => `app_learning_subjects/${subjectId}/chapters`,
   learningUnits: (subjectId: string) => `app_learning_subjects/${subjectId}/units`,
   learningUnitChapters: (subjectId: string, unitId: string) => `app_learning_subjects/${subjectId}/units/${unitId}/chapters`,
+  // Flat catalog collections for the Subject admin/data model. The nested paths
+  // above remain available for backward compatibility with the first release.
+  learningChapterRecords: 'app_learning_chapters',
+  learningUnitRecords: 'app_learning_units',
+  learningUnitChapterRecords: 'app_learning_unit_chapters',
+  // New subject-page content model; question mode is stored on each document so
+  // Practice and Read banks remain independently manageable.
+  learningQuestions: 'app_learning_questions',
+  learningQuestionBanks: 'app_learning_question_banks',
+  learningTheory: 'app_learning_theory',
   topics: (subjectId: string, chapterId: string) => `subjects/${subjectId}/chapters/${chapterId}/topics`,
   questions: 'questions',
   mockTests: 'mockTests',

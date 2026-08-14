@@ -1,6 +1,7 @@
-// Question Bank (PRD §47.3): filtered by subject/chapter/difficulty for Quiz Practice.
 import { runQuery } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
+import { fetchLearningQuestions, type LearningQuestion, type LearningQuestionMode } from '@/src/core/firebase/services/learningContent';
+import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
 
 export interface Question {
   id: string;
@@ -11,6 +12,27 @@ export interface Question {
   correctIndex: number;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  mode?: LearningQuestionMode;
+  textNe?: string;
+  optionsNe?: string[];
+  explanationNe?: string;
+}
+
+function toQuestion(question: LearningQuestion): Question {
+  return {
+    id: question.id,
+    subjectId: question.subjectId,
+    chapterId: question.chapterId,
+    text: question.text,
+    options: question.options,
+    correctIndex: question.correctIndex,
+    explanation: question.explanation,
+    difficulty: question.difficulty,
+    mode: question.mode,
+    textNe: question.textNe,
+    optionsNe: question.optionsNe,
+    explanationNe: question.explanationNe,
+  };
 }
 
 export async function fetchQuestionsBySubject(subjectId: string, max = 50): Promise<Question[]> {
@@ -20,14 +42,22 @@ export async function fetchQuestionsBySubject(subjectId: string, max = 50): Prom
   })) as unknown as Question[];
 }
 
-export async function fetchQuestionsByChapter(subjectId: string, chapterId: string, max = 100): Promise<Question[]> {
-  return (await runQuery(Collections.questions, {
+export async function fetchQuestionsByChapter(
+  subjectId: string,
+  chapterId: string,
+  max = 100,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<Question[]> {
+  const learningQuestions = await fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId);
+  const legacyQuestions = (await runQuery(Collections.questions, {
     where: [
       { field: 'subjectId', op: '==', value: subjectId },
       { field: 'chapterId', op: '==', value: chapterId },
     ],
     limit: max,
   })) as unknown as Question[];
+  return [...learningQuestions.map(toQuestion), ...legacyQuestions].slice(0, max);
 }
 
 export async function fetchAllQuestions(max = 200): Promise<Question[]> {

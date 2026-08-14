@@ -62,8 +62,18 @@ export interface LearningSeedOptions {
   overwriteCatalogFields?: boolean;
 }
 
-const DEFAULT_COURSE_ID = 'civil-engineering';
-const DEFAULT_SUBCOURSE_ID = 'civil-assistant-sub-engineer';
+export const DEFAULT_LEARNING_COURSE_ID = 'civil-engineering';
+export const DEFAULT_LEARNING_SUBCOURSE_ID = 'civil-assistant-sub-engineer';
+
+function catalogDocumentId(subjectId: string, courseId = DEFAULT_LEARNING_COURSE_ID, subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID): string {
+  return courseId === DEFAULT_LEARNING_COURSE_ID && subcourseId === DEFAULT_LEARNING_SUBCOURSE_ID
+    ? subjectId
+    : `${courseId}__${subcourseId}__${subjectId}`;
+}
+
+function scopedSubjectPath(subjectId: string, courseId?: string, subcourseId?: string): string {
+  return `${Collections.learningSubjects}/${catalogDocumentId(subjectId, courseId, subcourseId)}`;
+}
 
 function numberValue(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -79,7 +89,7 @@ function booleanValue(value: unknown, fallback = false): boolean {
 
 function subjectFromDocument(document: Record<string, unknown>): LearningSubject {
   return {
-    id: String(document.id ?? ''),
+    id: String(document.subjectId ?? document.id ?? ''),
     order: numberValue(document.order),
     title: String(document.title ?? document.name ?? ''),
     titleNe: String(document.titleNe ?? document.title ?? document.name ?? ''),
@@ -128,18 +138,34 @@ function chapterFromDocument(document: Record<string, unknown>, subjectId: strin
   };
 }
 
-export async function fetchLearningSubjects(): Promise<LearningSubject[]> {
+export async function fetchLearningSubjects(
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<LearningSubject[]> {
   const documents = await listDocuments(Collections.learningSubjects);
-  return documents.map(subjectFromDocument).sort((a, b) => a.order - b.order);
+  return documents
+    .filter((document) => (document.courseId ?? DEFAULT_LEARNING_COURSE_ID) === courseId && (document.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID) === subcourseId)
+    .map(subjectFromDocument)
+    .sort((a, b) => a.order - b.order);
 }
 
-export async function fetchLearningSubject(subjectId: string): Promise<LearningSubject | null> {
-  const document = await getDocument(`${Collections.learningSubjects}/${subjectId}`);
+export async function fetchLearningSubject(
+  subjectId: string,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<LearningSubject | null> {
+  const document = await getDocument(scopedSubjectPath(subjectId, courseId, subcourseId));
   return document ? subjectFromDocument(document) : null;
 }
 
-export async function fetchLearningUnit(subjectId: string, unitId: string): Promise<LearningUnit | null> {
-  const document = await getDocument(`${Collections.learningUnits(subjectId)}/${unitId}`);
+export async function fetchLearningUnit(
+  subjectId: string,
+  unitId: string,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<LearningUnit | null> {
+  const scopedId = catalogDocumentId(subjectId, courseId, subcourseId);
+  const document = await getDocument(`${Collections.learningUnits(scopedId)}/${unitId}`);
   return document ? unitFromDocument(document, subjectId) : null;
 }
 
@@ -147,28 +173,60 @@ export async function fetchLearningChapter(
   subjectId: string,
   chapterId: string,
   unitId?: string | null,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
 ): Promise<LearningChapter | null> {
+  const scopedId = catalogDocumentId(subjectId, courseId, subcourseId);
   const document = await getDocument(
     unitId
-      ? `${Collections.learningUnitChapters(subjectId, unitId)}/${chapterId}`
-      : `${Collections.learningChapters(subjectId)}/${chapterId}`,
+      ? `${Collections.learningUnitChapters(scopedId, unitId)}/${chapterId}`
+      : `${Collections.learningChapters(scopedId)}/${chapterId}`,
   );
   return document ? chapterFromDocument(document, subjectId, unitId ?? null) : null;
 }
 
-export async function fetchLearningUnits(subjectId: string): Promise<LearningUnit[]> {
-  const documents = await listDocuments(Collections.learningUnits(subjectId));
+export async function fetchLearningUnits(
+  subjectId: string,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<LearningUnit[]> {
+  const scopedId = catalogDocumentId(subjectId, courseId, subcourseId);
+  const flatDocuments = (await listDocuments(Collections.learningUnitRecords)).filter(
+    (document) => document.subjectId === subjectId && (document.courseId ?? DEFAULT_LEARNING_COURSE_ID) === courseId && (document.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID) === subcourseId,
+  );
+  if (flatDocuments.length > 0) {
+    return flatDocuments.map((document) => unitFromDocument(document, subjectId)).sort((a, b) => a.order - b.order);
+  }
+  const documents = await listDocuments(Collections.learningUnits(scopedId));
   return documents.map((document) => unitFromDocument(document, subjectId)).sort((a, b) => a.order - b.order);
 }
 
-export async function fetchLearningChapters(subjectId: string, unitId?: string | null): Promise<LearningChapter[]> {
-  const documents = await listDocuments(unitId ? Collections.learningUnitChapters(subjectId, unitId) : Collections.learningChapters(subjectId));
+export async function fetchLearningChapters(
+  subjectId: string,
+  unitId?: string | null,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<LearningChapter[]> {
+  const scopedId = catalogDocumentId(subjectId, courseId, subcourseId);
+  const flatCollection = unitId ? Collections.learningUnitChapterRecords : Collections.learningChapterRecords;
+  const flatDocuments = (await listDocuments(flatCollection)).filter(
+    (document) => document.subjectId === subjectId
+      && (document.unitId ?? null) === (unitId ?? null)
+      && (document.courseId ?? DEFAULT_LEARNING_COURSE_ID) === courseId
+      && (document.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID) === subcourseId,
+  );
+  if (flatDocuments.length > 0) {
+    return flatDocuments.map((document) => chapterFromDocument(document, subjectId, unitId ?? null)).sort((a, b) => a.order - b.order);
+  }
+  const documents = await listDocuments(unitId ? Collections.learningUnitChapters(scopedId, unitId) : Collections.learningChapters(scopedId));
   return documents.map((document) => chapterFromDocument(document, subjectId, unitId ?? null)).sort((a, b) => a.order - b.order);
 }
 
 function subjectWrite(subject: LearningSubjectSeed, options: Required<LearningSeedOptions>): WriteSpec {
   const chapterCount = countLearningChapters(subject);
-  return setWrite(`${Collections.learningSubjects}/${subject.id}`, {
+  const scopedId = catalogDocumentId(subject.id, options.courseId, options.subcourseId);
+  return setWrite(`${Collections.learningSubjects}/${scopedId}`, {
+    subjectId: subject.id,
     name: subject.title,
     title: subject.title,
     titleNe: subject.titleNe,
@@ -180,8 +238,8 @@ function subjectWrite(subject: LearningSubjectSeed, options: Required<LearningSe
     unitCount: countLearningUnits(subject),
     chapterCount,
     questionCount: 0,
-    isPremium: false,
-    price: 0,
+    isPremium: true,
+    price: 50,
     isPublished: true,
     isSeed: true,
     updatedAt: serverTimestamp(),
@@ -189,8 +247,10 @@ function subjectWrite(subject: LearningSubjectSeed, options: Required<LearningSe
   }, { merge: !options.overwriteCatalogFields });
 }
 
-function unitWrite(subject: LearningSubjectSeed, currentUnit: LearningUnitSeed, options: Required<LearningSeedOptions>): WriteSpec {
-  return setWrite(`${Collections.learningUnits(subject.id)}/${currentUnit.id}`, {
+function unitWrite(subject: LearningSubjectSeed, currentUnit: LearningUnitSeed, options: Required<LearningSeedOptions>): WriteSpec[] {
+  const scopedId = catalogDocumentId(subject.id, options.courseId, options.subcourseId);
+  const fields = {
+    id: currentUnit.id,
     subjectId: subject.id,
     title: currentUnit.title,
     titleNe: currentUnit.titleNe,
@@ -200,13 +260,17 @@ function unitWrite(subject: LearningSubjectSeed, currentUnit: LearningUnitSeed, 
     subcourseId: options.subcourseId,
     chapterCount: currentUnit.chapters.length,
     questionCount: 0,
-    isPremium: false,
-    price: 0,
+    isPremium: true,
+    price: 50,
     isPublished: true,
     isSeed: true,
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
-  }, { merge: !options.overwriteCatalogFields });
+  };
+  return [
+    setWrite(`${Collections.learningUnits(scopedId)}/${currentUnit.id}`, fields, { merge: !options.overwriteCatalogFields }),
+    setWrite(`${Collections.learningUnitRecords}/${scopedId}__${currentUnit.id}`, fields, { merge: !options.overwriteCatalogFields }),
+  ];
 }
 
 function chapterWrite(
@@ -214,11 +278,13 @@ function chapterWrite(
   currentChapter: LearningChapterSeed,
   options: Required<LearningSeedOptions>,
   unitId: string | null
-): WriteSpec {
+): WriteSpec[] {
+  const scopedId = catalogDocumentId(subject.id, options.courseId, options.subcourseId);
   const path = unitId
-    ? `${Collections.learningUnitChapters(subject.id, unitId)}/${currentChapter.id}`
-    : `${Collections.learningChapters(subject.id)}/${currentChapter.id}`;
-  return setWrite(path, {
+    ? `${Collections.learningUnitChapters(scopedId, unitId)}/${currentChapter.id}`
+    : `${Collections.learningChapters(scopedId)}/${currentChapter.id}`;
+  const fields = {
+    id: currentChapter.id,
     subjectId: subject.id,
     unitId,
     title: currentChapter.title,
@@ -227,19 +293,26 @@ function chapterWrite(
     courseId: options.courseId,
     subcourseId: options.subcourseId,
     questionCount: 0,
-    isPremium: false,
-    price: 0,
+    isPremium: true,
+    price: 50,
     isPublished: true,
     isSeed: true,
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
-  }, { merge: !options.overwriteCatalogFields });
+  };
+  const flatPath = unitId
+    ? `${Collections.learningUnitChapterRecords}/${scopedId}__${unitId}__${currentChapter.id}`
+    : `${Collections.learningChapterRecords}/${scopedId}__${currentChapter.id}`;
+  return [
+    setWrite(path, fields, { merge: !options.overwriteCatalogFields }),
+    setWrite(flatPath, fields, { merge: !options.overwriteCatalogFields }),
+  ];
 }
 
 export function buildCivilSubEngineerCatalogWrites(options: LearningSeedOptions = {}): WriteSpec[] {
   const resolvedOptions: Required<LearningSeedOptions> = {
-    courseId: options.courseId ?? DEFAULT_COURSE_ID,
-    subcourseId: options.subcourseId ?? DEFAULT_SUBCOURSE_ID,
+    courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
+    subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
     overwriteCatalogFields: options.overwriteCatalogFields ?? false,
   };
   const writes: WriteSpec[] = [];
@@ -247,12 +320,12 @@ export function buildCivilSubEngineerCatalogWrites(options: LearningSeedOptions 
   for (const subject of civilSubEngineerLearningCatalog) {
     writes.push(subjectWrite(subject, resolvedOptions));
     for (const currentChapter of subject.chapters ?? []) {
-      writes.push(chapterWrite(subject, currentChapter, resolvedOptions, null));
+      writes.push(...chapterWrite(subject, currentChapter, resolvedOptions, null));
     }
     for (const currentUnit of subject.units ?? []) {
-      writes.push(unitWrite(subject, currentUnit, resolvedOptions));
+      writes.push(...unitWrite(subject, currentUnit, resolvedOptions));
       for (const currentChapter of currentUnit.chapters) {
-        writes.push(chapterWrite(subject, currentChapter, resolvedOptions, currentUnit.id));
+        writes.push(...chapterWrite(subject, currentChapter, resolvedOptions, currentUnit.id));
       }
     }
   }

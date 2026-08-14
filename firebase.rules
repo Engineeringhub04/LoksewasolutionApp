@@ -117,7 +117,31 @@ service cloud.firestore {
         }
       }
     }
+    match /app_learning_chapters/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_learning_units/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_learning_unit_chapters/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /questions/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_learning_questions/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_learning_question_banks/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_learning_theory/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
