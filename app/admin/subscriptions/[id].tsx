@@ -6,7 +6,7 @@
 // its status/tag, never deletes it.
 import React, { useState } from 'react';
 import { View, StyleSheet, Image, Modal, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/src/core/theme';
@@ -33,7 +33,6 @@ export default function AdminSubscriptionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
-  const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
@@ -127,6 +126,23 @@ export default function AdminSubscriptionDetailScreen() {
               </View>
             ) : null}
 
+            <View style={[styles.actionPanel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: radius.lg, padding: spacing.md }]}>
+              <TextField
+                label={t('subscription.adminMessageLabel')}
+                helperText={t('subscription.adminMessageHint')}
+                placeholder={t('subscription.adminMessagePlaceholder')}
+                value={adminMessage}
+                onChangeText={setAdminMessage}
+                multiline
+                numberOfLines={3}
+              />
+              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                <Button label={t('subscription.adminApprove')} onPress={() => setShowApproveConfirm(true)} loading={busy} />
+                <Button label={t('subscription.adminReject')} variant="danger" onPress={() => setShowRejectDialog(true)} loading={busy} />
+                {alreadyReviewed ? <Text variant="caption" secondary style={{ textAlign: 'center' }}>{t('subscription.adminReReviewHint')}</Text> : null}
+              </View>
+            </View>
+
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <Row label={t('subscription.adminUser')} value={record.userName ?? record.userEmail ?? record.uid} />
               <Divider />
@@ -172,21 +188,6 @@ export default function AdminSubscriptionDetailScreen() {
               </View>
             ) : null}
 
-            <TextField
-              label={t('subscription.adminMessageLabel')}
-              helperText={t('subscription.adminMessageHint')}
-              placeholder={t('subscription.adminMessagePlaceholder')}
-              value={adminMessage}
-              onChangeText={setAdminMessage}
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={{ gap: spacing.sm }}>
-              <Button label={t('subscription.adminApprove')} onPress={() => setShowApproveConfirm(true)} loading={busy} />
-              <Button label={t('subscription.adminReject')} variant="danger" onPress={() => setShowRejectDialog(true)} loading={busy} />
-              {alreadyReviewed ? <Text variant="caption" secondary style={{ textAlign: 'center' }}>{t('subscription.adminReReviewHint')}</Text> : null}
-            </View>
           </>
         )}
       </SubpageScrollScreen>
@@ -247,6 +248,7 @@ function Divider() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusBanner: { borderWidth: 1 },
+  actionPanel: { borderWidth: 1.5 },
   card: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   screenshot: { width: '100%', height: 220, borderRadius: 12 },

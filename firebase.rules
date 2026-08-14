@@ -99,6 +99,47 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ===== Subscriptions =====
+    // Plans, payment settings, bank details and coupons are readable by signed-in
+    // users so the subscription and checkout screens can load their data. Only
+    // admins can manage the catalog/configuration documents.
+    match /app_subscription_settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_subscription_bank_details/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_subscription_plans/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_coupon_codes/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // A user can create and read only their own subscription request. Admins
+    // can review every request. Users may edit only their own payment details
+    // and customer note; status, amount, plan and admin fields stay protected.
+    match /app_subscriptions/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() &&
+                    request.resource.data.uid == request.auth.uid &&
+                    request.resource.data.status == 'pending' &&
+                    request.resource.data.adminMessage == null &&
+                    request.resource.data.reviewedAt == null &&
+                    request.resource.data.reviewedBy == null;
+      allow update: if isAdmin() ||
+                    (isSignedIn() &&
+                     resource.data.uid == request.auth.uid &&
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
     // ===== Exam Hub =====
     // TEMPORARY: write is open so the in-app seed button can populate these.
     // Once seeding is done, change every `write: if true` below to
