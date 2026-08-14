@@ -152,12 +152,18 @@ const DEFAULT_SETTINGS: SubscriptionSettings = {
 };
 
 export async function fetchSubscriptionSettings(): Promise<SubscriptionSettings> {
-  const doc = await getDocument(SETTINGS_DOC);
-  if (!doc) return DEFAULT_SETTINGS;
-  return {
-    esewa: { ...DEFAULT_SETTINGS.esewa, ...(doc.esewa as object) },
-    khalti: { ...DEFAULT_SETTINGS.khalti, ...(doc.khalti as object) },
-  };
+  try {
+    const doc = await getDocument(SETTINGS_DOC);
+    if (!doc) return DEFAULT_SETTINGS;
+    return {
+      esewa: { ...DEFAULT_SETTINGS.esewa, ...(doc.esewa as object) },
+      khalti: { ...DEFAULT_SETTINGS.khalti, ...(doc.khalti as object) },
+    };
+  } catch {
+    // Secret-bearing or temporarily unavailable settings must not block the
+    // manual QR checkout flow. Gateway cards safely fall back to disabled.
+    return DEFAULT_SETTINGS;
+  }
 }
 
 /** Admin-only: toggle eSewa/Khalti on or off, or update their merchant keys. */

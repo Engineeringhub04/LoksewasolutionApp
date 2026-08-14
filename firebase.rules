@@ -1,95 +1,200 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-    // Onboarding — read only (admin can write)
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // Public read-only configuration used before login. No client can write it.
     match /app_onboarding-settings/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Courses & Subcourses — readable by anyone signed in, writable by admin only.
-    // Subcourses live as a SUB-COLLECTION under each course document. A rule on the
-    // parent path does NOT cascade to subcollections in Firestore — this explicit
-    // nested match is required, otherwise subcourse reads/writes get "insufficient
-    // permission" even though the parent course path is open.
+    match /meta/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User profile. Privilege and subscription fields are never client-writable.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) &&
+        !request.resource.data.keys().hasAny([
+          'role', 'isAdmin', 'isPremium', 'premiumPlanName',
+          'premiumBillingCycle', 'premiumExpiryDate'
+        ]);
+      allow update: if isAdmin() ||
+        (isOwner(userId) && changedOnly([
+          'firstName', 'lastName', 'name', 'dob', 'gender', 'photoURL',
+          'courseId', 'subcourseId', 'courseSetupComplete', 'stats', 'updatedAt',
+          'unlockedAchievements'
+        ]));
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Legacy mock/live-exam attempts and the newer Exam Hub attempts.
+      match /attempts/{attemptId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin();
+      }
+      match /exam_attempts/{attemptId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin();
+      }
+      match /bookmarks/{bookmarkId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow update: if isOwner(userId) && changedOnly(['read']) &&
+          request.resource.data.read == true;
+        allow create, delete: if isAdmin();
+      }
+      match /qotd/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Curriculum and content. Users can consume content; only admins can edit it.
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+      match /chapters/{chapterId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+        match /topics/{topicId} {
+          allow read: if isSignedIn();
+          allow write: if isAdmin();
+        }
+      }
+    }
+    match /questions/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /mockTests/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /liveExams/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /currentAffairs/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /gorkhapatra/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /notices/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /achievements/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /leaderboard/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Discussion board: users may create their own posts/comments and adjust
+    // counters through the narrow operations used by the app.
+    match /discussions/{discussionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.likeCount == 0 &&
+        request.resource.data.commentCount == 0;
+      allow update: if isAdmin() ||
+        (isSignedIn() && (
+          (changedOnly(['likeCount']) &&
+            (request.resource.data.likeCount == resource.data.likeCount + 1 ||
+             request.resource.data.likeCount == resource.data.likeCount - 1)) ||
+          (changedOnly(['commentCount']) &&
+            (request.resource.data.commentCount == resource.data.commentCount + 1 ||
+             request.resource.data.commentCount == resource.data.commentCount - 1))
+        ));
+      allow delete: if isAdmin() ||
+        (isSignedIn() && resource.data.authorId == request.auth.uid);
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update: if isAdmin();
+        allow delete: if isAdmin() ||
+          (isSignedIn() && resource.data.authorId == request.auth.uid);
+      }
+    }
+
+    // Legacy flat collections retained for data already created by the app.
+    match /app_subcourses/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /app_courses/{courseId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
-
       match /subcourses/{subcourseId} {
         allow read: if isSignedIn();
         allow write: if isAdmin();
       }
     }
-    // Legacy flat collection (kept read-only for backward compatibility with data
-    // seeded before the sub-collection restructure).
-    match /app_subcourses/{docId} {
+    match /app_categories/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_mocktest/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_syllabus/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    match /meta/{docId} { allow read: if true; }
-
-    // User profile documents: users/{uid}
-    // Shape: uid, name, firstName, lastName, email, dob, gender, photoURL,
-    //        courseId, subcourseId, courseSetupComplete,
-    //        stats { testsTaken, streak, rank, points }, createdAt, updatedAt
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-
-      // A user may create and edit their OWN document, but must never write the
-      // `role` field: isAdmin() above is derived from users/{uid}.role, so
-      // allowing it would let anyone grant themselves admin over every
-      // collection in this file.
-      allow create: if isOwner(userId) && !request.resource.data.keys().hasAny(['role']);
-      allow update: if isAdmin() ||
-                       (isOwner(userId) &&
-                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
-
-      // Needed for "Delete Account", which removes the profile document before
-      // deleting the auth identity.
-      allow delete: if isOwner(userId) || isAdmin();
-
-      // Security rules do NOT cascade into subcollections, so these need their
-      // own match blocks — without them every attempt/QOTD write fell through
-      // to the deny-all at the bottom of this file.
-      match /attempts/{attemptId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-      match /qotd/{docId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-      // Catch-all for any future per-user subcollection.
-      match /{userSubcollection=**} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-    }
-
-    match /app_categories/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
-    match /app_mocktest/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
-    match /app_syllabus/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
-
     match /app_quiz_results/{docId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isOwner(resource.data.userId) || isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     match /app_bookmarks/{docId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isOwner(resource.data.userId) || isAdmin();
+      allow update, delete: if isAdmin();
     }
 
-    match /app_notes/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
-    match /app_notifications/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
-
-    // Home banners & About Developer — locked down now that seeding is done.
-    // Readable by anyone signed in, writable by admin only.
+    match /app_notes/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_notifications/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
     match /app_home_banners/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -99,127 +204,101 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ===== Subscriptions =====
-    // Plans, payment settings, bank details and coupons are readable by signed-in
-    // users so the subscription and checkout screens can load their data. Only
-    // admins can manage the catalog/configuration documents.
-    match /app_subscription_settings/{docId} {
+    // Exam Hub catalog. Reads remain public to preserve the existing website/app
+    // behavior; all catalog mutations require an admin.
+    match /app_exam_provinces/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /app_exam_sections/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /app_exam_sets/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /app_exam_rules/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /app_exam_rankings/{docId} {
       allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.score is number &&
+        request.resource.data.timeTakenSeconds is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.timeTakenSeconds >= 0;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // Theory answer upload and admin review.
+    match /app_exam_answers/{docId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.score == 0 &&
+        request.resource.data.passed == false &&
+        request.resource.data.reviewedAt == null;
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         resource.data.uid == request.auth.uid &&
+         resource.data.status == 'pending' &&
+         changedOnly(['pdfUrl', 'message']));
+      allow delete: if isAdmin();
+    }
+
+    // Subscription catalog and payment configuration.
+    match /app_subscription_plans/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /app_subscription_settings/{docId} {
+      // The public config may contain only enabled flags and public identifiers.
+      // Never expose eSewa/Khalti secret keys to mobile or website clients.
+      allow read: if isSignedIn() &&
+        (!resource.data.keys().hasAny(['esewa']) ||
+         !resource.data.esewa.keys().hasAny(['secretKey'])) &&
+        (!resource.data.keys().hasAny(['khalti']) ||
+         !resource.data.khalti.keys().hasAny(['secretKey']));
       allow write: if isAdmin();
     }
     match /app_subscription_bank_details/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-    match /app_subscription_plans/{docId} {
+    match /app_coupon_codes/{code} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         changedOnly(['usedCount']) &&
+         request.resource.data.usedCount == resource.data.usedCount + 1);
     }
-    match /app_coupon_codes/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // A user can create and read only their own subscription request. Admins
-    // can review every request. Users may edit only their own payment details
-    // and customer note; status, amount, plan and admin fields stay protected.
     match /app_subscriptions/{docId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create: if isSignedIn() &&
-                    request.resource.data.uid == request.auth.uid &&
-                    request.resource.data.status == 'pending' &&
-                    request.resource.data.adminMessage == null &&
-                    request.resource.data.reviewedAt == null &&
-                    request.resource.data.reviewedBy == null;
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.adminMessage == null &&
+        request.resource.data.reviewedAt == null &&
+        request.resource.data.reviewedBy == null;
       allow update: if isAdmin() ||
-                    (isSignedIn() &&
-                     resource.data.uid == request.auth.uid &&
-                     request.resource.data.uid == resource.data.uid &&
-                     request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
+        (isSignedIn() &&
+         resource.data.uid == request.auth.uid &&
+         request.resource.data.uid == resource.data.uid &&
+         changedOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
-    // ===== Exam Hub =====
-    // TEMPORARY: write is open so the in-app seed button can populate these.
-    // Once seeding is done, change every `write: if true` below to
-    // `write: if isAdmin()` — same pattern already applied to app_courses and
-    // app_home_banners after their seeding finished.
-    match /app_exam_provinces/{docId} {
-      allow read: if true;
-      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    // Default deny-all: any collection not explicitly listed above is closed.
+    match /{document=**} {
+      allow read, write: if false;
     }
-    match /app_exam_sections/{docId} {
-      allow read: if true;
-      allow write: if true; // TODO: tighten to isAdmin() after seeding
-    }
-    match /app_exam_sets/{docId} {
-      allow read: if true;
-      allow write: if true; // TODO: tighten to isAdmin() after seeding
-    }
-    match /app_exam_rules/{docId} {
-      allow read: if true;
-      allow write: if true; // TODO: tighten to isAdmin() after seeding
-    }
-
-    // One public row per attempt, used to build per-exam leaderboards. Needed
-    // because users/{uid}/exam_attempts is private and cannot be queried across
-    // users. A user may only create rows for themselves, and rows are immutable
-    // so a score can never be edited after the fact.
-    match /app_exam_rankings/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if false;
-      allow delete: if isAdmin();
-    }
-
-    // ===== Theory Answer Upload + Admin Review =====
-    // One document per submitted answer PDF. Flat top-level collection (not a
-    // per-user subcollection) because the Admin desk lists/queries submissions
-    // across every user, which a subcollection cannot do — so ownership is
-    // enforced with a `uid` field check instead.
-    //
-    // Shape: uid, studentName, courseId, courseName, subcourseId, subcourseName,
-    //        examSetId, examSetTitle, message, pdfUrl, status ('pending' |
-    //        'reviewed'), score, fullMarks, passed, reviewNote, createdAt,
-    //        reviewedAt.
-    match /app_exam_answers/{docId} {
-      // Owner reads their own submissions; admin reads everything (the Answer
-      // Review desk lists across all users).
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
-
-      // A student may only create a submission under their own uid, and it must
-      // start exactly as 'pending' with a zero score — grading fields are
-      // admin-only from the very first write, not just on update.
-      allow create: if isSignedIn()
-                      && request.resource.data.uid == request.auth.uid
-                      && request.resource.data.status == 'pending'
-                      && request.resource.data.score == 0
-                      && request.resource.data.passed == false;
-
-      // Two very different kinds of update share this collection, so they're
-      // split by who is writing:
-      //
-      // 1. The OWNER may re-upload/edit their own pending submission, but only
-      //    for one hour after createdAt, and only pdfUrl/message may change —
-      //    status/score/fullMarks/passed/reviewNote/reviewedAt/createdAt are
-      //    frozen from the student's side for the lifetime of the document,
-      //    which is what stops a student ever writing their own grade.
-      //
-      // 2. The ADMIN grades a submission — allowed to change the review fields
-      //    at any time, with no time limit.
-      allow update: if isAdmin() ||
-                      (isSignedIn() &&
-                       resource.data.uid == request.auth.uid &&
-                       resource.data.status == 'pending' &&
-                       request.time.toMillis() - resource.data.createdAt.toMillis() < 3600000 &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['uid', 'status', 'score', 'fullMarks', 'passed', 'reviewNote', 'reviewedAt', 'createdAt', 'checkedPdfUrl']));
-
-      allow delete: if isAdmin();
-    }
-
-    // Default deny-all
-    match /{document=**} { allow read, write: if false; }
   }
 }
