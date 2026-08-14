@@ -68,6 +68,7 @@ export default function ReportHistoryDetailScreen() {
   const responsePalette = isQuestionReport
     ? { panel: '#1E2A5A', active: '#344A86', previous: '#172044', border: '#7186D6', title: '#E2EAFF', muted: '#C5D2FF' }
     : { panel: '#8A3F0A', active: '#A85212', previous: '#743308', border: '#C56A2A', title: '#FFD7B0', muted: '#FFE9D6' };
+  const questionContentPalette = { card: '#EEF2FF', border: '#7186D6', icon: '#2449A8', iconBackground: '#DCE6FF', divider: '#B9C8F2', heading: '#1E2A5A' };
 
   return (
     <>
@@ -83,21 +84,28 @@ export default function ReportHistoryDetailScreen() {
             </View>
 
             <Card style={styles.sectionCard}>
-              <View style={styles.sectionHeading}><Ionicons name="document-text-outline" size={20} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportedContent')}</Text></View>
-              <View style={[styles.targetTag, { backgroundColor: `${colors.primary}16` }]}>
-                <Ionicons name={targetIcon(record)} size={16} color={colors.primary} />
-                <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{targetLabel(record, t)}</Text>
+              <View style={styles.sectionHeading}><Ionicons name={isQuestionReport ? 'school-outline' : 'document-text-outline'} size={20} color={isQuestionReport ? questionContentPalette.icon : colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportedContent')}</Text></View>
+              <View style={[styles.targetTag, { backgroundColor: isQuestionReport ? questionContentPalette.iconBackground : `${colors.primary}16` }]}>
+                <Ionicons name={targetIcon(record)} size={16} color={isQuestionReport ? questionContentPalette.icon : colors.primary} />
+                <Text variant="caption" weight="bold" style={{ color: isQuestionReport ? questionContentPalette.icon : colors.primary }}>{targetLabel(record, t)}</Text>
               </View>
-              <View style={[styles.contentCard, { backgroundColor: colors.surfaceAlt, borderColor: `${colors.primary}28`, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm }]}>
+              <View style={[styles.contentCard, { backgroundColor: isQuestionReport ? questionContentPalette.card : colors.surfaceAlt, borderColor: isQuestionReport ? questionContentPalette.border : `${colors.primary}28`, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm }]}>
                 <View style={styles.contentHeader}>
-                  {record.targetAuthorPhoto ? <Image source={{ uri: record.targetAuthorPhoto }} style={styles.smallAvatar} /> : <View style={[styles.smallAvatar, styles.avatarFallback, { backgroundColor: `${colors.primary}16` }]}><Ionicons name="person" size={16} color={colors.primary} /></View>}
+                  {isQuestionReport ? <View style={[styles.questionIconWrap, { backgroundColor: questionContentPalette.iconBackground, borderColor: questionContentPalette.border }]}><Ionicons name="school-outline" size={25} color={questionContentPalette.icon} /></View> : record.targetAuthorPhoto ? <Image source={{ uri: record.targetAuthorPhoto }} style={styles.smallAvatar} /> : <View style={[styles.smallAvatar, styles.avatarFallback, { backgroundColor: `${colors.primary}16` }]}><Ionicons name="person" size={16} color={colors.primary} /></View>}
                   <View style={{ flex: 1 }}>
-                    <Text variant="body" weight="bold" numberOfLines={1}>{record.targetTitle || targetLabel(record, t)}</Text>
-                    <Text variant="caption" secondary numberOfLines={1}>{record.targetAuthorName || '—'} · {formatDate(record.createdAt)}</Text>
+                    <Text variant="body" weight="bold" numberOfLines={2} style={isQuestionReport ? { color: questionContentPalette.heading } : undefined}>{record.targetTitle || targetLabel(record, t)}</Text>
+                    <Text variant="caption" secondary numberOfLines={1}>{isQuestionReport ? t('discussion.questionReport') : `${record.targetAuthorName || '—'} · ${formatDate(record.createdAt)}`}</Text>
                   </View>
                 </View>
                 <Text variant="body" style={{ marginTop: spacing.sm }}>{record.targetPreview || '—'}</Text>
                 <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{t('discussion.targetKind')}: {targetLabel(record, t)} · ID: {record.targetId}</Text>
+                {isQuestionReport ? (
+                  <View style={[styles.questionReportDetails, { borderTopColor: questionContentPalette.divider }]}>
+                    <View style={styles.questionDetailRow}><Ionicons name="flag-outline" size={17} color={questionContentPalette.icon} /><Text variant="caption" weight="bold" style={{ color: questionContentPalette.heading }}>{t('discussion.reason')}: {record.reason}</Text></View>
+                    <Text variant="bodySmall" secondary>{record.description || '—'}</Text>
+                    <Text variant="caption" secondary>{formatDate(record.createdAt)}</Text>
+                  </View>
+                ) : null}
               </View>
             </Card>
 
@@ -106,12 +114,14 @@ export default function ReportHistoryDetailScreen() {
               <ProfileLine name={record.reporterName} email={record.reporterEmail} photo={record.reporterPhoto} course={record.reporterCourseId} subcourse={record.reporterSubcourseId} colors={colors} />
             </Card>
 
-            <Card style={styles.sectionCard}>
-              <View style={styles.sectionHeading}><Ionicons name="information-circle-outline" size={20} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportMessage')}</Text></View>
-              <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.sm }}>{record.reason}</Text>
-              <Text variant="body" secondary style={{ marginTop: spacing.sm }}>{record.description || '—'}</Text>
-              <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{formatDate(record.createdAt)}</Text>
-            </Card>
+            {!isQuestionReport ? (
+              <Card style={styles.sectionCard}>
+                <View style={styles.sectionHeading}><Ionicons name="information-circle-outline" size={20} color={colors.primary} /><Text variant="bodyLarge" weight="bold">{t('discussion.reportMessage')}</Text></View>
+                <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.sm }}>{record.reason}</Text>
+                <Text variant="body" secondary style={{ marginTop: spacing.sm }}>{record.description || '—'}</Text>
+                <Text variant="caption" secondary style={{ marginTop: spacing.sm }}>{formatDate(record.createdAt)}</Text>
+              </Card>
+            ) : null}
 
             {record.adminResponses.length ? (
               <View style={[styles.responsePanel, { backgroundColor: responsePalette.panel, borderColor: responsePalette.border, borderRadius: radius.lg, padding: spacing.md }]}>
@@ -146,6 +156,9 @@ const styles = StyleSheet.create({
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 10 },
   avatar: { width: 52, height: 52, borderRadius: 26 },
   smallAvatar: { width: 36, height: 36, borderRadius: 18 },
+  questionIconWrap: { width: 52, height: 52, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  questionReportDetails: { gap: 7, borderTopWidth: 1, marginTop: 12, paddingTop: 12 },
+  questionDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
   responsePanel: { gap: 2 },
   responseItem: { borderWidth: 1, borderColor: '#C56A2A' },
