@@ -133,7 +133,7 @@ export default function DiscussionFeedScreen() {
           { label: t('common.edit'), icon: 'create-outline', onPress: () => setConfirmAction({ kind: 'edit', post: selectedPost }) },
           { label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'delete', post: selectedPost }) },
         ]
-      : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', post: selectedPost }) }]
+      : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => { setReportTarget({ type: 'post', id: selectedPost.id, authorName: selectedPost.authorName, authorPhoto: selectedPost.authorPhoto, preview: selectedPost.body }); setShowReportModal(true); setSelectedPost(null); } }]
     : [];
 
   const handleConfirmedPostAction = () => {

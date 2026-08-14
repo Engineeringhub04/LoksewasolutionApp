@@ -51,6 +51,7 @@ export default function DiscussionDetailScreen() {
   const discussion = useAsyncData(() => fetchDiscussion(id), [id]);
   const comments = useAsyncData(() => fetchComments(id), [id]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentProfile, setCurrentProfile] = useState<{ name?: string | null; photoURL?: string | null } | null>(null);
   const [commentText, setCommentText] = useState('');
   const [replyText, setReplyText] = useState('');
   const [liked, setLiked] = useState(false);
@@ -66,20 +67,43 @@ export default function DiscussionDetailScreen() {
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [commentLikes, setCommentLikes] = useState<Record<string, LikeState>>({});
   const [replyLikes, setReplyLikes] = useState<Record<string, LikeState>>({});
+  const [likesLoading, setLikesLoading] = useState(true);
+  const [postLikeLoading, setPostLikeLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    fetchUserProfile(user.uid).then((profile) => setIsAdmin(profile?.isAdmin === true)).catch(() => undefined);
-    isDiscussionLiked(id).then(setLiked).catch(() => undefined);
+    setPostLikeLoading(true);
+    setProfileLoading(Boolean(user));
+    if (!user) {
+      setCurrentProfile(null);
+      setIsAdmin(false);
+      setLiked(false);
+      setPostLikeLoading(false);
+      return;
+    }
+    fetchUserProfile(user.uid).then((profile) => {
+      setCurrentProfile(profile ? { name: profile.name, photoURL: profile.photoURL } : null);
+      setIsAdmin(profile?.isAdmin === true);
+    }).catch(() => undefined).finally(() => setProfileLoading(false));
+    isDiscussionLiked(id).then(setLiked).catch(() => undefined).finally(() => setPostLikeLoading(false));
   }, [id, user]);
 
   useEffect(() => {
     const currentComments = comments.data ?? [];
     let active = true;
+    setLikesLoading(true);
+    if (currentComments.length === 0) {
+      setCommentLikes({});
+      setLikesLoading(false);
+      return () => { active = false; };
+    }
     Promise.all(currentComments.map(async (comment) => [comment.id, await isCommentLiked(id, comment.id).catch(() => false)] as const))
       .then((entries) => {
         if (!active) return;
         setCommentLikes(Object.fromEntries(entries.map(([commentId, isLiked]) => [commentId, { liked: isLiked, delta: 0 }])));
+      })
+      .finally(() => {
+        if (active) setLikesLoading(false);
       });
     return () => { active = false; };
   }, [comments.data, id]);
@@ -104,12 +128,21 @@ export default function DiscussionDetailScreen() {
     }
   };
 
-  const handleToggleCommentLike = async (commentId: string, next: boolean, replyId?: string) => {
+  const handleToggleCommentLike = async (commentId: string, next: boolean, replyId?: string, baseLikeCount = 0) => {
     const key = replyId ? `${commentId}:${replyId}` : commentId;
     const setter = replyId ? setReplyLikes : setCommentLikes;
     setter((prev) => ({ ...prev, [key]: { liked: next, delta: (prev[key]?.delta ?? 0) + (next ? 1 : -1) } }));
     try {
       await toggleCommentLike(id, commentId, next, replyId);
+      if (replyId) {
+        const latestReplies = await fetchReplies(id, commentId);
+        const latestReply = latestReplies.find((reply) => reply.id === replyId);
+        if (latestReply) setter((prev) => ({ ...prev, [key]: { liked: next, delta: latestReply.likeCount - baseLikeCount } }));
+      } else {
+        const latestComments = await fetchComments(id);
+        const latestComment = latestComments.find((comment) => comment.id === commentId);
+        if (latestComment) setter((prev) => ({ ...prev, [key]: { liked: next, delta: latestComment.likeCount - baseLikeCount } }));
+      }
     } catch {
       setter((prev) => ({ ...prev, [key]: { liked: !next, delta: (prev[key]?.delta ?? 0) + (next ? -1 : 1) } }));
     }
@@ -119,7 +152,8 @@ export default function DiscussionDetailScreen() {
     if (!user || !commentText.trim()) return;
     setPosting(true);
     try {
-      await addComment(id, { body: commentText.trim(), authorName: user.displayName ?? 'Anonymous', authorPhoto: user.photoURL, authorId: user.uid });
+      const profile = await fetchUserProfile(user.uid).catch(() => null);
+      await addComment(id, { body: commentText.trim(), authorName: profile?.name || user.displayName || 'Anonymous', authorPhoto: profile?.photoURL ?? user.photoURL ?? null, authorId: user.uid });
       setCommentText('');
       showToast(t('discussion.commentPosted'), 'success');
       comments.refetch();
@@ -134,7 +168,8 @@ export default function DiscussionDetailScreen() {
     if (!user || !replyText.trim()) return;
     setReplying(true);
     try {
-      await addReply(id, commentId, { body: replyText.trim(), authorName: user.displayName ?? 'Anonymous', authorPhoto: user.photoURL, authorId: user.uid });
+      const profile = await fetchUserProfile(user.uid).catch(() => null);
+      await addReply(id, commentId, { body: replyText.trim(), authorName: profile?.name || user.displayName || 'Anonymous', authorPhoto: profile?.photoURL ?? user.photoURL ?? null, authorId: user.uid });
       setReplyText('');
       await loadReplies(commentId);
       showToast(t('discussion.replyPosted'), 'success');
@@ -252,21 +287,21 @@ export default function DiscussionDetailScreen() {
             { label: t('common.edit'), icon: 'create-outline', onPress: () => setConfirmAction({ kind: 'editPost' }) },
             { label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deletePost' }) },
           ]
-        : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'post', id, authorName: post.authorName, authorPhoto: post.authorPhoto, preview: post.body } }) }];
+        : [{ label: t('discussion.reportPost'), icon: 'flag-outline', destructive: true, onPress: () => openReport({ type: 'post', id, authorName: post.authorName, authorPhoto: post.authorPhoto, preview: post.body }) }];
     }
     if (menuTarget.kind === 'comment') {
       const comment = menuTarget.comment;
       return user?.uid === comment.authorId || isAdmin
         ? [{ label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deleteComment', commentId: comment.id }) }]
-        : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'comment', id: comment.id, authorName: comment.authorName, authorPhoto: comment.authorPhoto, preview: comment.body } }) }];
+        : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => openReport({ type: 'comment', id: comment.id, authorName: comment.authorName, authorPhoto: comment.authorPhoto, preview: comment.body }) }];
     }
     const reply = menuTarget.reply;
     return user?.uid === reply.authorId || isAdmin
       ? [{ label: t('common.delete'), icon: 'trash-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'deleteReply', commentId: menuTarget.commentId, replyId: reply.id }) }]
-      : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => setConfirmAction({ kind: 'report', target: { type: 'comment', id: reply.id, authorName: reply.authorName, authorPhoto: reply.authorPhoto, preview: reply.body } }) }];
+      : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => openReport({ type: 'comment', id: reply.id, authorName: reply.authorName, authorPhoto: reply.authorPhoto, preview: reply.body }) }];
   }, [discussion.data, id, isAdmin, menuTarget, t, user?.uid]);
 
-  if (discussion.loading) {
+  if (discussion.loading || comments.loading || likesLoading || postLikeLoading || profileLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <TopAppBar title={t('discussion.commentsTitle')} actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} />} />
@@ -332,12 +367,12 @@ export default function DiscussionDetailScreen() {
             <View style={{ marginBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: spacing.xs }}>
               <CommentCard
                 authorName={item.authorName}
-                authorPhoto={item.authorPhoto ?? (item.authorId === user?.uid ? user?.photoURL : null)}
+                authorPhoto={item.authorPhoto ?? (item.authorId === user?.uid ? currentProfile?.photoURL ?? user?.photoURL : null)}
                 body={item.body}
                 timestamp={formatTimestamp(item.createdAt)}
                 likeCount={item.likeCount + commentLike.delta}
                 liked={commentLike.liked}
-                onToggleLike={() => handleToggleCommentLike(item.id, !commentLike.liked)}
+                onToggleLike={() => handleToggleCommentLike(item.id, !commentLike.liked, undefined, item.likeCount)}
                 onMenuPress={(anchor) => handleCommentMenu(item, anchor)}
               />
               <View style={{ flexDirection: 'row', gap: spacing.md, marginLeft: spacing.xl, marginBottom: spacing.xs }}>
@@ -353,13 +388,13 @@ export default function DiscussionDetailScreen() {
                       <CommentCard
                         key={reply.id}
                         authorName={reply.authorName}
-                        authorPhoto={reply.authorPhoto ?? (reply.authorId === user?.uid ? user?.photoURL : null)}
+                        authorPhoto={reply.authorPhoto ?? (reply.authorId === user?.uid ? currentProfile?.photoURL ?? user?.photoURL : null)}
                         body={reply.body}
                         timestamp={formatTimestamp(reply.createdAt)}
                         likeCount={reply.likeCount + replyLike.delta}
                         liked={replyLike.liked}
                         indent
-                        onToggleLike={() => handleToggleCommentLike(item.id, !replyLike.liked, reply.id)}
+                        onToggleLike={() => handleToggleCommentLike(item.id, !replyLike.liked, reply.id, reply.likeCount)}
                         onMenuPress={(anchor) => handleReplyMenu(item.id, reply, anchor)}
                       />
                     );

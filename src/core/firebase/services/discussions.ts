@@ -238,11 +238,14 @@ async function isReactionLiked(reactionPath: string): Promise<boolean> {
 async function toggleReaction(reactionPath: string, targetPath: string, liked: boolean): Promise<void> {
   const uid = await getCurrentUid();
   if (!uid) throw new Error('AUTH_REQUIRED');
+  const reactionDocument = `${reactionPath}/${uid}`;
+  const alreadyLiked = Boolean(await getDocument(reactionDocument));
+  if (liked === alreadyLiked) return;
   if (liked) {
-    await setDocument(`${reactionPath}/${uid}`, { uid, createdAt: serverTimestamp() }, { merge: true });
+    await setDocument(reactionDocument, { uid, createdAt: serverTimestamp() }, { merge: true });
     await updateDocument(targetPath, { likeCount: increment(1) });
   } else {
-    await deleteDocument(`${reactionPath}/${uid}`);
+    await deleteDocument(reactionDocument);
     await updateDocument(targetPath, { likeCount: increment(-1) });
   }
 }
@@ -274,7 +277,7 @@ export async function reportContent(
   reason: string,
   context?: { title?: string | null; preview?: string | null; authorName?: string | null; authorPhoto?: string | null }
 ): Promise<void> {
-  await Promise.all([
+  const results = await Promise.allSettled([
     submitToGoogleForm({
       type: 'report',
       issueCategory: `discussion / ${targetType}`,
@@ -292,4 +295,11 @@ export async function reportContent(
       reason,
     }),
   ]);
+
+  // Never let a Firestore history write prevent the legacy Google Form →
+  // Spreadsheet → Apps Script → Discord notification path from completing.
+  // The UI only treats the report as failed when both destinations reject it.
+  if (results.every((result) => result.status === 'rejected')) {
+    throw new Error('DISCUSSION_REPORT_SUBMIT_FAILED');
+  }
 }
