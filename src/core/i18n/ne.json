@@ -283,6 +283,8 @@
     "reportedBy": "सामग्रीको लेखक",
     "adminResponse": "एडमिन प्रतिक्रिया",
     "adminResponseHistory": "जवाफ इतिहास",
+    "questionResponse": "प्रश्न प्रतिक्रिया",
+    "questionResponseHistory": "प्रश्न प्रतिक्रिया इतिहास",
     "customAdminMessage": "कस्टम सन्देश",
     "customAdminMessagePlaceholder": "रिपोर्टकर्ताका लागि सन्देश लेख्नुहोस्...",
     "resolveReport": "रिपोर्ट समाधान गर्नुहोस्",

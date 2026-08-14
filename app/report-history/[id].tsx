@@ -64,6 +64,10 @@ export default function ReportHistoryDetailScreen() {
   const record = data ?? null;
   const sourceLabel = record?.source === 'question' ? t('discussion.questionReport') : record?.source === 'comment' ? t('discussion.commentReport') : t('discussion.discussionReport');
   const statusColor = record?.status === 'resolved' ? colors.success : record?.status === 'dismissed' ? colors.error : record?.status === 'reviewed' ? colors.primary : colors.warning;
+  const isQuestionReport = record?.source === 'question' || record?.targetType === 'question';
+  const responsePalette = isQuestionReport
+    ? { panel: '#1E2A5A', active: '#344A86', previous: '#172044', border: '#7186D6', title: '#E2EAFF', muted: '#C5D2FF' }
+    : { panel: '#8A3F0A', active: '#A85212', previous: '#743308', border: '#C56A2A', title: '#FFD7B0', muted: '#FFE9D6' };
 
   return (
     <>
@@ -110,13 +114,13 @@ export default function ReportHistoryDetailScreen() {
             </Card>
 
             {record.adminResponses.length ? (
-              <View style={[styles.responsePanel, { backgroundColor: '#8A3F0A', borderRadius: radius.lg, padding: spacing.md }]}>
-                <View style={styles.sectionHeading}><Ionicons name="shield-checkmark" size={20} color="#FFD7B0" /><Text variant="bodyLarge" weight="bold" style={{ color: '#FFD7B0' }}>{t('discussion.adminResponse')}</Text></View>
-                <Text variant="caption" style={{ color: '#FFE9D6', marginTop: spacing.xs }}>{t('discussion.adminResponseHistory')}</Text>
+              <View style={[styles.responsePanel, { backgroundColor: responsePalette.panel, borderColor: responsePalette.border, borderRadius: radius.lg, padding: spacing.md }]}>
+                <View style={styles.sectionHeading}><Ionicons name={isQuestionReport ? 'school-outline' : 'shield-checkmark'} size={20} color={responsePalette.title} /><Text variant="bodyLarge" weight="bold" style={{ color: responsePalette.title }}>{isQuestionReport ? t('discussion.questionResponse') : t('discussion.adminResponse')}</Text></View>
+                <Text variant="caption" style={{ color: responsePalette.muted, marginTop: spacing.xs }}>{isQuestionReport ? t('discussion.questionResponseHistory') : t('discussion.adminResponseHistory')}</Text>
                 <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
                   {record.adminResponses.map((response, index) => (
-                    <View key={response.id} style={[styles.responseItem, { backgroundColor: index === record.adminResponses.length - 1 ? '#A85212' : '#743308', borderRadius: radius.md, padding: spacing.sm }]}>
-                      <View style={styles.responseMeta}><Text variant="caption" weight="bold" style={{ color: '#FFD7B0' }}>{statusLabel(response.status, t)}</Text><Text variant="caption" style={{ color: '#FFE9D6' }}>{formatDate(response.createdAt)}</Text></View>
+                    <View key={response.id} style={[styles.responseItem, { backgroundColor: index === record.adminResponses.length - 1 ? responsePalette.active : responsePalette.previous, borderColor: responsePalette.border, borderRadius: radius.md, padding: spacing.sm }]}>
+                      <View style={styles.responseMeta}><Text variant="caption" weight="bold" style={{ color: responsePalette.title }}>{statusLabel(response.status, t)}</Text><Text variant="caption" style={{ color: responsePalette.muted }}>{formatDate(response.createdAt)}</Text></View>
                       <Text variant="body" style={{ color: '#FFFFFF', marginTop: spacing.xs }}>{response.message}</Text>
                     </View>
                   ))}
