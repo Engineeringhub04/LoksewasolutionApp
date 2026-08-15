@@ -49,8 +49,17 @@ export async function seedCourseData(): Promise<void> {
 
 /** Fetch all courses ordered by `order` field. */
 export async function fetchCourses(): Promise<Course[]> {
-  const docs = await runQuery(COURSES_COLLECTION, { orderBy: [{ field: 'order', direction: 'asc' }] });
-  return docs as unknown as Course[];
+  try {
+    const docs = await runQuery(COURSES_COLLECTION, { orderBy: [{ field: 'order', direction: 'asc' }] });
+    return (docs as unknown as Course[]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  } catch (queryError) {
+    // Older or partially seeded course documents can make the structured
+    // orderBy request fail. A direct collection read uses the same rules and
+    // lets the client apply the small catalogue sort safely.
+    if (__DEV__) console.warn('[Courses] ordered query failed; using collection fallback', queryError);
+    const docs = await listDocuments(COURSES_COLLECTION);
+    return (docs as unknown as Course[]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
 }
 
 /**
