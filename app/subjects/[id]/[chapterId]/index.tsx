@@ -100,9 +100,13 @@ export default function ChapterTopicsScreen() {
     [allQuestionItems],
   );
   const readQuestionItems = useMemo(
-    () => allQuestionItems.filter((question) => question.mode === 'read'),
-    [allQuestionItems],
+    () => {
+      const readItems = allQuestionItems.filter((question) => question.mode === 'read');
+      return readItems.length > 0 ? readItems : questionItems;
+    },
+    [allQuestionItems, questionItems],
   );
+  const displayedQuestionCount = questionItems.length > 0 ? questionItems.length : chapter?.questionCount ?? 0;
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const attemptedIds = useMemo(() => Object.keys(answers), [answers]);
@@ -326,7 +330,7 @@ export default function ChapterTopicsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text variant="h3" weight="bold" style={{ color: colors.onPrimary }} numberOfLines={3}>{title}</Text>
                   <Text variant="bodySmall" style={{ color: colors.onPrimary, opacity: 0.8 }}>
-                    {chapter?.questionCount ?? questionItems.length} {t('subscription.questions')}
+                    {displayedQuestionCount} {t('subscription.questions')}
                   </Text>
                 </View>
               </View>

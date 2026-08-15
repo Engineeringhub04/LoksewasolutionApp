@@ -1,6 +1,7 @@
 import { Collections } from '@/src/core/firebase/collections';
-import { commitWrites, getDocument, listDocuments, setWrite, type WriteSpec } from '@/src/core/firebase/firestoreRest';
+import { commitWrites, getDocument, runQuery, setWrite, type WriteSpec } from '@/src/core/firebase/firestoreRest';
 import { civilSubEngineerLearningCatalog, type LearningChapterSeed } from '@/src/core/firebase/learningCatalog';
+import { learningQuestionBankSeed, type LearningQuestionSeedRecord } from '@/src/core/firebase/learningQuestionBank';
 import {
   DEFAULT_LEARNING_COURSE_ID,
   DEFAULT_LEARNING_SUBCOURSE_ID,
@@ -62,12 +63,18 @@ export interface LearningScope {
   subcourseId: string;
 }
 
+const QUESTION_WRITE_CHUNK_SIZE = 400;
+
 function scopePrefix(courseId: string, subcourseId: string): string {
   return `${courseId}__${subcourseId}`;
 }
 
 export function learningContentId(courseId: string, subcourseId: string, subjectId: string, chapterId: string): string {
   return `${scopePrefix(courseId, subcourseId)}__${subjectId}__${chapterId}`;
+}
+
+function learningQuestionId(courseId: string, subcourseId: string, sourceId: string): string {
+  return `${scopePrefix(courseId, subcourseId)}__${sourceId}`;
 }
 
 function readString(value: unknown, fallback = ''): string {
@@ -128,11 +135,17 @@ export async function fetchLearningQuestions(
   subjectId: string,
   chapterId: string,
 ): Promise<LearningQuestion[]> {
-  const documents = await listDocuments(Collections.learningQuestions);
-  return documents
-    .filter((document) => document.courseId === courseId && document.subcourseId === subcourseId && document.subjectId === subjectId && document.chapterId === chapterId && document.isPublished !== false)
-    .map(questionFromDocument)
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const documents = await runQuery(Collections.learningQuestions, {
+    where: [
+      { field: 'courseId', op: '==', value: courseId },
+      { field: 'subcourseId', op: '==', value: subcourseId },
+      { field: 'subjectId', op: '==', value: subjectId },
+      { field: 'chapterId', op: '==', value: chapterId },
+      { field: 'isPublished', op: '==', value: true },
+    ],
+    limit: 200,
+  });
+  return documents.map(questionFromDocument).sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export async function fetchLearningTheory(
@@ -152,9 +165,22 @@ function chapterEntries(): { subjectId: string; chapter: LearningChapterSeed; un
   ]);
 }
 
+function questionCountsForChapter(subjectId: string, chapterId: string): { practice: number; read: number } {
+  return learningQuestionBankSeed.reduce(
+    (counts, question) => {
+      if (question.subjectId !== subjectId || question.chapterId !== chapterId) return counts;
+      if (question.mode === 'read') counts.read += 1;
+      else counts.practice += 1;
+      return counts;
+    },
+    { practice: 0, read: 0 },
+  );
+}
+
 function buildContentSlotWrites(options: Required<LearningSeedOptions>): WriteSpec[] {
   return chapterEntries().flatMap(({ subjectId, chapter, unitId }) => {
     const id = learningContentId(options.courseId, options.subcourseId, subjectId, chapter.id);
+    const counts = questionCountsForChapter(subjectId, chapter.id);
     return [
       setWrite(`${Collections.learningTheory}/${id}`, {
         id,
@@ -179,11 +205,37 @@ function buildContentSlotWrites(options: Required<LearningSeedOptions>): WriteSp
         subjectId,
         unitId,
         chapterId: chapter.id,
-        practiceQuestionCount: 0,
-        readQuestionCount: 0,
+        practiceQuestionCount: counts.practice,
+        readQuestionCount: counts.read,
         isSeed: true,
       }, { merge: true }),
     ];
+  });
+}
+
+function buildQuestionWrites(options: Required<LearningSeedOptions>): WriteSpec[] {
+  return learningQuestionBankSeed.map((question: LearningQuestionSeedRecord) => {
+    const id = learningQuestionId(options.courseId, options.subcourseId, question.sourceId);
+    return setWrite(`${Collections.learningQuestions}/${id}`, {
+      id,
+      sourceId: question.sourceId,
+      courseId: options.courseId,
+      subcourseId: options.subcourseId,
+      subjectId: question.subjectId,
+      unitId: question.unitId,
+      chapterId: question.chapterId,
+      mode: question.mode,
+      text: question.text,
+      textNe: question.textNe,
+      options: question.options,
+      optionsNe: question.optionsNe,
+      correctIndex: question.correctIndex,
+      explanation: question.explanation,
+      explanationNe: question.explanationNe,
+      difficulty: question.difficulty,
+      isPublished: question.isPublished,
+      isSeed: true,
+    }, { merge: true });
   });
 }
 
@@ -195,8 +247,23 @@ export function buildLearningContentSlotWrites(options: LearningSeedOptions = {}
   });
 }
 
+export function buildLearningQuestionWrites(options: LearningSeedOptions = {}): WriteSpec[] {
+  return buildQuestionWrites({
+    courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
+    subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
+    overwriteCatalogFields: options.overwriteCatalogFields ?? false,
+  });
+}
+
 export async function seedLearningContentSlots(options: LearningSeedOptions = {}): Promise<number> {
-  const writes = buildLearningContentSlotWrites(options);
-  await commitWrites(writes);
+  const normalizedOptions = {
+    courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
+    subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
+    overwriteCatalogFields: options.overwriteCatalogFields ?? false,
+  };
+  const writes = [...buildContentSlotWrites(normalizedOptions), ...buildQuestionWrites(normalizedOptions)];
+  for (let index = 0; index < writes.length; index += QUESTION_WRITE_CHUNK_SIZE) {
+    await commitWrites(writes.slice(index, index + QUESTION_WRITE_CHUNK_SIZE));
+  }
   return writes.length;
 }
