@@ -3,7 +3,7 @@
 // seeded subcourses into a flat `app_subcourses` collection (with a `courseId`
 // field) instead — fetchSubcourses() falls back to that legacy location if the
 // sub-collection is empty, so data seeded before the restructure still shows up.
-import { commitWrites, setWrite, runQuery, getDocument, setDocument, listDocuments } from '@/src/core/firebase/firestoreRest';
+import { commitWrites, setWrite, getDocument, setDocument, listDocuments } from '@/src/core/firebase/firestoreRest';
 
 const COURSES_COLLECTION = 'app_courses';
 const LEGACY_SUBCOURSES_COLLECTION = 'app_subcourses';
@@ -47,19 +47,28 @@ export async function seedCourseData(): Promise<void> {
   await commitWrites(writes);
 }
 
+let coursesCache: Course[] | null = null;
+let coursesRequest: Promise<Course[]> | null = null;
+
 /** Fetch all courses ordered by `order` field. */
-export async function fetchCourses(): Promise<Course[]> {
-  try {
-    const docs = await runQuery(COURSES_COLLECTION, { orderBy: [{ field: 'order', direction: 'asc' }] });
-    return (docs as unknown as Course[]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  } catch (queryError) {
-    // Older or partially seeded course documents can make the structured
-    // orderBy request fail. A direct collection read uses the same rules and
-    // lets the client apply the small catalogue sort safely.
-    if (__DEV__) console.warn('[Courses] ordered query failed; using collection fallback', queryError);
-    const docs = await listDocuments(COURSES_COLLECTION);
-    return (docs as unknown as Course[]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
+export function fetchCourses(): Promise<Course[]> {
+  if (coursesCache) return Promise.resolve(coursesCache);
+  if (coursesRequest) return coursesRequest;
+
+  // The catalogue is small and read-only at runtime. Use one direct read
+  // instead of a structured orderBy query, then deduplicate concurrent callers
+  // so Course Setup/refresh/navigation cannot create a request burst.
+  coursesRequest = listDocuments(COURSES_COLLECTION)
+    .then((docs) => {
+      const courses = (docs as unknown as Course[]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      coursesCache = courses;
+      return courses;
+    })
+    .finally(() => {
+      coursesRequest = null;
+    });
+
+  return coursesRequest;
 }
 
 /**
