@@ -126,7 +126,29 @@
     "seedStructureConfirm": "Seed Subject Structure",
     "seedStructureRunning": "Seeding subject structure...",
     "seedStructureSuccess": "Subject structure seeded successfully.",
-    "seedStructureFailed": "Subject structure could not be seeded. Please try again."
+    "seedStructureFailed": "Subject structure could not be seeded. Please try again.",
+    "chaptersPage": {
+      "chapter": "Chapter",
+      "chapterOf": "Chapters in {{subject}}",
+      "totalTopics": "Total Added Topics",
+      "complete": "Complete",
+      "inProgress": "In Progress",
+      "premium": "Premium",
+      "viewAnalytics": "View Practice Analytics",
+      "practiceMode": "Practice Mode",
+      "readMode": "Read Mode",
+      "theoryMode": "Theory Mode",
+      "nextUpdate": "This feature will be available in the next update.",
+      "premiumTitle": "Premium Chapter",
+      "premiumMessage": "An active subscription is required to access this chapter.",
+      "subscriptionRequired": "Subscription required",
+      "languageEn": "EN",
+      "languageNe": "नेपाली",
+      "noChapters": "No chapters found for this subject.",
+      "progress": "Progress",
+      "free": "Free",
+      "topics": "Topics"
+    }
   },
   "pdf": {
     "page": "Page",
