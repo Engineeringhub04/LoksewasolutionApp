@@ -1,10 +1,6 @@
 import { Collections } from '@/src/core/firebase/collections';
 import { runQuery, listDocuments } from '@/src/core/firebase/firestoreRest';
 import {
-  fetchLearningQuestions,
-  type LearningQuestion,
-} from '@/src/core/firebase/services/learningContent';
-import {
   fetchLearningProgress,
   type LearningProgress,
 } from '@/src/core/firebase/services/learningProgress';
@@ -130,25 +126,19 @@ function percentageFor(progress: LearningProgress | null, totalQuestions: number
 
 async function progressForChapter(
   uid: string | null | undefined,
-  course: string,
-  subcourse: string,
   subjectId: string,
   chapter: SubjectChapterDetail,
 ): Promise<SubjectChapterProgress> {
-  // Chapter metadata should remain visible even when question-count reads are
-  // temporarily blocked by an older Firebase rules deployment. The dedicated
-  // question read rule is added alongside this service, but a missing count is
-  // still a valid 0% progress state rather than a reason to hide every chapter.
-  const [questions, progress] = await Promise.all([
-    fetchLearningQuestions(course, subcourse, subjectId, chapter.id).catch(() => []),
-    uid ? fetchLearningProgress(uid, subjectId, chapter.id) : Promise.resolve(null),
-  ]);
-  const percentage = percentageFor(progress, questions.length);
+  // Phase 3 intentionally renders the chapter hierarchy independently of the
+  // question bank. Questions may be seeded later, so their absence must never
+  // prevent chapter cards from appearing.
+  const progress = uid ? await fetchLearningProgress(uid, subjectId, chapter.id) : null;
+  const percentage = percentageFor(progress, 0);
   return {
     chapterId: chapter.id,
     attempted: progress?.attemptedQuestionIds.length ?? 0,
     correct: progress?.correctQuestionIds.length ?? 0,
-    totalQuestions: questions.length,
+    totalQuestions: 0,
     percentage,
     completed: progress?.completed === true || percentage >= 100,
     progress,
@@ -165,7 +155,7 @@ export async function fetchSubjectChaptersWithProgress(
   const chapters = await fetchSubjectChapters(course, subcourse, logicalSubjectId);
   return Promise.all(chapters.map(async (chapter) => ({
     ...chapter,
-    progress: await progressForChapter(uid, course, subcourse, logicalSubjectId, chapter),
+    progress: await progressForChapter(uid, logicalSubjectId, chapter),
   })));
 }
 
@@ -181,8 +171,4 @@ export async function fetchChapterProgressMap(
     await fetchLearningProgress(uid, logicalSubjectId, chapter.id),
   ] as const));
   return Object.fromEntries(entries);
-}
-
-export function chapterQuestionCount(questions: LearningQuestion[]): number {
-  return questions.length;
 }
