@@ -108,17 +108,20 @@ export default function HomeScreen() {
     if (!user) return [];
     return fetchNotifications(user.uid);
   }, [user?.uid]);
+  // Prefer the shared profile cache for the enrolled scope. The direct fetch is
+  // still kept as a cold-start/name fallback, but a temporary name lookup issue
+  // must never make Home fall back to the default course after the user has saved
+  // a different one.
+  const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const subjectDetails = useAsyncData(
-    () => fetchSubjectDetails(
-      courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID,
-      courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
-    ),
-    [courseInfo.data?.courseId, courseInfo.data?.subcourseId],
+    () => fetchSubjectDetails(enrolledCourseId, enrolledSubcourseId),
+    [enrolledCourseId, enrolledSubcourseId],
   );
   const qotdAnswered = useAsyncData(async () => {
     if (!user) return false;
-    return hasAnsweredQotdToday(user.uid, courseInfo.data?.courseId ?? null);
-  }, [user?.uid, courseInfo.data?.courseId]);
+    return hasAnsweredQotdToday(user.uid, storeCourseInfo?.courseId ?? storeProfile?.courseId ?? courseInfo.data?.courseId ?? null);
+  }, [user?.uid, storeCourseInfo?.courseId, storeProfile?.courseId, courseInfo.data?.courseId]);
 
   // qotdAnswered is included so the overlay stays up until EVERY source has
   // settled — it was refreshed but not tracked, so the loader could disappear
@@ -253,8 +256,8 @@ export default function HomeScreen() {
                     pathname: hasUnits ? '/subjects/units/[subjectId]' : '/subjects/chapters/[subjectId]',
                     params: {
                       subjectId: subject.id,
-                      course: courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID,
-                      subcourse: courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
+                      course: enrolledCourseId,
+                      subcourse: enrolledSubcourseId,
                       subjectName: subject.name,
                     },
                   });
