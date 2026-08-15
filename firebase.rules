@@ -78,70 +78,20 @@ service cloud.firestore {
       }
     }
 
-    // Curriculum and content. Users can consume content; only admins can edit it.
-    match /subjects/{subjectId} {
+    // Phase 1 Subject catalog. Subject metadata is readable by signed-in users,
+    // while every create/update/delete is restricted to administrators.
+    match /app_subjects_details/{subjectId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
-      match /chapters/{chapterId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin();
-        match /topics/{topicId} {
-          allow read: if isSignedIn();
-          allow write: if isAdmin();
-        }
-      }
-      match /units/{unitId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin();
-        match /chapters/{chapterId} {
-          allow read: if isSignedIn();
-          allow write: if isAdmin();
-        }
-      }
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'name', 'course', 'subcourse', 'pro', 'price', 'order'
+        ]);
+      allow delete: if isAdmin();
     }
-    // Syllabus-driven learning catalog. It is intentionally separate from the legacy
-    // subjects tree so seeding cannot overwrite existing question content.
-    match /app_learning_subjects/{subjectId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-      match /chapters/{chapterId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin();
-      }
-      match /units/{unitId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin();
-        match /chapters/{chapterId} {
-          allow read: if isSignedIn();
-          allow write: if isAdmin();
-        }
-      }
-    }
-    match /app_learning_chapters/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    match /app_learning_units/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    match /app_learning_unit_chapters/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
+
+    // Legacy question data remains available to existing non-learning flows. The
+    // Phase 1 Subject catalog deliberately has no access to the old subject tree.
     match /questions/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    match /app_learning_questions/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    match /app_learning_question_banks/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    match /app_learning_theory/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

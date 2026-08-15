@@ -18,7 +18,8 @@ import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
 import { fetchDevelopers } from '@/src/core/firebase/services/developer';
-import { fetchLearningSubjects } from '@/src/core/firebase/services/learning';
+import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
+import { fetchSubjectDetails } from '@/src/core/firebase/services/subjectDetails';
 import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
@@ -85,7 +86,7 @@ const GUIDE_ACCENT = '#059669';
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const insets = useSafeAreaInsets();
@@ -107,7 +108,13 @@ export default function HomeScreen() {
     if (!user) return [];
     return fetchNotifications(user.uid);
   }, [user?.uid]);
-  const learningSubjects = useAsyncData(fetchLearningSubjects, []);
+  const subjectDetails = useAsyncData(
+    () => fetchSubjectDetails(
+      courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID,
+      courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
+    ),
+    [courseInfo.data?.courseId, courseInfo.data?.subcourseId],
+  );
   const qotdAnswered = useAsyncData(async () => {
     if (!user) return false;
     return hasAnsweredQotdToday(user.uid, courseInfo.data?.courseId ?? null);
@@ -122,7 +129,7 @@ export default function HomeScreen() {
     developers.refreshing ||
     notifications.refreshing ||
     qotdAnswered.refreshing ||
-    learningSubjects.refreshing;
+    subjectDetails.refreshing;
   const initialLoading = banners.loading || courseInfo.loading || developers.loading;
   const onRefresh = () => {
     banners.refresh();
@@ -130,7 +137,7 @@ export default function HomeScreen() {
     developers.refresh();
     notifications.refresh();
     qotdAnswered.refresh();
-    learningSubjects.refresh();
+    subjectDetails.refresh();
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
@@ -140,7 +147,7 @@ export default function HomeScreen() {
   useRefreshOnFocus(onRefresh);
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
-  const homeSubjects = useMemo(() => (learningSubjects.data ?? []).slice(0, 6), [learningSubjects.data]);
+  const homeSubjects = useMemo(() => (subjectDetails.data ?? []).slice(0, 6), [subjectDetails.data]);
   const recentNotices = useMemo(() => APP_NOTICES.slice(0, 3), []);
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
@@ -214,10 +221,10 @@ export default function HomeScreen() {
         <View style={styles.sectionHeaderRow}>
           <Text variant="h3" weight="bold">Subjects</Text>
           <Pressable onPress={() => router.push('/subjects')} style={[styles.viewAllPill, { backgroundColor: colors.surfaceAlt }]}>
-            <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>View All</Text>
+            <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('subjects.seeAll')}</Text>
           </Pressable>
         </View>
-        {learningSubjects.loading ? (
+        {subjectDetails.loading ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
             {[1, 2, 3].map((item) => <Skeleton key={item} width={150} height={118} radius={18} />)}
           </ScrollView>
@@ -230,10 +237,12 @@ export default function HomeScreen() {
             {homeSubjects.map((subject, index) => (
               <SubjectCardColored
                 key={subject.id}
-                name={language === 'ne' ? subject.titleNe : subject.title}
-                icon={subject.icon as never}
+                name={subject.name}
+                icon={['globe-outline', 'briefcase-outline', 'construct-outline'][index % 3] as never}
                 backgroundColor={['#2563EB', '#7C3AED', '#059669', '#EA580C'][index % 4]}
-                onPress={() => router.push(`/subjects/${subject.id}`)}
+                premium={subject.pro}
+                premiumLabel={t('subjects.premium')}
+                onPress={() => router.push('/subjects')}
               />
             ))}
           </ScrollView>
