@@ -52,9 +52,30 @@ function asBoolean(value: unknown, fallback = false): boolean {
  * `general-awareness`. Keep the boundary normalization here so chapter,
  * question, and progress lookups all use the same logical subject ID.
  */
+function normalizeCatalogId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function normalizeSubjectId(subjectId: string): string {
   const parts = subjectId.split('__').filter(Boolean);
-  return parts[parts.length - 1] ?? subjectId;
+  return normalizeCatalogId(parts[parts.length - 1] ?? subjectId);
+}
+
+function isDirectChapterDocument(
+  document: Record<string, unknown>,
+  logicalSubjectId: string,
+): boolean {
+  return document.unitId == null
+    && document.isPublished !== false
+    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId;
+}
+
+function sortChapterDocuments(documents: Record<string, unknown>[]): SubjectChapterDetail[] {
+  return documents.map(fromDocument).sort((a, b) => a.order - b.order);
 }
 
 function fromDocument(document: Record<string, unknown>): SubjectChapterDetail {
@@ -95,27 +116,33 @@ export async function fetchSubjectChapters(
     { field: 'isPublished', op: '==' as const, value: true },
   ];
 
+  let queriedDocuments: Record<string, unknown>[] = [];
   try {
-    const documents = await runQuery(Collections.subjectChapterDetails, {
+    queriedDocuments = await runQuery(Collections.subjectChapterDetails, {
       where,
       orderBy: [{ field: 'order', direction: 'asc' }],
     });
-    return documents.map(fromDocument).sort((a, b) => a.order - b.order);
   } catch {
-    // Keep the screen usable when the Firebase project has not created the
-    // composite index for the scoped query yet.
-    const documents = await listDocuments(Collections.subjectChapterDetails);
-    return documents
-      .filter((document) => (
-        document.course === course
-        && document.subcourse === subcourse
-        && document.subjectId === logicalSubjectId
-        && document.unitId == null
-        && document.isPublished !== false
-      ))
-      .map(fromDocument)
-      .sort((a, b) => a.order - b.order);
+    // Fall through to the client-side scan when an index or an older rules
+    // deployment rejects the scoped query.
   }
+
+  if (queriedDocuments.length > 0) {
+    return sortChapterDocuments(queriedDocuments);
+  }
+
+  // Seeded projects may contain the same subject under a different scope
+  // spelling, or an older seed may have omitted unitId/isPublished fields.
+  // Prefer the requested course/subcourse when available, then safely fall
+  // back to the canonical subject ID so cards are not hidden by scope drift.
+  const documents = await listDocuments(Collections.subjectChapterDetails);
+  const directDocuments = documents.filter((document) => isDirectChapterDocument(document, logicalSubjectId));
+  const scopedDocuments = directDocuments.filter((document) => (
+    normalizeCatalogId(asString(document.course)) === normalizeCatalogId(course)
+    && normalizeCatalogId(asString(document.subcourse)) === normalizeCatalogId(subcourse)
+  ));
+
+  return sortChapterDocuments(scopedDocuments.length > 0 ? scopedDocuments : directDocuments);
 }
 
 function percentageFor(progress: LearningProgress | null, totalQuestions: number): number {
