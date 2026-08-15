@@ -50,9 +50,12 @@ export default function SubjectListScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { courseInfo } = useProfileStore();
-  const course = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
-  const subcourse = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
+  const { courseInfo, profile } = useProfileStore();
+  // `courseInfo` also carries names and is refreshed separately. Keep the raw
+  // profile IDs as a fallback so a temporary course-name lookup failure cannot
+  // silently switch the subject catalogue to the default course.
+  const course = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const subcourse = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
 
   const subjectData = useAsyncData(
