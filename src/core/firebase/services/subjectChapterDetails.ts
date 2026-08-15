@@ -135,8 +135,12 @@ async function progressForChapter(
   subjectId: string,
   chapter: SubjectChapterDetail,
 ): Promise<SubjectChapterProgress> {
+  // Chapter metadata should remain visible even when question-count reads are
+  // temporarily blocked by an older Firebase rules deployment. The dedicated
+  // question read rule is added alongside this service, but a missing count is
+  // still a valid 0% progress state rather than a reason to hide every chapter.
   const [questions, progress] = await Promise.all([
-    fetchLearningQuestions(course, subcourse, subjectId, chapter.id),
+    fetchLearningQuestions(course, subcourse, subjectId, chapter.id).catch(() => []),
     uid ? fetchLearningProgress(uid, subjectId, chapter.id) : Promise.resolve(null),
   ]);
   const percentage = percentageFor(progress, questions.length);

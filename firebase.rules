@@ -107,6 +107,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Learning questions are visible only to authenticated users because they
+    // contain answer keys and explanations. Only admins may seed or maintain them.
+    match /app_learning_questions/{questionId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'sourceId', 'courseId', 'subcourseId', 'subjectId', 'unitId',
+          'chapterId', 'mode', 'text', 'textNe', 'options', 'optionsNe',
+          'correctIndex', 'explanation', 'explanationNe', 'difficulty',
+          'isPublished', 'isSeed'
+        ]) &&
+        request.resource.data.courseId is string &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.subjectId is string &&
+        request.resource.data.chapterId is string &&
+        (request.resource.data.unitId == null || request.resource.data.unitId is string) &&
+        request.resource.data.mode in ['practice', 'read'] &&
+        request.resource.data.difficulty in ['easy', 'medium', 'hard'];
+      allow delete: if isAdmin();
+    }
+
     match /app_subjects_units_details/{documentId} {
       allow read: if isSignedIn();
       allow create, update: if isAdmin() &&
