@@ -148,6 +148,26 @@
       "progress": "Progress",
       "free": "Free",
       "topics": "Topics"
+    },
+    "unitsPage": {
+      "units": "Units",
+      "totalTopics": "Total Topics",
+      "complete": "Complete",
+      "inProgress": "In Progress",
+      "premium": "Premium",
+      "viewAnalytics": "View Practice Analytics",
+      "all": "All",
+      "chapters": "chapters",
+      "progress": "Progress",
+      "free": "Free",
+      "practiceMode": "Practice Mode",
+      "readMode": "Read Mode",
+      "theoryMode": "Theory Mode",
+      "nextUpdate": "This feature will be available in the next update.",
+      "premiumTitle": "Premium Chapter",
+      "premiumMessage": "An active subscription is required to access this chapter.",
+      "subscriptionRequired": "Subscription required",
+      "noUnits": "No units or chapters found for this subject."
     }
   },
   "pdf": {

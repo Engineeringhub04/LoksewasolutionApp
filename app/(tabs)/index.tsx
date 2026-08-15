@@ -243,12 +243,14 @@ export default function HomeScreen() {
                 premium={subject.pro}
                 premiumLabel={t('subjects.premium')}
                 onPress={() => {
-                  if (subject.pro) {
+                  const subjectKey = `${subject.id} ${subject.name}`.toLowerCase();
+                  const hasUnits = subjectKey.includes('technical') || subjectKey.includes('प्राविधिक');
+                  if (subject.pro && !hasUnits) {
                     router.push('/subjects');
                     return;
                   }
                   router.push({
-                    pathname: '/subjects/chapters/[subjectId]',
+                    pathname: hasUnits ? '/subjects/units/[subjectId]' : '/subjects/chapters/[subjectId]',
                     params: {
                       subjectId: subject.id,
                       course: courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID,

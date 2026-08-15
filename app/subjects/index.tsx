@@ -76,12 +76,15 @@ export default function SubjectListScreen() {
   const scopeLabel = `${courseName} • ${subcourseName}`;
 
   const handleSubjectAction = (subject: SubjectDetail) => {
-    if (subject.pro) {
+    const subjectKey = `${subject.id} ${subject.name}`.toLowerCase();
+    const hasUnits = subjectKey.includes('technical') || subjectKey.includes('प्राविधिक');
+    const pathname = hasUnits ? '/subjects/units/[subjectId]' : '/subjects/chapters/[subjectId]';
+    if (subject.pro && !hasUnits) {
       setPremiumSubject(subject);
       return;
     }
     router.push({
-      pathname: '/subjects/chapters/[subjectId]',
+      pathname,
       params: {
         subjectId: subject.id,
         course,
