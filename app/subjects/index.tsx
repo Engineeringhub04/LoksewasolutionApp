@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
@@ -11,44 +12,44 @@ import {
   DEFAULT_LEARNING_COURSE_ID,
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
-import {
-  fetchSubjectDetails,
-  seedSubjectDetails,
-  type SubjectDetail,
-} from '@/src/core/firebase/services/subjectDetails';
+import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { Button } from '@/src/components/buttons/Button';
-import { Card } from '@/src/components/cards/Card';
 import { Text } from '@/src/components/misc/Text';
 
 const SUBJECT_COLORS = ['#2563EB', '#7C3AED', '#059669', '#EA580C'];
 const SUBJECT_ICONS: (keyof typeof Ionicons.glyphMap)[] = ['globe-outline', 'briefcase-outline', 'construct-outline'];
 
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
-  const { colors, spacing } = useTheme();
+type JourneyStatProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: number;
+};
+
+function JourneyStat({ icon, label, value }: JourneyStatProps) {
   return (
-    <View style={{ flex: 1, alignItems: 'center', gap: spacing.xs }}>
-      <Text variant="h3" weight="bold" style={{ color }}>{value}</Text>
-      <Text variant="caption" secondary style={{ textAlign: 'center' }}>{label}</Text>
-      <View style={{ width: 28, height: 3, borderRadius: 3, backgroundColor: colors.border }} />
+    <View style={styles.journeyStat}>
+      <View style={styles.journeyStatIcon}>
+        <Ionicons name={icon} size={23} color="#FFFFFF" />
+      </View>
+      <Text variant="h2" weight="bold" style={styles.journeyStatValue}>{value}</Text>
+      <Text variant="caption" style={styles.journeyStatLabel}>{label}</Text>
     </View>
   );
 }
 
 export default function SubjectListScreen() {
-  const { colors, spacing, effective, setMode, radius } = useTheme();
+  const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
-  const { profile, courseInfo } = useProfileStore();
+  const { courseInfo } = useProfileStore();
   const course = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
-  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
 
   const subjectData = useAsyncData(
@@ -77,39 +78,14 @@ export default function SubjectListScreen() {
     showToast(t('subjects.nextUpdate'), 'info');
   };
 
-  const handleSeed = async () => {
-    setShowSeedConfirm(false);
-    setSeeding(true);
-    try {
-      const result = await seedSubjectDetails();
-      showToast(`${t('subjects.seedSuccess')} ${result.records} ${t('subjects.seededRecords')}`, 'success');
-      await subjectData.refresh();
-    } catch {
-      showToast(t('subjects.seedFailed'), 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const headerActions = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-      {profile?.isAdmin ? (
-        <Pressable
-          accessibilityLabel={t('subjects.seedTitle')}
-          onPress={() => setShowSeedConfirm(true)}
-          style={styles.headerAction}
-        >
-          <Ionicons name="cloud-upload-outline" size={21} color={colors.onPrimary} />
-        </Pressable>
-      ) : null}
-      <Pressable
-        accessibilityLabel={t('settings.theme')}
-        onPress={() => setMode(effective === 'dark' ? 'light' : 'dark')}
-        style={styles.headerAction}
-      >
-        <Ionicons name={effective === 'dark' ? 'sunny-outline' : 'moon-outline'} size={20} color={colors.onPrimary} />
-      </Pressable>
-    </View>
+    <ThemeToggleButton
+      isDark={effective === 'dark'}
+      onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
+      size={38}
+      iconColor="#FFFFFF"
+      backgroundColor="rgba(255,255,255,0.16)"
+    />
   );
 
   return (
@@ -119,27 +95,32 @@ export default function SubjectListScreen() {
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={subjectData.refreshing} onRefresh={subjectData.refresh} />}
       >
-        <Card style={[styles.summaryCard, { borderRadius: radius.lg, backgroundColor: colors.card }]}>
-          <View style={styles.summaryHeader}>
-            <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
-
-              <Ionicons name="library-outline" size={25} color={colors.onPrimary} />
-            </View>
+        <LinearGradient
+          colors={['#153DB8', '#0C2D91']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.journeyCard}
+        >
+          <View style={styles.journeyGlowTop} />
+          <View style={styles.journeyGlowBottom} />
+          <View style={styles.journeyHeader}>
             <View style={{ flex: 1 }}>
-              <Text variant="h3" weight="bold">{subcourseLabel}</Text>
-              <Text variant="bodySmall" secondary>{t('subjects.totalAvailable')}</Text>
+              <Text variant="h2" weight="bold" style={styles.journeyTitle}>{t('subjects.journeyTitle')}</Text>
+              <Text variant="body" style={styles.journeySubtitle}>
+                {stats.total} {t('subjects.subjectsAvailable')}
+              </Text>
             </View>
-            <View style={[styles.scopePill, { backgroundColor: colors.surfaceAlt }]}>
-              <Text variant="caption" weight="semiBold" style={{ color: colors.primary }}>{course}</Text>
+            <View style={styles.journeyScopePill}>
+              <Text variant="caption" weight="bold" style={styles.journeyScopeText}>{subcourseLabel}</Text>
             </View>
           </View>
-          <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-            <Stat label={t('subjects.totalAvailable')} value={stats.total} color={colors.primary} />
-            <Stat label={t('subjects.complete')} value={stats.complete} color="#059669" />
-            <Stat label={t('subjects.inProgress')} value={stats.inProgress} color="#D97706" />
-            <Stat label={t('subjects.premium')} value={stats.premium} color="#B45309" />
+
+          <View style={styles.journeyStatsRow}>
+            <JourneyStat icon="checkmark-circle" label={t('subjects.complete')} value={stats.complete} />
+            <JourneyStat icon="play-circle" label={t('subjects.inProgress')} value={stats.inProgress} />
+            <JourneyStat icon="lock-closed" label={t('subjects.premium')} value={stats.premium} />
           </View>
-        </Card>
+        </LinearGradient>
 
         {subjectData.error ? (
           <ErrorState onRetry={subjectData.refetch} />
@@ -164,21 +145,12 @@ export default function SubjectListScreen() {
         )}
       </ScrollView>
 
-      <PageLoaderOverlay visible={subjectData.loading || seeding} label={seeding ? t('subjects.seedRunning') : t('common.loading')} />
-
-      <ConfirmDialog
-        visible={showSeedConfirm}
-        title={t('subjects.seedTitle')}
-        message={t('subjects.seedMessage')}
-        confirmLabel={t('subjects.seedConfirm')}
-        onConfirm={handleSeed}
-        onCancel={() => setShowSeedConfirm(false)}
-      />
+      <PageLoaderOverlay visible={subjectData.loading} label={t('common.loading')} />
 
       <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
-          <Pressable style={[styles.premiumModal, { backgroundColor: colors.card, borderRadius: radius.lg }]} onPress={(event) => event.stopPropagation()}>
-            <View style={[styles.premiumIcon, { backgroundColor: '#FEF3C7' }]}>
+          <Pressable style={[styles.premiumModal, { backgroundColor: colors.card }]} onPress={(event) => event.stopPropagation()}>
+            <View style={styles.premiumIcon}>
               <Ionicons name="lock-closed" size={28} color="#B45309" />
             </View>
             <Text variant="h2" weight="bold" style={{ textAlign: 'center' }}>{t('subjects.premiumTitle')}</Text>
@@ -201,41 +173,93 @@ export default function SubjectListScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerAction: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+  journeyCard: {
+    minHeight: 290,
+    borderRadius: 28,
+    padding: 22,
+    overflow: 'hidden',
+    shadowColor: '#0C2D91',
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
-  summaryCard: {
-    gap: 18,
-    padding: 18,
+  journeyGlowTop: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    top: -100,
+    right: -40,
+    backgroundColor: 'rgba(90,140,255,0.22)',
   },
-  summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  journeyGlowBottom: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    bottom: -125,
+    left: -70,
+    backgroundColor: 'rgba(0,0,45,0.16)',
   },
-  summaryIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scopePill: {
-    maxWidth: 112,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  statsRow: {
+  journeyHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderTopWidth: 1,
-    paddingTop: 15,
+    gap: 12,
+    marginBottom: 22,
+  },
+  journeyTitle: {
+    color: '#FFFFFF',
+    letterSpacing: 0.15,
+  },
+  journeySubtitle: {
+    color: '#D6E2FF',
+    marginTop: 6,
+  },
+  journeyScopePill: {
+    maxWidth: 130,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  journeyScopeText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  journeyStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  journeyStat: {
+    flex: 1,
+    minHeight: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 14,
+    borderRadius: 19,
+    backgroundColor: 'rgba(105,132,204,0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  journeyStatIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 9,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+  },
+  journeyStatValue: {
+    color: '#FFFFFF',
+    lineHeight: 34,
+  },
+  journeyStatLabel: {
+    color: '#E2EAFF',
+    textAlign: 'center',
+    marginTop: 2,
   },
   subjectGrid: {
     flexDirection: 'row',
@@ -253,6 +277,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 390,
     padding: 24,
+    borderRadius: 24,
     gap: 13,
     alignItems: 'center',
   },
@@ -263,5 +288,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 3,
+    backgroundColor: '#FEF3C7',
   },
 });

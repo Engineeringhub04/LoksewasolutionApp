@@ -94,6 +94,8 @@
   },
   "subjects": {
     "title": "All Subjects",
+    "journeyTitle": "Your Learning Journey",
+    "subjectsAvailable": "subjects available",
     "chapters": "Chapters",
     "topics": "Topics",
     "progress": "Progress",
