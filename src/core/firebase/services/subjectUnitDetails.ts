@@ -208,7 +208,14 @@ async function withProgress(
   subjectId: string,
   uid?: string | null,
 ): Promise<UnitChapterWithProgress> {
-  const progress = uid ? await fetchLearningProgress(uid, subjectId, chapter.id) : null;
+  let progress: LearningProgress | null = null;
+  if (uid) {
+    try {
+      progress = await fetchLearningProgress(uid, subjectId, chapter.id);
+    } catch {
+      // A missing or temporarily unavailable progress document must not hide chapter metadata.
+    }
+  }
   const percentage = progress?.completed ? 100 : 0;
   return {
     ...chapter,
@@ -232,7 +239,12 @@ export async function fetchSubjectUnitsWithChapters(
   const logicalSubjectId = normalizeSubjectId(subjectId);
   const units = await fetchSubjectUnits(course, subcourse, logicalSubjectId);
   return Promise.all(units.map(async (unit) => {
-    const chapters = await fetchUnitChapters(course, subcourse, logicalSubjectId, unit.id);
+    let chapters: UnitChapterDetail[] = [];
+    try {
+      chapters = await fetchUnitChapters(course, subcourse, logicalSubjectId, unit.id);
+    } catch {
+      // Keep the unit visible even if its optional chapter collection is unavailable.
+    }
     return {
       ...unit,
       chapters: await Promise.all(chapters.map((chapter) => withProgress(chapter, logicalSubjectId, uid))),

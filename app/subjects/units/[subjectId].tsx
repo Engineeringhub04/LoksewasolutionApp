@@ -144,10 +144,14 @@ export default function SubjectUnitsScreen() {
 
   const unitData = useAsyncData(
     async () => {
-      const [units, directChapters] = await Promise.all([
-        fetchSubjectUnitsWithChapters(course, subcourse, subjectId, user?.uid),
-        fetchSubjectChaptersWithProgress(course, subcourse, subjectId, user?.uid),
-      ]);
+      const units = await fetchSubjectUnitsWithChapters(course, subcourse, subjectId, user?.uid);
+      let directChapters: ChapterWithProgress[] = [];
+      try {
+        directChapters = await fetchSubjectChaptersWithProgress(course, subcourse, subjectId, user?.uid);
+      } catch {
+        // Technical Subject normally has no direct chapters. Keep unit content usable
+        // if the optional backward-compatible direct-chapter lookup is unavailable.
+      }
       return {
         units,
         directChapters: directChapters.map(toDisplayChapter),
