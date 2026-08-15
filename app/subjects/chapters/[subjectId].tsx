@@ -26,6 +26,7 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Button } from '@/src/components/buttons/Button';
 import { ProgressRing } from '@/src/components/misc/ProgressRing';
 import { Text } from '@/src/components/misc/Text';
+import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
 type ChapterLanguage = 'ne' | 'en';
 
@@ -54,7 +55,7 @@ function chapterName(chapter: ChapterWithProgress, language: ChapterLanguage): s
 
 export default function SubjectChaptersScreen() {
   const router = useRouter();
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { courseInfo } = useProfileStore();
@@ -105,18 +106,27 @@ export default function SubjectChaptersScreen() {
 
   const showNextUpdate = () => showToast(t('subjects.chaptersPage.nextUpdate'), 'info');
 
-  const languageButton = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={chapterLanguage === 'ne' ? t('subjects.chaptersPage.languageEn') : t('subjects.chaptersPage.languageNe')}
-      onPress={() => setChapterLanguage((current) => (current === 'ne' ? 'en' : 'ne'))}
-      style={styles.languageButton}
-    >
-      <Ionicons name="language-outline" size={18} color="#FFFFFF" />
-      <Text variant="caption" weight="bold" style={styles.languageButtonText}>
-        {chapterLanguage === 'ne' ? t('subjects.chaptersPage.languageEn') : t('subjects.chaptersPage.languageNe')}
-      </Text>
-    </Pressable>
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={chapterLanguage === 'ne' ? t('subjects.chaptersPage.languageEn') : t('subjects.chaptersPage.languageNe')}
+        onPress={() => setChapterLanguage((current) => (current === 'ne' ? 'en' : 'ne'))}
+        style={styles.languageButton}
+      >
+        <Ionicons name="language-outline" size={18} color="#FFFFFF" />
+        <Text variant="caption" weight="bold" style={styles.languageButtonText}>
+          {chapterLanguage === 'ne' ? t('subjects.chaptersPage.languageEn') : t('subjects.chaptersPage.languageNe')}
+        </Text>
+      </Pressable>
+      <ThemeToggleButton
+        isDark={effective === 'dark'}
+        onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
+        size={38}
+        iconColor="#FFFFFF"
+        backgroundColor="rgba(255,255,255,0.16)"
+      />
+    </View>
   );
 
   return (
@@ -124,7 +134,7 @@ export default function SubjectChaptersScreen() {
       <TopAppBar
         title={t('subjects.chaptersPage.chapter')}
         onBackPress={() => router.back()}
-        actions={languageButton}
+        actions={headerActions}
       />
       <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
@@ -136,11 +146,11 @@ export default function SubjectChaptersScreen() {
           </Text>
         </View>
 
-        {chapterData.error ? (
+        {!chapterData.loading && chapterData.error ? (
           <ErrorState onRetry={chapterData.refetch} />
         ) : !chapterData.loading && chapters.length === 0 ? (
           <EmptyState title={t('subjects.chaptersPage.noChapters')} />
-        ) : (
+        ) : !chapterData.loading ? (
           <>
             <LinearGradient
               colors={['#153DB8', '#0C2D91']}
@@ -224,7 +234,7 @@ export default function SubjectChaptersScreen() {
               })}
             </View>
           </>
-        )}
+        ) : null}
       </ScrollView>
 
       <PageLoaderOverlay visible={chapterData.loading} label={t('common.loading')} />
@@ -268,7 +278,22 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   subjectSubtitleWrap: { paddingHorizontal: 4, marginTop: -4 },
   subjectSubtitle: { fontWeight: '600' },
-  languageButton: { minWidth: 64, height: 36, paddingHorizontal: 10, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)', gap: 5 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  languageButton: {
+    minWidth: 64,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    gap: 5,
+  },
   languageButtonText: { color: '#FFFFFF' },
   summaryCard: { minHeight: 255, borderRadius: 28, padding: 18, overflow: 'hidden', shadowColor: '#0C2D91', shadowOpacity: 0.26, shadowRadius: 14, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
   summaryGlowTop: { position: 'absolute', width: 160, height: 160, borderRadius: 80, top: -90, right: -40, backgroundColor: 'rgba(90,140,255,0.22)' },
