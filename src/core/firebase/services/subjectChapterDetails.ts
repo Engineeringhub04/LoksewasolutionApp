@@ -49,6 +49,18 @@ function asBoolean(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/**
+ * Subject cards carry the Phase 1 Firestore document ID, for example
+ * `civil-engineering__civil-assistant-sub-engineer__general-awareness`, while
+ * the learning hierarchy is seeded with the canonical catalog slug
+ * `general-awareness`. Keep the boundary normalization here so chapter,
+ * question, and progress lookups all use the same logical subject ID.
+ */
+function normalizeSubjectId(subjectId: string): string {
+  const parts = subjectId.split('__').filter(Boolean);
+  return parts[parts.length - 1] ?? subjectId;
+}
+
 function fromDocument(document: Record<string, unknown>): SubjectChapterDetail {
   const unitId = typeof document.unitId === 'string' && document.unitId.trim()
     ? document.unitId
@@ -78,10 +90,11 @@ export async function fetchSubjectChapters(
   subcourse: string,
   subjectId: string,
 ): Promise<SubjectChapterDetail[]> {
+  const logicalSubjectId = normalizeSubjectId(subjectId);
   const where = [
     { field: 'course', op: '==' as const, value: course },
     { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: subjectId },
+    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
     { field: 'unitId', op: '==' as const, value: null },
     { field: 'isPublished', op: '==' as const, value: true },
   ];
@@ -100,7 +113,7 @@ export async function fetchSubjectChapters(
       .filter((document) => (
         document.course === course
         && document.subcourse === subcourse
-        && document.subjectId === subjectId
+        && document.subjectId === logicalSubjectId
         && document.unitId == null
         && document.isPublished !== false
       ))
@@ -144,10 +157,11 @@ export async function fetchSubjectChaptersWithProgress(
   subjectId: string,
   uid?: string | null,
 ): Promise<ChapterWithProgress[]> {
-  const chapters = await fetchSubjectChapters(course, subcourse, subjectId);
+  const logicalSubjectId = normalizeSubjectId(subjectId);
+  const chapters = await fetchSubjectChapters(course, subcourse, logicalSubjectId);
   return Promise.all(chapters.map(async (chapter) => ({
     ...chapter,
-    progress: await progressForChapter(uid, course, subcourse, subjectId, chapter),
+    progress: await progressForChapter(uid, course, subcourse, logicalSubjectId, chapter),
   })));
 }
 
@@ -157,9 +171,10 @@ export async function fetchChapterProgressMap(
   subjectId: string,
   chapters: SubjectChapterDetail[],
 ): Promise<Record<string, LearningProgress | null>> {
+  const logicalSubjectId = normalizeSubjectId(subjectId);
   const entries = await Promise.all(chapters.map(async (chapter) => [
     chapter.id,
-    await fetchLearningProgress(uid, subjectId, chapter.id),
+    await fetchLearningProgress(uid, logicalSubjectId, chapter.id),
   ] as const));
   return Object.fromEntries(entries);
 }
