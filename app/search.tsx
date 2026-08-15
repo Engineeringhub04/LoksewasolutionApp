@@ -91,7 +91,7 @@ export default function SearchScreen() {
             <View style={{ gap: spacing.sm }}>
               <Text variant="bodySmall" weight="semiBold" secondary>{t('subjects.title')}</Text>
               {results!.subjects.map((s) => (
-                <Card key={s.id} onPress={() => router.push(`/subjects/${s.id}`)}>
+                <Card key={s.id} onPress={() => router.push('/subjects')}>
                   <Text variant="body">{s.name}</Text>
                 </Card>
               ))}

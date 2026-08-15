@@ -53,7 +53,7 @@ export default function ContentPurchaseRequestDetailScreen() {
 
   const handleBack = () => {
     if (source === 'content' || source === 'chapter') {
-      router.replace({ pathname: '/subjects/[id]/[chapterId]', params: { id: record?.subjectId ?? '', chapterId: record?.contentId ?? '', unitId: record?.unitId ?? '' } } as never);
+      router.replace('/subjects');
       return;
     }
     router.back();

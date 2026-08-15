@@ -49,17 +49,8 @@ export default function BookmarksScreen() {
 
   const handleOpen = (item: { type: BookmarkType; refId: string }) => {
     if (item.type !== 'chapter') return;
-    const parts = item.refId.split('__');
-    if (parts.length < 3) return;
-    const [subjectId, unitId, chapterId] = parts;
-    router.push({
-      pathname: '/subjects/[id]/[chapterId]',
-      params: {
-        id: subjectId,
-        chapterId,
-        ...(unitId && unitId !== 'root' ? { unitId } : {}),
-      },
-    });
+    showToast(t('subjects.nextUpdate'), 'info');
+    router.push('/subjects');
   };
 
   return (

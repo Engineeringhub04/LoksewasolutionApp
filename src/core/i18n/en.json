@@ -93,7 +93,7 @@
     "keepNotes": "Keep Notes"
   },
   "subjects": {
-    "title": "Subjects",
+    "title": "All Subjects",
     "chapters": "Chapters",
     "topics": "Topics",
     "progress": "Progress",
@@ -101,7 +101,24 @@
     "markComplete": "Mark as Complete",
     "completed": "Completed",
     "addedToBookmarks": "Added to bookmarks",
-    "markedComplete": "Marked as complete"
+    "markedComplete": "Marked as complete",
+    "seeAll": "See all",
+    "totalAvailable": "Total available Subjects",
+    "complete": "Complete",
+    "inProgress": "In Progress",
+    "premium": "Premium",
+    "viewChapter": "View Chapter",
+    "premiumTitle": "Premium Subject",
+    "premiumMessage": "A subscription is required to access this premium subject.",
+    "subscriptionRequired": "Subscription required",
+    "nextUpdate": "This feature will be available in the next update.",
+    "seedTitle": "Seed Subject Details",
+    "seedMessage": "Seed General Awareness, Public Management, and Technical Subject for every available course and subcourse?",
+    "seedConfirm": "Seed Subjects",
+    "seedRunning": "Seeding subject details...",
+    "seedSuccess": "Subject details seeded successfully.",
+    "seedFailed": "Subject details could not be seeded. Please try again.",
+    "seededRecords": "records created"
   },
   "pdf": {
     "page": "Page",

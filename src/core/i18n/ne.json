@@ -93,7 +93,7 @@
     "keepNotes": "नोट्स राख्नुहोस्"
   },
   "subjects": {
-    "title": "विषयहरू",
+    "title": "सबै विषयहरू",
     "chapters": "च्याप्टरहरू",
     "topics": "टपिकहरू",
     "progress": "प्रगति",
@@ -101,7 +101,24 @@
     "markComplete": "पूरा भएको चिन्ह लगाउनुहोस्",
     "completed": "पूरा भयो",
     "addedToBookmarks": "बुकमार्कमा थपियो",
-    "markedComplete": "पूरा भएको चिन्ह लगाइयो"
+    "markedComplete": "पूरा भएको चिन्ह लगाइयो",
+    "seeAll": "सबै हेर्नुहोस्",
+    "totalAvailable": "उपलब्ध विषयहरू जम्मा",
+    "complete": "पूरा",
+    "inProgress": "प्रगतिमा",
+    "premium": "प्रिमियम",
+    "viewChapter": "च्याप्टर हेर्नुहोस्",
+    "premiumTitle": "प्रिमियम विषय",
+    "premiumMessage": "यो प्रिमियम विषय खोल्न सदस्यता आवश्यक छ।",
+    "subscriptionRequired": "सदस्यता आवश्यक",
+    "nextUpdate": "यो सुविधा अर्को अपडेटमा उपलब्ध हुनेछ।",
+    "seedTitle": "विषय विवरण Seed",
+    "seedMessage": "उपलब्ध हरेक course र subcourse का लागि General Awareness, Public Management र Technical Subject seed गर्ने?",
+    "seedConfirm": "विषयहरू Seed गर्नुहोस्",
+    "seedRunning": "विषय विवरण Seed हुँदैछ...",
+    "seedSuccess": "विषय विवरण सफलतापूर्वक seed भयो।",
+    "seedFailed": "विषय विवरण seed हुन सकेन। फेरि प्रयास गर्नुहोस्।",
+    "seededRecords": "वटा records तयार भए"
   },
   "pdf": {
     "page": "पृष्ठ",
