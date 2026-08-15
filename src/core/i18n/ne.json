@@ -148,6 +148,26 @@
       "progress": "प्रगति",
       "free": "फ्री",
       "topics": "टपिकहरू"
+    },
+    "unitsPage": {
+      "units": "युनिटहरू",
+      "totalTopics": "जम्मा टपिकहरू",
+      "complete": "पूरा",
+      "inProgress": "प्रगतिमा",
+      "premium": "प्रिमियम",
+      "viewAnalytics": "अभ्यास विश्लेषण हेर्नुहोस्",
+      "all": "सबै",
+      "chapters": "अध्यायहरू",
+      "progress": "प्रगति",
+      "free": "फ्री",
+      "practiceMode": "अभ्यास मोड",
+      "readMode": "पढ्ने मोड",
+      "theoryMode": "थ्योरी मोड",
+      "nextUpdate": "यो सुविधा अर्को अपडेटमा उपलब्ध हुनेछ।",
+      "premiumTitle": "प्रिमियम अध्याय",
+      "premiumMessage": "यो अध्याय खोल्न सक्रिय सदस्यता आवश्यक छ।",
+      "subscriptionRequired": "सदस्यता आवश्यक",
+      "noUnits": "यस विषयका लागि कुनै युनिट वा अध्याय भेटिएन।"
     }
   },
   "pdf": {
