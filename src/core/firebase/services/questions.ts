@@ -50,14 +50,15 @@ export async function fetchQuestionsByChapter(
   subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
 ): Promise<Question[]> {
   const learningQuestions = await fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId);
-  const legacyQuestions = (await runQuery(Collections.questions, {
+  if (learningQuestions.length > 0) return learningQuestions.map(toQuestion).slice(0, max);
+
+  return (await runQuery(Collections.questions, {
     where: [
       { field: 'subjectId', op: '==', value: subjectId },
       { field: 'chapterId', op: '==', value: chapterId },
     ],
     limit: max,
   })) as unknown as Question[];
-  return [...learningQuestions.map(toQuestion), ...legacyQuestions].slice(0, max);
 }
 
 export async function fetchAllQuestions(max = 200): Promise<Question[]> {
