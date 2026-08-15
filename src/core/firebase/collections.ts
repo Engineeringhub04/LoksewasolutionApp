@@ -20,6 +20,10 @@ export const Collections = {
   learningUnitChapterRecords: 'app_learning_unit_chapters',
   // Phase 1 subject-page catalog; scoped by course and subcourse.
   subjectDetails: 'app_subjects_details',
+  // Phase 2 subject structure catalog; scoped by course, subcourse and subject.
+  subjectChapterDetails: 'app_subjects_chapter_details',
+  subjectUnitDetails: 'app_subjects_units_details',
+  subjectUnitChapterDetails: 'app_subjects_unit-chapters_details',
   // New subject-page content model; question mode is stored on each document so
   // Practice and Read banks remain independently manageable.
   learningQuestions: 'app_learning_questions',

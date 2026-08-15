@@ -94,7 +94,7 @@
   },
   "subjects": {
     "title": "सबै विषयहरू",
-    "journeyTitle": "तपाईंको सिकाइ यात्रा",
+    "journeyTitle": "तपाईंको प्रगति विवरण",
     "subjectsAvailable": "विषयहरू उपलब्ध",
     "chapters": "च्याप्टरहरू",
     "topics": "टपिकहरू",
@@ -120,7 +120,13 @@
     "seedRunning": "विषय विवरण Seed हुँदैछ...",
     "seedSuccess": "विषय विवरण सफलतापूर्वक seed भयो।",
     "seedFailed": "विषय विवरण seed हुन सकेन। फेरि प्रयास गर्नुहोस्।",
-    "seededRecords": "वटा records तयार भए"
+    "seededRecords": "वटा records तयार भए",
+    "seedStructureTitle": "Subject Structure Seed गर्नुहोस्",
+    "seedStructureMessage": "उपलब्ध हरेक course र subcourse का लागि GA/PM chapters तथा Technical Subject units र unit chapters seed गर्ने?",
+    "seedStructureConfirm": "Subject Structure Seed",
+    "seedStructureRunning": "Subject structure seed हुँदैछ...",
+    "seedStructureSuccess": "Subject structure सफलतापूर्वक seed भयो।",
+    "seedStructureFailed": "Subject structure seed हुन सकेन। फेरि प्रयास गर्नुहोस्।"
   },
   "pdf": {
     "page": "पृष्ठ",

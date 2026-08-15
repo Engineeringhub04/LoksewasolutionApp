@@ -94,7 +94,7 @@
   },
   "subjects": {
     "title": "All Subjects",
-    "journeyTitle": "Your Learning Journey",
+    "journeyTitle": "Your Progress Overview",
     "subjectsAvailable": "subjects available",
     "chapters": "Chapters",
     "topics": "Topics",
@@ -120,7 +120,13 @@
     "seedRunning": "Seeding subject details...",
     "seedSuccess": "Subject details seeded successfully.",
     "seedFailed": "Subject details could not be seeded. Please try again.",
-    "seededRecords": "records created"
+    "seededRecords": "records created",
+    "seedStructureTitle": "Seed Subject Structure",
+    "seedStructureMessage": "Seed GA and PM chapters plus Technical Subject units and unit chapters for every available course and subcourse?",
+    "seedStructureConfirm": "Seed Subject Structure",
+    "seedStructureRunning": "Seeding subject structure...",
+    "seedStructureSuccess": "Subject structure seeded successfully.",
+    "seedStructureFailed": "Subject structure could not be seeded. Please try again."
   },
   "pdf": {
     "page": "Page",
