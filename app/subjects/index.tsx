@@ -13,7 +13,9 @@ import {
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
+import { seedSubjectStructureDetails } from '@/src/core/firebase/services/subjectStructureDetails';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
@@ -30,13 +32,14 @@ type JourneyStatProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: number;
+  accent: string;
 };
 
-function JourneyStat({ icon, label, value }: JourneyStatProps) {
+function JourneyStat({ icon, label, value, accent }: JourneyStatProps) {
   return (
     <View style={styles.journeyStat}>
-      <View style={styles.journeyStatIcon}>
-        <Ionicons name={icon} size={23} color="#FFFFFF" />
+      <View style={[styles.journeyStatIcon, { backgroundColor: accent, borderColor: `${accent}CC` }]}>
+        <Ionicons name={icon} size={21} color="#0C2D91" />
       </View>
       <Text variant="h2" weight="bold" style={styles.journeyStatValue}>{value}</Text>
       <Text variant="caption" style={styles.journeyStatLabel}>{label}</Text>
@@ -47,10 +50,12 @@ function JourneyStat({ icon, label, value }: JourneyStatProps) {
 export default function SubjectListScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
-  const { courseInfo } = useProfileStore();
+  const { profile, courseInfo } = useProfileStore();
   const course = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
+  const [seedDialogVisible, setSeedDialogVisible] = useState(false);
+  const [seedingStructure, setSeedingStructure] = useState(false);
 
   const subjectData = useAsyncData(
     () => fetchSubjectDetails(course, subcourse),
@@ -66,9 +71,11 @@ export default function SubjectListScreen() {
     inProgress: 0,
   }), [subjects]);
 
-  const subcourseLabel = courseInfo?.subcourseName || (
+  const subcourseName = courseInfo?.subcourseName || (
     subcourse === DEFAULT_LEARNING_SUBCOURSE_ID ? 'Civil Assistant Sub Engineer' : subcourse
   );
+  const courseName = courseInfo?.courseName || (course === DEFAULT_LEARNING_COURSE_ID ? 'Civil Engineering' : course);
+  const scopeLabel = `${courseName} • ${subcourseName}`;
 
   const handleSubjectAction = (subject: SubjectDetail) => {
     if (subject.pro) {
@@ -78,14 +85,43 @@ export default function SubjectListScreen() {
     showToast(t('subjects.nextUpdate'), 'info');
   };
 
+  const handleSeedStructure = async () => {
+    setSeedDialogVisible(false);
+    setSeedingStructure(true);
+    try {
+      const result = await seedSubjectStructureDetails();
+      showToast(
+        `${t('subjects.seedStructureSuccess')} ${result.totalRecords} ${t('subjects.seededRecords')}.`,
+        'success',
+      );
+      await subjectData.refetch();
+    } catch {
+      showToast(t('subjects.seedStructureFailed'), 'error');
+    } finally {
+      setSeedingStructure(false);
+    }
+  };
+
   const headerActions = (
-    <ThemeToggleButton
-      isDark={effective === 'dark'}
-      onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
-      size={38}
-      iconColor="#FFFFFF"
-      backgroundColor="rgba(255,255,255,0.16)"
-    />
+    <View style={styles.headerActions}>
+      {profile?.isAdmin ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('subjects.seedStructureConfirm')}
+          onPress={() => setSeedDialogVisible(true)}
+          style={styles.seedButton}
+        >
+          <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
+        </Pressable>
+      ) : null}
+      <ThemeToggleButton
+        isDark={effective === 'dark'}
+        onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
+        size={38}
+        iconColor="#FFFFFF"
+        backgroundColor="rgba(255,255,255,0.16)"
+      />
+    </View>
   );
 
   return (
@@ -111,14 +147,14 @@ export default function SubjectListScreen() {
               </Text>
             </View>
             <View style={styles.journeyScopePill}>
-              <Text variant="caption" weight="bold" style={styles.journeyScopeText}>{subcourseLabel}</Text>
+              <Text variant="caption" weight="bold" style={styles.journeyScopeText} numberOfLines={2}>{scopeLabel}</Text>
             </View>
           </View>
 
           <View style={styles.journeyStatsRow}>
-            <JourneyStat icon="checkmark-circle" label={t('subjects.complete')} value={stats.complete} />
-            <JourneyStat icon="play-circle" label={t('subjects.inProgress')} value={stats.inProgress} />
-            <JourneyStat icon="lock-closed" label={t('subjects.premium')} value={stats.premium} />
+            <JourneyStat icon="checkmark-circle" label={t('subjects.complete')} value={stats.complete} accent="#C7D9FF" />
+            <JourneyStat icon="pulse" label={t('subjects.inProgress')} value={stats.inProgress} accent="#B8E1FF" />
+            <JourneyStat icon="diamond" label={t('subjects.premium')} value={stats.premium} accent="#FFD2A6" />
           </View>
         </LinearGradient>
 
@@ -145,7 +181,19 @@ export default function SubjectListScreen() {
         )}
       </ScrollView>
 
-      <PageLoaderOverlay visible={subjectData.loading} label={t('common.loading')} />
+      <PageLoaderOverlay
+        visible={subjectData.loading || seedingStructure}
+        label={seedingStructure ? t('subjects.seedStructureRunning') : t('common.loading')}
+      />
+
+      <ConfirmDialog
+        visible={seedDialogVisible}
+        title={t('subjects.seedStructureTitle')}
+        message={t('subjects.seedStructureMessage')}
+        confirmLabel={t('subjects.seedStructureConfirm')}
+        onConfirm={handleSeedStructure}
+        onCancel={() => setSeedDialogVisible(false)}
+      />
 
       <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
@@ -173,10 +221,23 @@ export default function SubjectListScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  seedButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
   journeyCard: {
-    minHeight: 290,
+    minHeight: 252,
     borderRadius: 28,
-    padding: 22,
+    padding: 20,
     overflow: 'hidden',
     shadowColor: '#0C2D91',
     shadowOpacity: 0.28,
@@ -206,7 +267,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 22,
+    marginBottom: 16,
   },
   journeyTitle: {
     color: '#FFFFFF',
@@ -217,11 +278,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   journeyScopePill: {
-    maxWidth: 130,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    maxWidth: 168,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#9A3412',
   },
   journeyScopeText: {
     color: '#FFFFFF',
@@ -229,28 +290,29 @@ const styles = StyleSheet.create({
   },
   journeyStatsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   journeyStat: {
     flex: 1,
-    minHeight: 150,
+    minHeight: 126,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 14,
+    paddingVertical: 11,
     borderRadius: 19,
     backgroundColor: 'rgba(105,132,204,0.58)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
   },
   journeyStatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 9,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    marginBottom: 7,
+    borderWidth: 2,
+    backgroundColor: '#C7D9FF',
   },
   journeyStatValue: {
     color: '#FFFFFF',

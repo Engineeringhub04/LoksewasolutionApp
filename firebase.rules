@@ -89,6 +89,53 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Phase 2 Subject structure catalog. All records are readable by signed-in
+    // users, while only admins can seed or maintain validated catalog metadata.
+    match /app_subjects_chapter_details/{documentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'name', 'nameNe', 'order', 'course', 'subcourse', 'subjectId',
+          'unit', 'unitId', 'pro', 'price', 'isPublished', 'isSeed',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.course is string &&
+        request.resource.data.subcourse is string &&
+        request.resource.data.subjectId is string &&
+        request.resource.data.unit == null &&
+        request.resource.data.unitId == null;
+      allow delete: if isAdmin();
+    }
+
+    match /app_subjects_units_details/{documentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'name', 'nameNe', 'order', 'course', 'subcourse', 'subjectId',
+          'pro', 'price', 'chapterCount', 'isPublished', 'isSeed',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.course is string &&
+        request.resource.data.subcourse is string &&
+        request.resource.data.subjectId == 'technical-subject';
+      allow delete: if isAdmin();
+    }
+
+    match /app_subjects_unit-chapters_details/{documentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'name', 'nameNe', 'order', 'course', 'subcourse', 'subjectId',
+          'unitId', 'unit', 'unitNameNe', 'pro', 'price', 'isPublished',
+          'isSeed', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.course is string &&
+        request.resource.data.subcourse is string &&
+        request.resource.data.subjectId == 'technical-subject' &&
+        request.resource.data.unitId is string;
+      allow delete: if isAdmin();
+    }
+
     // Legacy question data remains available to existing non-learning flows. The
     // Phase 1 Subject catalog deliberately has no access to the old subject tree.
     match /questions/{docId} {

@@ -72,7 +72,7 @@ export function SubjectCardColored({
 
 const styles = StyleSheet.create({
   card: {
-    width: 150,
+    width: 164,
     height: 130,
     borderRadius: 18,
     padding: 14,
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   cardWithFooter: {
-    height: 166,
+    height: 172,
   },
   topRow: {
     flexDirection: 'row',
@@ -100,11 +100,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: '#9A3412',
+    borderWidth: 1,
+    borderColor: 'rgba(255,213,166,0.62)',
   },
   premiumText: {
     color: '#FFF',
     fontSize: 9,
+    letterSpacing: 0.1,
   },
   footer: {
     flexDirection: 'row',
