@@ -1,5 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  LayoutAnimation,
+  Modal,
+  Pressable,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  UIManager,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -49,6 +60,26 @@ type UnitTrack = {
   chapters: DisplayChapter[];
   direct: boolean;
 };
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+function StaggeredReveal({ children, index, animationKey }: { children: React.ReactNode; index: number; animationKey: string }) {
+  const opacity = React.useRef(new Animated.Value(0)).current;
+  const translateY = React.useRef(new Animated.Value(12)).current;
+
+  React.useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(12);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 260, delay: index * 55, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 300, delay: index * 55, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [animationKey, index, opacity, translateY]);
+
+  return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
 
 type UnitStatProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -169,6 +200,26 @@ export default function SubjectUnitsScreen() {
     ? null
     : tracks.find((track) => track.id === selectedTrack);
 
+  const animateLayout = () => {
+    LayoutAnimation.configureNext({
+      duration: 260,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+  };
+
+  const selectTrack = (trackId: string) => {
+    animateLayout();
+    setSelectedTrack(trackId);
+    setExpandedUnit(null);
+  };
+
+  const toggleUnit = (trackId: string) => {
+    animateLayout();
+    setExpandedUnit((current) => (current === trackId ? null : trackId));
+  };
+
   const showNextUpdate = () => showToast(t('subjects.unitsPage.nextUpdate'), 'info');
 
   const showChapterActions = (chapter: DisplayChapter) => {
@@ -243,8 +294,8 @@ export default function SubjectUnitsScreen() {
     return (
       <View key={track.id} style={[styles.unitCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.lg }]}>
         <Pressable
-          onPress={() => setExpandedUnit((current) => (current === track.id ? null : track.id))}
-          style={({ pressed }) => [styles.unitCardHeader, pressed && styles.cardPressed]}
+          onPress={() => toggleUnit(track.id)}
+          style={({ pressed }) => [styles.unitCardHeader, { backgroundColor: track.direct ? colors.card : '#F2F6FF' }, pressed && styles.cardPressed]}
         >
           <View style={styles.unitIcon}><Ionicons name={track.direct ? 'albums-outline' : 'layers-outline'} size={20} color="#0C2D91" /></View>
           <View style={styles.unitNameBlock}>
@@ -256,7 +307,15 @@ export default function SubjectUnitsScreen() {
           ) : null}
           <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
         </Pressable>
-        {isExpanded ? <View style={styles.expandedChapters}>{track.chapters.map(renderChapterCard)}</View> : null}
+        {isExpanded ? (
+          <View style={[styles.expandedChapters, { backgroundColor: colors.background }]}>
+            {track.chapters.map((chapter, index) => (
+              <StaggeredReveal key={`${track.id}-${chapter.id}`} index={index} animationKey={`${track.id}-${isExpanded}`}>
+                {renderChapterCard(chapter)}
+              </StaggeredReveal>
+            ))}
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -299,12 +358,19 @@ export default function SubjectUnitsScreen() {
               </LinearGradient>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trackRow}>
-                <Pressable onPress={() => { setSelectedTrack('all'); setExpandedUnit(null); }} style={[styles.trackChip, selectedTrack === 'all' && styles.trackChipActive]}>
+                <Pressable
+                  onPress={() => selectTrack('all')}
+                  style={({ pressed }) => [styles.trackChip, selectedTrack === 'all' && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                >
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackTextActive : { color: colors.textSecondary }}>{t('subjects.unitsPage.all')}</Text>
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackCountActive : { color: colors.textSecondary }}>{allChapters.length}</Text>
                 </Pressable>
                 {tracks.map((track) => (
-                  <Pressable key={track.id} onPress={() => { setSelectedTrack(track.id); setExpandedUnit(null); }} style={[styles.trackChip, selectedTrack === track.id && styles.trackChipActive]}>
+                  <Pressable
+                    key={track.id}
+                    onPress={() => selectTrack(track.id)}
+                    style={({ pressed }) => [styles.trackChip, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                  >
                     <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
                     <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
                   </Pressable>
@@ -312,13 +378,21 @@ export default function SubjectUnitsScreen() {
               </ScrollView>
 
               <View style={styles.listHeader}>
-                <Text variant="h3" weight="bold">{selectedTrack === 'all' ? t('subjects.unitsPage.units') : selectedTrackData?.label}</Text>
-                <Text variant="caption" secondary>{stats.average}% {t('subjects.unitsPage.progress')}</Text>
+                <View style={styles.listHeaderTitleBlock}>
+                  <Text variant="h3" weight="bold" numberOfLines={2}>{selectedTrack === 'all' ? t('subjects.unitsPage.units') : selectedTrackData?.label}</Text>
+                </View>
+                <View style={styles.listProgressBlock}>
+                  <Text variant="caption" secondary numberOfLines={1}>{stats.average}% {t('subjects.unitsPage.progress')}</Text>
+                </View>
               </View>
               <View style={{ gap: spacing.sm }}>
                 {selectedTrack === 'all'
                   ? tracks.map(renderUnitCard)
-                  : selectedTrackData?.chapters.map(renderChapterCard)}
+                  : selectedTrackData?.chapters.map((chapter, index) => (
+                    <StaggeredReveal key={`${selectedTrack}-${chapter.id}`} index={index} animationKey={selectedTrack}>
+                      {renderChapterCard(chapter)}
+                    </StaggeredReveal>
+                  ))}
               </View>
             </>
           )}
@@ -378,14 +452,17 @@ const styles = StyleSheet.create({
   trackRow: { gap: 8, paddingVertical: 2 },
   trackChip: { minHeight: 40, maxWidth: 180, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 20, borderWidth: 1, borderColor: '#D5DCEC', paddingHorizontal: 13, backgroundColor: '#FFFFFF' },
   trackChipActive: { backgroundColor: '#0C2D91', borderColor: '#0C2D91' },
+  trackChipPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   trackTextActive: { color: '#FFFFFF' },
   trackCountActive: { color: '#FFD2A6' },
-  listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  unitCard: { borderWidth: 1, overflow: 'hidden' },
-  unitCardHeader: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  unitIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#E7EEFF', alignItems: 'center', justifyContent: 'center' },
-  unitNameBlock: { flex: 1, gap: 3 },
-  expandedChapters: { gap: 9, padding: 10, paddingTop: 0 },
+  listHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  listHeaderTitleBlock: { flex: 1, minWidth: 0 },
+  listProgressBlock: { width: 96, alignItems: 'flex-end', paddingTop: 4 },
+  unitCard: { borderWidth: 1, overflow: 'hidden', shadowColor: '#0C2D91', shadowOpacity: 0.08, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  unitCardHeader: { minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
+  unitIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#DCE7FF', alignItems: 'center', justifyContent: 'center' },
+  unitNameBlock: { flex: 1, minWidth: 0, gap: 4 },
+  expandedChapters: { gap: 9, padding: 11, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#D7E2FF' },
   chapterCard: { borderWidth: 1, padding: 14, gap: 14 },
   chapterCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   chapterNumber: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
