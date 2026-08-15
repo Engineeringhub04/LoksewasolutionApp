@@ -94,6 +94,8 @@
   },
   "subjects": {
     "title": "सबै विषयहरू",
+    "journeyTitle": "तपाईंको सिकाइ यात्रा",
+    "subjectsAvailable": "विषयहरू उपलब्ध",
     "chapters": "च्याप्टरहरू",
     "topics": "टपिकहरू",
     "progress": "प्रगति",
