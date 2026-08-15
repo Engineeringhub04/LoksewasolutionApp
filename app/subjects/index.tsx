@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -13,9 +14,7 @@ import {
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
-import { seedSubjectStructureDetails } from '@/src/core/firebase/services/subjectStructureDetails';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
@@ -50,12 +49,11 @@ function JourneyStat({ icon, label, value, accent }: JourneyStatProps) {
 export default function SubjectListScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
-  const { profile, courseInfo } = useProfileStore();
+  const router = useRouter();
+  const { courseInfo } = useProfileStore();
   const course = courseInfo?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
-  const [seedDialogVisible, setSeedDialogVisible] = useState(false);
-  const [seedingStructure, setSeedingStructure] = useState(false);
 
   const subjectData = useAsyncData(
     () => fetchSubjectDetails(course, subcourse),
@@ -82,52 +80,31 @@ export default function SubjectListScreen() {
       setPremiumSubject(subject);
       return;
     }
-    showToast(t('subjects.nextUpdate'), 'info');
-  };
-
-  const handleSeedStructure = async () => {
-    setSeedDialogVisible(false);
-    setSeedingStructure(true);
-    try {
-      const result = await seedSubjectStructureDetails();
-      showToast(
-        `${t('subjects.seedStructureSuccess')} ${result.totalRecords} ${t('subjects.seededRecords')}.`,
-        'success',
-      );
-      await subjectData.refetch();
-    } catch {
-      showToast(t('subjects.seedStructureFailed'), 'error');
-    } finally {
-      setSeedingStructure(false);
-    }
+    router.push({
+      pathname: '/subjects/chapters/[subjectId]',
+      params: {
+        subjectId: subject.id,
+        course,
+        subcourse,
+        subjectName: subject.name,
+      },
+    });
   };
 
   const headerActions = (
-    <View style={styles.headerActions}>
-      {profile?.isAdmin ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('subjects.seedStructureConfirm')}
-          onPress={() => setSeedDialogVisible(true)}
-          style={styles.seedButton}
-        >
-          <Ionicons name="cloud-upload-outline" size={20} color="#FFFFFF" />
-        </Pressable>
-      ) : null}
-      <ThemeToggleButton
-        isDark={effective === 'dark'}
-        onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
-        size={38}
-        iconColor="#FFFFFF"
-        backgroundColor="rgba(255,255,255,0.16)"
-      />
-    </View>
+    <ThemeToggleButton
+      isDark={effective === 'dark'}
+      onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
+      size={38}
+      iconColor="#FFFFFF"
+      backgroundColor="rgba(255,255,255,0.16)"
+    />
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('subjects.title')} actions={headerActions} />
-      <ScrollView
+      {!subjectData.loading ? <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={subjectData.refreshing} onRefresh={subjectData.refresh} />}
       >
@@ -179,21 +156,9 @@ export default function SubjectListScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
+      </ScrollView> : null}
 
-      <PageLoaderOverlay
-        visible={subjectData.loading || seedingStructure}
-        label={seedingStructure ? t('subjects.seedStructureRunning') : t('common.loading')}
-      />
-
-      <ConfirmDialog
-        visible={seedDialogVisible}
-        title={t('subjects.seedStructureTitle')}
-        message={t('subjects.seedStructureMessage')}
-        confirmLabel={t('subjects.seedStructureConfirm')}
-        onConfirm={handleSeedStructure}
-        onCancel={() => setSeedDialogVisible(false)}
-      />
+      <PageLoaderOverlay visible={subjectData.loading} label={t('common.loading')} />
 
       <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
@@ -221,19 +186,6 @@ export default function SubjectListScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  seedButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
   journeyCard: {
     minHeight: 252,
     borderRadius: 28,

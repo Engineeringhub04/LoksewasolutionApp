@@ -242,7 +242,21 @@ export default function HomeScreen() {
                 backgroundColor={['#2563EB', '#7C3AED', '#059669', '#EA580C'][index % 4]}
                 premium={subject.pro}
                 premiumLabel={t('subjects.premium')}
-                onPress={() => router.push('/subjects')}
+                onPress={() => {
+                  if (subject.pro) {
+                    router.push('/subjects');
+                    return;
+                  }
+                  router.push({
+                    pathname: '/subjects/chapters/[subjectId]',
+                    params: {
+                      subjectId: subject.id,
+                      course: courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID,
+                      subcourse: courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
+                      subjectName: subject.name,
+                    },
+                  });
+                }}
               />
             ))}
           </ScrollView>

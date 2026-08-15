@@ -126,7 +126,29 @@
     "seedStructureConfirm": "Subject Structure Seed",
     "seedStructureRunning": "Subject structure seed हुँदैछ...",
     "seedStructureSuccess": "Subject structure सफलतापूर्वक seed भयो।",
-    "seedStructureFailed": "Subject structure seed हुन सकेन। फेरि प्रयास गर्नुहोस्।"
+    "seedStructureFailed": "Subject structure seed हुन सकेन। फेरि प्रयास गर्नुहोस्।",
+    "chaptersPage": {
+      "chapter": "अध्याय",
+      "chapterOf": "{{subject}} का अध्यायहरू",
+      "totalTopics": "जम्मा थपिएका टपिकहरू",
+      "complete": "पूरा",
+      "inProgress": "प्रगतिमा",
+      "premium": "प्रिमियम",
+      "viewAnalytics": "अभ्यास विश्लेषण हेर्नुहोस्",
+      "practiceMode": "अभ्यास मोड",
+      "readMode": "पढ्ने मोड",
+      "theoryMode": "थ्योरी मोड",
+      "nextUpdate": "यो सुविधा अर्को अपडेटमा उपलब्ध हुनेछ।",
+      "premiumTitle": "प्रिमियम अध्याय",
+      "premiumMessage": "यो अध्याय खोल्न सक्रिय सदस्यता आवश्यक छ।",
+      "subscriptionRequired": "सदस्यता आवश्यक",
+      "languageEn": "EN",
+      "languageNe": "नेपाली",
+      "noChapters": "यस विषयका लागि कुनै अध्याय भेटिएन।",
+      "progress": "प्रगति",
+      "free": "फ्री",
+      "topics": "टपिकहरू"
+    }
   },
   "pdf": {
     "page": "पृष्ठ",
