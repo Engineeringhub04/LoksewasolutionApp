@@ -68,22 +68,47 @@ export default function ReadModeScreen() {
   const expandAll = () => setExpanded(Object.fromEntries(questions.map((question) => [question.id, true])));
   const collapseAll = () => setExpanded({});
 
-  if (loading) return <PageLoaderOverlay visible label={t('common.loading')} />;
-  if (loadError) return <DataNotFound title={t('common.somethingWentWrong')} description={t('common.retry')} onRetry={() => void load()} />;
-  if (questions.length === 0) return <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noReadQuestions')} onRetry={() => router.back()} />;
-
-  const allExpanded = questions.every((question) => expanded[question.id]);
-
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + spacing.sm }]}>
+  const modeHeader = (
+    <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon} accessibilityLabel={t('common.back')}><Ionicons name="arrow-back" size={22} color="#FFF" /></Pressable>
         <View style={styles.headerText}>
           <Text variant="bodyLarge" weight="bold" style={styles.headerTitle} numberOfLines={1}>{t('learningModes.readTitle')}</Text>
           <Text variant="caption" style={styles.headerSubtitle} numberOfLines={1}>{chapterName} · {subjectName}</Text>
         </View>
         <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={34} />
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {modeHeader}
+        <PageLoaderOverlay visible label={t('common.loading')} />
       </View>
+    );
+  }
+  if (loadError) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {modeHeader}
+        <DataNotFound title={t('common.somethingWentWrong')} description={t('common.retry')} onRetry={() => void load()} />
+      </View>
+    );
+  }
+  if (questions.length === 0) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        {modeHeader}
+        <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noReadQuestions')} onRetry={() => void load()} />
+      </View>
+    );
+  }
+
+  const allExpanded = questions.every((question) => expanded[question.id]);
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {modeHeader}
 
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
         <View style={[styles.sectionHeader, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>

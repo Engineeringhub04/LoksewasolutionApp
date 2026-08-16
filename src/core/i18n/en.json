@@ -657,6 +657,12 @@
   "learningModes": {
     "practiceTitle": "Practice Mode",
     "readTitle": "Read Mode",
+    "theoryTitle": "Theory Mode",
+    "openTheoryPdf": "Open Theory PDF",
+    "theoryResource": "Theory Resource",
+    "theoryResourceReady": "Theory resource is ready for this chapter.",
+    "noTheoryResource": "Theory resource is not available for this chapter yet.",
+    "theoryOpenFailed": "Could not open the theory PDF. Please try again.",
     "dailyLimit": "Daily limit reached: {{used}}/{{limit}}",
     "dailyLimitUnlimited": "Daily limit reached: {{used}}/{{limit}}",
     "dailyLimitReachedTitle": "Your Daily Practice limit is reached",
