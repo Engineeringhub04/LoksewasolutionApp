@@ -136,6 +136,45 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Phase 5 learning questions. Published questions are readable by signed-in
+    // learners; seed and moderation writes are restricted to administrators.
+    match /app_subject_cucqdata_Allmode/{questionId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'sourceId', 'courseId', 'subcourseId', 'subjectId', 'unitId',
+          'chapterId', 'mode', 'order', 'difficulty', 'text', 'textNe',
+          'options', 'optionsNe', 'correctIndex', 'explanation', 'explanationNe',
+          'isPublished', 'isPremium', 'price', 'isSeed', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.courseId is string &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.subjectId is string &&
+        request.resource.data.chapterId is string &&
+        request.resource.data.mode in ['practice', 'read'] &&
+        request.resource.data.difficulty in ['easy', 'medium', 'hard'];
+      allow delete: if isAdmin();
+    }
+
+    // Phase 5 theory resources. The PDF remains external/storage-backed; this
+    // collection stores only chapter metadata and the resource URL.
+    match /app_subject_theory_resources/{resourceId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'courseId', 'subcourseId', 'subjectId', 'unitId', 'chapterId',
+          'title', 'titleNe', 'resourceType', 'notes', 'notesNe', 'pdfUrl',
+          'notesUrl', 'isConfigured', 'isPublished', 'isPremium', 'price',
+          'isSeed', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.courseId is string &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.subjectId is string &&
+        request.resource.data.chapterId is string &&
+        request.resource.data.resourceType == 'pdf';
+      allow delete: if isAdmin();
+    }
+
     // Legacy question data remains available to existing non-learning flows. The
     // Phase 1 Subject catalog deliberately has no access to the old subject tree.
     match /questions/{docId} {

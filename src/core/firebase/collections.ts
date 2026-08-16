@@ -29,6 +29,9 @@ export const Collections = {
   learningQuestions: 'app_learning_questions',
   learningQuestionBanks: 'app_learning_question_banks',
   learningTheory: 'app_learning_theory',
+  // Phase 5 content collections: one question/resource document per syllabus record.
+  subjectCucqDataAllMode: 'app_subject_cucqdata_Allmode',
+  subjectTheoryResources: 'app_subject_theory_resources',
   topics: (subjectId: string, chapterId: string) => `subjects/${subjectId}/chapters/${chapterId}/topics`,
   questions: 'questions',
   mockTests: 'mockTests',

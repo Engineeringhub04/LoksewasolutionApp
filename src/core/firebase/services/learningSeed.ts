@@ -3,13 +3,31 @@ import {
   DEFAULT_LEARNING_SUBCOURSE_ID,
   seedCivilSubEngineerLearningCatalog,
 } from '@/src/core/firebase/services/learning';
-import { seedLearningContentSlots } from '@/src/core/firebase/services/learningContent';
+import {
+  seedLearningContentSlots,
+  type LearningContentSeedResult,
+} from '@/src/core/firebase/services/learningContent';
 import { fetchCourses, fetchSubcourses } from '@/src/core/firebase/services/courses';
 
 export interface LearningSeedResult {
   scopes: number;
   catalogRecords: number;
   contentRecords: number;
+  totalRecords: number;
+}
+
+export interface Phase5SeedResult {
+  scopes: number;
+  questionRecords: number;
+  theoryRecords: number;
+  totalRecords: number;
+}
+
+export interface Phase5SeedProgress {
+  scopeIndex: number;
+  scopeTotal: number;
+  questionRecords: number;
+  theoryRecords: number;
   totalRecords: number;
 }
 
@@ -41,8 +59,8 @@ async function discoverLearningScopes(): Promise<LearningScope[]> {
 }
 
 /**
- * Seeds only the Subject page's learning data. Re-running is safe because all
- * catalog and content-slot IDs are deterministic and writes are merge-safe.
+ * Seeds the existing Subject page catalog and the Phase 5 content slots.
+ * Re-running is safe because all IDs are deterministic and writes are merge-safe.
  */
 export async function seedLearningPageData(): Promise<LearningSeedResult> {
   const scopes = await discoverLearningScopes();
@@ -51,7 +69,8 @@ export async function seedLearningPageData(): Promise<LearningSeedResult> {
 
   for (const scope of scopes) {
     catalogRecords += await seedCivilSubEngineerLearningCatalog(scope);
-    contentRecords += await seedLearningContentSlots(scope);
+    const contentResult = await seedLearningContentSlots(scope);
+    contentRecords += contentResult.totalRecords;
   }
 
   return {
@@ -59,5 +78,37 @@ export async function seedLearningPageData(): Promise<LearningSeedResult> {
     catalogRecords,
     contentRecords,
     totalRecords: catalogRecords + contentRecords,
+  };
+}
+
+/**
+ * Phase 5 seed entry point. It writes only the new question and theory
+ * collections, leaving the already-seeded Subject/Unit/Chapter catalog intact.
+ */
+export async function seedPhase5ContentData(
+  onProgress?: (progress: Phase5SeedProgress) => void,
+): Promise<Phase5SeedResult> {
+  const scopes = await discoverLearningScopes();
+  let questionRecords = 0;
+  let theoryRecords = 0;
+
+  for (let index = 0; index < scopes.length; index += 1) {
+    const result: LearningContentSeedResult = await seedLearningContentSlots(scopes[index]);
+    questionRecords += result.questionRecords;
+    theoryRecords += result.theoryRecords;
+    onProgress?.({
+      scopeIndex: index + 1,
+      scopeTotal: scopes.length,
+      questionRecords,
+      theoryRecords,
+      totalRecords: questionRecords + theoryRecords,
+    });
+  }
+
+  return {
+    scopes: scopes.length,
+    questionRecords,
+    theoryRecords,
+    totalRecords: questionRecords + theoryRecords,
   };
 }
