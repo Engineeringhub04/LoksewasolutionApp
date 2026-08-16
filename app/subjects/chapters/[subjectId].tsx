@@ -263,8 +263,8 @@ export default function SubjectChaptersScreen() {
             <Text variant="h3" weight="bold">{selectedChapter ? chapterName(selectedChapter, chapterLanguage) : ''}</Text>
             <Text variant="bodySmall" secondary>{t('subjects.chaptersPage.free')}</Text>
             <View style={styles.sheetButtons}>
-              <Button label={t('subjects.chaptersPage.practiceMode')} onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
-              <Button label={t('subjects.chaptersPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
+              <Button label={t('subjects.chaptersPage.practiceMode')} onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/practice', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '' } }); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
+              <Button label={t('subjects.chaptersPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/read', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '' } }); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
               <Button label={t('subjects.chaptersPage.theoryMode')} variant="secondary" onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="school-outline" size={18} color={colors.primary} />} />
             </View>
           </Pressable>
