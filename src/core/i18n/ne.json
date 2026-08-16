@@ -657,6 +657,12 @@
   "learningModes": {
     "practiceTitle": "अभ्यास मोड",
     "readTitle": "पढ्ने मोड",
+    "theoryTitle": "सैद्धान्तिक मोड",
+    "openTheoryPdf": "सैद्धान्तिक PDF खोल्नुहोस्",
+    "theoryResource": "सैद्धान्तिक सामग्री",
+    "theoryResourceReady": "यस अध्यायका लागि सैद्धान्तिक सामग्री तयार छ।",
+    "noTheoryResource": "यस अध्यायका लागि सैद्धान्तिक सामग्री उपलब्ध छैन।",
+    "theoryOpenFailed": "सैद्धान्तिक PDF खोल्न सकिएन। फेरि प्रयास गर्नुहोस्।",
     "dailyLimit": "दैनिक सीमा पुगेको: {{used}}/{{limit}}",
     "dailyLimitUnlimited": "दैनिक सीमा पुगेको: {{used}}/{{limit}}",
     "dailyLimitReachedTitle": "तपाईंको दैनिक अभ्यास सीमा पुग्यो",
