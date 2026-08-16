@@ -127,6 +127,12 @@
     "seedStructureRunning": "Seeding subject structure...",
     "seedStructureSuccess": "Subject structure seeded successfully.",
     "seedStructureFailed": "Subject structure could not be seeded. Please try again.",
+    "phase5SeedTitle": "Seed Phase 5 Learning Content",
+    "phase5SeedMessage": "This will seed {{questions}} sample questions and {{theory}} theory resources across {{scopes}} learning scopes. Continue?",
+    "phase5SeedConfirm": "Seed Learning Content",
+    "phase5SeedRunning": "Seeding learning content (scope {{current}} of {{total}})...",
+    "phase5SeedSuccess": "Phase 5 seeded successfully: {{questions}} questions and {{theory}} theory resources.",
+    "phase5SeedFailed": "Phase 5 content could not be seeded. Please try again.",
     "chaptersPage": {
       "chapter": "Chapter",
       "chapterOf": "Chapters in {{subject}}",
