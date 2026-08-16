@@ -425,8 +425,8 @@ export default function SubjectUnitsScreen() {
             <Text variant="h3" weight="bold">{selectedChapter ? chapterTitle(selectedChapter, language) : ''}</Text>
             <Text variant="bodySmall" secondary>{t('subjects.unitsPage.free')}</Text>
             <View style={styles.sheetButtons}>
-              <Button label={t('subjects.unitsPage.practiceMode')} onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
-              <Button label={t('subjects.unitsPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
+              <Button label={t('subjects.unitsPage.practiceMode')} onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/practice', params: { courseId: course, subcourseId: subcourse, subjectId, chapterId: selectedChapter?.id ?? '', subjectName, chapterName: selectedChapter ? chapterTitle(selectedChapter, language) : '' } }); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
+              <Button label={t('subjects.unitsPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/read', params: { courseId: course, subcourseId: subcourse, subjectId, chapterId: selectedChapter?.id ?? '', subjectName, chapterName: selectedChapter ? chapterTitle(selectedChapter, language) : '' } }); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
               <Button label={t('subjects.unitsPage.theoryMode')} variant="secondary" onPress={() => { setSelectedChapter(null); showNextUpdate(); }} icon={<Ionicons name="school-outline" size={18} color={colors.primary} />} />
             </View>
           </Pressable>
