@@ -11,7 +11,7 @@ import { fetchLearningQuestions, type LearningQuestion } from '@/src/core/fireba
 import { Text } from '@/src/components/misc/Text';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 
 function valueOf(value: string | string[] | undefined, fallback = ''): string {
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
@@ -31,7 +31,7 @@ export default function ReadModeScreen() {
     subjectName?: string;
     chapterName?: string;
   }>();
-  const { colors, spacing, radius, effective, setMode } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
@@ -44,8 +44,6 @@ export default function ReadModeScreen() {
   const subcourseId = valueOf(params.subcourseId);
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
-  const subjectName = valueOf(params.subjectName, subjectId);
-  const chapterName = valueOf(params.chapterName, chapterId);
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) return;
@@ -69,14 +67,10 @@ export default function ReadModeScreen() {
   const collapseAll = () => setExpanded({});
 
   const modeHeader = (
-    <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={styles.headerIcon} accessibilityLabel={t('common.back')}><Ionicons name="arrow-back" size={22} color="#FFF" /></Pressable>
-        <View style={styles.headerText}>
-          <Text variant="bodyLarge" weight="bold" style={styles.headerTitle} numberOfLines={1}>{t('learningModes.readTitle')}</Text>
-          <Text variant="caption" style={styles.headerSubtitle} numberOfLines={1}>{chapterName} · {subjectName}</Text>
-        </View>
-        <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={34} />
-    </View>
+    <SubpageHeader
+      title={t('learningModes.readTitle')}
+      onBackPress={() => router.back()}
+    />
   );
 
   if (loading) {

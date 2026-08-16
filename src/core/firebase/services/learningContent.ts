@@ -1,7 +1,6 @@
 import {
   commitWrites,
   getDocument,
-  listDocuments,
   runQuery,
   serverTimestamp,
   setWrite,
@@ -164,48 +163,6 @@ function appSubjectId(subjectId: string): string {
   return subjectId === 'job-based-knowledge' ? 'technical-subject' : subjectId;
 }
 
-function normalizeLearningId(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function sameLearningId(left: string, right: string): boolean {
-  return normalizeLearningId(left) === normalizeLearningId(right);
-}
-
-function scopeMatches(document: Record<string, unknown>, courseId: string, subcourseId: string): boolean {
-  const documentCourse = readString(document.courseId);
-  const documentSubcourse = readString(document.subcourseId);
-  return (sameLearningId(documentCourse, courseId)
-    && sameLearningId(documentSubcourse, subcourseId));
-}
-
-function questionMatchesChapter(
-  document: Record<string, unknown>,
-  courseId: string,
-  subcourseId: string,
-  subjectId: string,
-  chapterId: string,
-): boolean {
-  return scopeMatches(document, courseId, subcourseId)
-    && sameLearningId(readString(document.subjectId), appSubjectId(subjectId))
-    && sameLearningId(readString(document.chapterId), chapterId)
-    && document.isPublished !== false;
-}
-
-function scopeOrChapterMatches(
-  document: Record<string, unknown>,
-  courseId: string,
-  subcourseId: string,
-  subjectId: string,
-  chapterId: string,
-): boolean {
-  const exactScope = questionMatchesChapter(document, courseId, subcourseId, subjectId, chapterId);
-  if (exactScope) return true;
-  return sameLearningId(readString(document.subjectId), appSubjectId(subjectId))
-    && sameLearningId(readString(document.chapterId), chapterId)
-    && document.isPublished !== false;
-}
-
 function scopePrefix(courseId: string, subcourseId: string): string {
   return `${courseId}__${subcourseId}`;
 }
@@ -280,73 +237,58 @@ function theoryFromDocument(document: Record<string, unknown>): LearningTheoryNo
   };
 }
 
-export async function fetchLearningQuestions(
+const learningQuestionFetches = new Map<string, Promise<LearningQuestion[]>>();
+const learningTheoryFetches = new Map<string, Promise<LearningTheoryNote | null>>();
+
+export function fetchLearningQuestions(
   courseId: string,
   subcourseId: string,
   subjectId: string,
   chapterId: string,
 ): Promise<LearningQuestion[]> {
-  let documents: Record<string, unknown>[] = [];
-  try {
-    documents = await runQuery(Collections.subjectCucqDataAllMode, {
-      where: [
-        { field: 'courseId', op: '==', value: courseId },
-        { field: 'subcourseId', op: '==', value: subcourseId },
-        { field: 'subjectId', op: '==', value: appSubjectId(subjectId) },
-        { field: 'chapterId', op: '==', value: chapterId },
-        { field: 'isPublished', op: '==', value: true },
-      ],
-      limit: 200,
-    });
-  } catch {
-    // The fallback scan below also supports older rules/index deployments.
-  }
+  const key = [courseId, subcourseId, appSubjectId(subjectId), chapterId].join('__');
+  const cached = learningQuestionFetches.get(key);
+  if (cached) return cached;
 
-  if (documents.length === 0) {
-    const allDocuments = await listDocuments(Collections.subjectCucqDataAllMode);
-    const scopedDocuments = allDocuments.filter((document) => (
-      questionMatchesChapter(document, courseId, subcourseId, subjectId, chapterId)
-    ));
-    documents = scopedDocuments.length > 0
-      ? scopedDocuments
-      : allDocuments.filter((document) => scopeOrChapterMatches(document, courseId, subcourseId, subjectId, chapterId));
-  }
-
-  return documents.map(questionFromDocument).sort((a, b) => {
+  const request = runQuery(Collections.subjectCucqDataAllMode, {
+    where: [
+      { field: 'courseId', op: '==', value: courseId },
+      { field: 'subcourseId', op: '==', value: subcourseId },
+      { field: 'subjectId', op: '==', value: appSubjectId(subjectId) },
+      { field: 'chapterId', op: '==', value: chapterId },
+      { field: 'isPublished', op: '==', value: true },
+    ],
+    limit: 200,
+  }).then((documents) => documents.map(questionFromDocument).sort((a, b) => {
     if (a.mode !== b.mode) return a.mode.localeCompare(b.mode);
     if (a.difficulty !== b.difficulty) return a.difficulty.localeCompare(b.difficulty);
     return a.id.localeCompare(b.id);
+  })).catch((error) => {
+    learningQuestionFetches.delete(key);
+    throw error;
   });
+  learningQuestionFetches.set(key, request);
+  return request;
 }
 
-export async function fetchLearningTheory(
+export function fetchLearningTheory(
   courseId: string,
   subcourseId: string,
   subjectId: string,
   chapterId: string,
 ): Promise<LearningTheoryNote | null> {
-  let document: Record<string, unknown> | null = null;
-  try {
-    document = await getDocument(`${Collections.subjectTheoryResources}/${learningContentId(courseId, subcourseId, subjectId, chapterId)}`);
-  } catch {
-    // Continue with the normalized fallback scan below.
-  }
-  if (document) return theoryFromDocument(document);
+  const key = [courseId, subcourseId, appSubjectId(subjectId), chapterId].join('__');
+  const cached = learningTheoryFetches.get(key);
+  if (cached) return cached;
 
-  try {
-    const allDocuments = await listDocuments(Collections.subjectTheoryResources);
-    const matched = allDocuments.find((candidate) => {
-      if (candidate.isPublished === false) return false;
-      const sameChapter = sameLearningId(readString(candidate.chapterId), chapterId);
-      const sameSubject = sameLearningId(readString(candidate.subjectId), appSubjectId(subjectId));
-      if (!sameChapter || !sameSubject) return false;
-      return scopeMatches(candidate, courseId, subcourseId)
-        || (!readString(candidate.courseId) && !readString(candidate.subcourseId));
-    });
-    return matched ? theoryFromDocument(matched) : null;
-  } catch {
-    return null;
-  }
+  const request = getDocument(
+    `${Collections.subjectTheoryResources}/${learningContentId(courseId, subcourseId, subjectId, chapterId)}`,
+  ).then((document) => (document ? theoryFromDocument(document) : null)).catch((error) => {
+    learningTheoryFetches.delete(key);
+    throw error;
+  });
+  learningTheoryFetches.set(key, request);
+  return request;
 }
 
 function chapterEntries(): { subjectId: string; chapter: LearningChapterSeed; unitId: string | null }[] {

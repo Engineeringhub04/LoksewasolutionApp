@@ -16,7 +16,7 @@ import { Button } from '@/src/components/buttons/Button';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
-import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
+import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 
 function valueOf(value: string | string[] | undefined, fallback = ''): string {
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
@@ -48,7 +48,7 @@ export default function PracticeModeScreen() {
     subjectName?: string;
     chapterName?: string;
   }>();
-  const { colors, spacing, radius, effective, setMode } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
@@ -70,8 +70,6 @@ export default function PracticeModeScreen() {
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
   const unitId = valueOf(params.unitId) || null;
-  const subjectName = valueOf(params.subjectName, subjectId);
-  const chapterName = valueOf(params.chapterName, chapterId);
   const profilePremium = isActivePremium(profile);
   const premium = profilePremium || hasSpecificAccess;
 
@@ -223,16 +221,10 @@ export default function PracticeModeScreen() {
   };
 
   const modeHeader = (
-    <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => setShowLeaveConfirm(true)} style={styles.headerIcon} accessibilityLabel={t('common.back')}>
-          <Ionicons name="arrow-back" size={22} color="#FFF" />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text variant="bodyLarge" weight="bold" style={styles.headerTitle} numberOfLines={1}>{t('learningModes.practiceTitle')}</Text>
-          <Text variant="caption" style={styles.headerSubtitle} numberOfLines={1}>{chapterName} · {subjectName}</Text>
-        </View>
-      <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={34} />
-    </View>
+    <SubpageHeader
+      title={t('learningModes.practiceTitle')}
+      onBackPress={() => setShowLeaveConfirm(true)}
+    />
   );
 
   if (loading) {
