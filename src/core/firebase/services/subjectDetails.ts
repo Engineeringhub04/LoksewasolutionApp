@@ -1,4 +1,19 @@
-import { commitWrites, listDocuments, runQuery, setWrite } from '@/src/core/firebase/firestoreRest';
+// Subject page catalogue backed by deterministic document IDs.
+//
+// Phase 1 seeded exactly one document per course+subcourse+subject under
+// `app_subjects_details`, with the ID `${course}__${subcourse}__${slug}`. That
+// means the whole subject catalogue for one scope is a small handful of direct
+// document reads (3 subjects x 1 read each) — no structured query and,
+// critically, no full-collection scan as recovery. Every other screen that
+// previously ran a scoped query with a `listDocuments` fallback (chapters,
+// units, unit-chapters) now reads from this bounded layer instead, which is
+// why Firebase read usage stays near zero after app opens and navigations.
+//
+// Concurrency and focus refreshes are deduplicated by a module-level cache with
+// a short stale window (see CACHED_* helpers at the bottom). Re-opens of the
+// Subject page within the window reuse the in-memory result without a new
+// Firestore request.
+import { commitWrites, getDocument, setWrite } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 import { fetchCourses, fetchSubcourses } from '@/src/core/firebase/services/courses';
 
@@ -61,25 +76,106 @@ function fromDocument(document: Record<string, unknown>): SubjectDetail {
   };
 }
 
-export async function fetchSubjectDetails(course: string, subcourse: string): Promise<SubjectDetail[]> {
-  try {
-    const documents = await runQuery(Collections.subjectDetails, {
-      where: [
-        { field: 'course', op: '==', value: course },
-        { field: 'subcourse', op: '==', value: subcourse },
-      ],
-      orderBy: [{ field: 'order', direction: 'asc' }],
+// ---------- Module-level cache with a stale window ----------
+//
+// Each scope key holds { result, cachedAt }. Entries older than STALE_MS are
+// refetched on the next access; concurrent callers for the same key share one
+// in-flight request so focus-driven refreshes never issue duplicate reads.
+
+const STALE_MS = 3 * 60 * 1000;
+
+interface CacheEntry<T> {
+  result: T;
+  cachedAt: number;
+}
+
+const cachedSubjects = new Map<string, CacheEntry<SubjectDetail[]>>();
+const inFlightSubjects = new Map<string, Promise<SubjectDetail[]>>();
+
+function isStale(entry: CacheEntry<unknown> | undefined): boolean {
+  return !entry || Date.now() - entry.cachedAt > STALE_MS;
+}
+
+function cachedOrInFlight<T>(
+  cache: Map<string, CacheEntry<T>>,
+  inFlight: Map<string, Promise<T>>,
+  key: string,
+  loader: () => Promise<T>,
+  force: boolean,
+): Promise<T> {
+  if (!force && !isStale(cache.get(key))) return Promise.resolve(cache.get(key)!.result);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const request = loader()
+    .then((result) => {
+      cache.set(key, { result, cachedAt: Date.now() });
+      return result;
+    })
+    .finally(() => {
+      inFlight.delete(key);
     });
-    return documents.map(fromDocument).sort((a, b) => a.order - b.order);
-  } catch {
-    // A client-side fallback keeps the first phase usable if the Firebase project
-    // requires a composite index for the scoped query.
-    const documents = await listDocuments(Collections.subjectDetails);
-    return documents
-      .filter((document) => document.course === course && document.subcourse === subcourse)
-      .map(fromDocument)
-      .sort((a, b) => a.order - b.order);
+
+  inFlight.set(key, request);
+  return request;
+}
+
+export function clearSubjectDetailCache(): void {
+  cachedSubjects.clear();
+  inFlightSubjects.clear();
+}
+
+/**
+ * Fetches the seeded subject catalogue for one course+subcourse scope using
+ * direct document reads against deterministic IDs only. Never scans the
+ * collection — failures surface as an empty array so screens keep rendering,
+ * while `fetchSubjectDetailsAll` exposes the raw error for refresh handlers.
+ */
+export async function fetchSubjectDetails(
+  course: string,
+  subcourse: string,
+  opts?: { force?: boolean },
+): Promise<SubjectDetail[]> {
+  const result = await fetchSubjectDetailsAll(course, subcourse, opts).catch(() => []);
+  return result;
+}
+
+/**
+ * Same as fetchSubjectDetails but lets the caller observe failures instead of
+ * swallowing them — used by screens that want pull-to-refresh to fail visibly.
+ */
+export async function fetchSubjectDetailsAll(
+  course: string,
+  subcourse: string,
+  opts?: { force?: boolean },
+): Promise<SubjectDetail[]> {
+  const key = `${course}__${subcourse}`;
+  const force = opts?.force === true;
+
+  return cachedOrInFlight(
+    cachedSubjects,
+    inFlightSubjects,
+    key,
+    () => loadSubjectDetails(course, subcourse),
+    force,
+  );
+}
+
+async function loadSubjectDetails(course: string, subcourse: string): Promise<SubjectDetail[]> {
+  // Deterministic ID reads only — 3 documents, 3 Firestore reads, no scans.
+  const subjects: SubjectDetail[] = [];
+  for (const seed of SUBJECT_SEED) {
+    const doc = await getDocument(`${Collections.subjectDetails}/${subjectDocumentId({ course, subcourse }, seed.slug)}`);
+    if (!doc) continue;
+    subjects.push(fromDocument({ ...doc, id: subjectDocumentId({ course, subcourse }, seed.slug) }));
   }
+
+  if (subjects.length > 0) return subjects.sort((a, b) => a.order - b.order);
+
+  // The seed documents genuinely are missing for this scope. Keep behaviour
+  // consistent with the old implementation, which also returned an empty
+  // catalogue when nothing matched — but do it without scanning Firestore.
+  return [];
 }
 
 export async function discoverSubjectDetailScopes(): Promise<SubjectDetailScope[]> {

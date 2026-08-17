@@ -8,7 +8,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { createDiscussion, fetchDiscussion, updateDiscussion } from '@/src/core/firebase/services/discussions';
-import { fetchUserProfile } from '@/src/core/firebase/services/profile';
+
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { TextField } from '@/src/components/inputs/TextField';
@@ -46,8 +46,10 @@ export default function CreateDiscussionScreen() {
   useEffect(() => {
     if (!user) return;
     loadProfile(user.uid).catch(() => undefined);
-    fetchUserProfile(user.uid).then((loadedProfile) => setIsAdmin(loadedProfile?.isAdmin === true)).catch(() => undefined);
-  }, [loadProfile, user]);
+    // isAdmin comes from the shared profile store to avoid a duplicate
+    // user-document read on top of the loadProfile() call above.
+    setIsAdmin(profile?.isAdmin === true);
+  }, [loadProfile, user, profile?.isAdmin]);
 
   useEffect(() => {
     if (!editId) return;

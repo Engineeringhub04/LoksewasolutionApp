@@ -1,5 +1,5 @@
 import { Collections } from '@/src/core/firebase/collections';
-import { listDocuments, runQuery } from '@/src/core/firebase/firestoreRest';
+import { runQuery } from '@/src/core/firebase/firestoreRest';
 import {
   fetchLearningProgress,
   type LearningProgress,
@@ -85,11 +85,6 @@ function normalizeUnitId(unitId: string): string {
   return normalizeCatalogId(parts[parts.length - 1] ?? unitId);
 }
 
-function sameScope(document: Record<string, unknown>, course: string, subcourse: string): boolean {
-  return normalizeCatalogId(asString(document.course)) === normalizeCatalogId(course)
-    && normalizeCatalogId(asString(document.subcourse)) === normalizeCatalogId(subcourse);
-}
-
 function fromUnitDocument(document: Record<string, unknown>): SubjectUnitDetail {
   return {
     id: asString(document.id),
@@ -128,48 +123,107 @@ function sortByOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order);
 }
 
-function unitMatches(document: Record<string, unknown>, logicalSubjectId: string): boolean {
-  return document.isPublished !== false
-    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId;
-}
-
-function chapterMatches(
-  document: Record<string, unknown>,
-  logicalSubjectId: string,
-  unitId: string,
-): boolean {
-  return document.isPublished !== false
-    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId
-    && normalizeUnitId(asString(document.unitId)) === normalizeUnitId(unitId);
-}
-
+/**
+ * Read-budget note: the old implementation re-scanned the entire
+ * `app_subjects_units_details` collection whenever a structured query failed,
+ * which silently multiplied read usage on every index/rules error and every
+ * focus-driven refresh. The scan is gone — scoped queries are bounded reads,
+ * and the module-level cache below deduplicates repeated refreshes.
+ */
 export async function fetchSubjectUnits(
   course: string,
   subcourse: string,
   subjectId: string,
+  opts?: { force?: boolean },
 ): Promise<SubjectUnitDetail[]> {
   const logicalSubjectId = normalizeSubjectId(subjectId);
-  const where = [
-    { field: 'course', op: '==' as const, value: course },
-    { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
-    { field: 'isPublished', op: '==' as const, value: true },
-  ];
+  const key = `${course}__${subcourse}__${logicalSubjectId}`;
+  const force = opts?.force === true;
 
-  try {
-    const queried = await runQuery(Collections.subjectUnitDetails, {
-      where,
-      orderBy: [{ field: 'order', direction: 'asc' }],
+  return cachedOrInFlight(
+    cachedUnits,
+    inFlightUnits,
+    key,
+    () => loadUnits(course, subcourse, logicalSubjectId),
+    force,
+  );
+}
+
+function loadUnits(
+  course: string,
+  subcourse: string,
+  logicalSubjectId: string,
+): Promise<SubjectUnitDetail[]> {
+  // Read-budget + index note: the multi-field equality query with an orderBy
+  // needs a composite Firestore index that does not exist, and the REST API
+  // fails the whole request instead of returning results. The previous SDK
+  // code hid that failure behind a full collection scan, which is why unit
+  // pages looked fine while burning reads. This keeps a single bounded read
+  // on the small units collection (3 units per scope) with the remaining scope
+  // rules and ordering applied client-side.
+  return runQuery(Collections.subjectUnitDetails, {
+    where: [{ field: 'course', op: '==' as const, value: course }],
+  }).then((queried) =>
+    sortByOrder(
+      queried
+        .filter(
+          (doc) =>
+            asString(doc.subcourse) === subcourse &&
+            normalizeCatalogId(asString(doc.subjectId)) === logicalSubjectId &&
+            asBoolean(doc.isPublished, false) === true,
+        )
+        .map(fromUnitDocument),
+    ),
+  );
+}
+
+// ---------- Module-level cache with a stale window ----------
+
+const STALE_MS = 3 * 60 * 1000;
+
+interface CacheEntry<T> {
+  result: T;
+  cachedAt: number;
+}
+
+function isStale(entry: CacheEntry<unknown> | undefined): boolean {
+  return !entry || Date.now() - entry.cachedAt > STALE_MS;
+}
+
+function cachedOrInFlight<T>(
+  cache: Map<string, CacheEntry<T>>,
+  inFlight: Map<string, Promise<T>>,
+  key: string,
+  loader: () => Promise<T>,
+  force: boolean,
+): Promise<T> {
+  if (!force && !isStale(cache.get(key))) return Promise.resolve(cache.get(key)!.result);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const request = loader()
+    .then((result) => {
+      cache.set(key, { result, cachedAt: Date.now() });
+      return result;
+    })
+    .finally(() => {
+      inFlight.delete(key);
     });
-    if (queried.length > 0) return sortByOrder(queried.map(fromUnitDocument));
-  } catch {
-    // Older projects or missing indexes use the scan fallback below.
-  }
 
-  const documents = await listDocuments(Collections.subjectUnitDetails);
-  const matching = documents.filter((document) => unitMatches(document, logicalSubjectId));
-  const scoped = matching.filter((document) => sameScope(document, course, subcourse));
-  return sortByOrder((scoped.length > 0 ? scoped : matching).map(fromUnitDocument));
+  inFlight.set(key, request);
+  return request;
+}
+
+const cachedUnits = new Map<string, CacheEntry<SubjectUnitDetail[]>>();
+const inFlightUnits = new Map<string, Promise<SubjectUnitDetail[]>>();
+const cachedUnitChapters = new Map<string, CacheEntry<UnitChapterDetail[]>>();
+const inFlightUnitChapters = new Map<string, Promise<UnitChapterDetail[]>>();
+
+export function clearUnitDetailCache(): void {
+  cachedUnits.clear();
+  inFlightUnits.clear();
+  cachedUnitChapters.clear();
+  inFlightUnitChapters.clear();
 }
 
 export async function fetchUnitChapters(
@@ -177,30 +231,48 @@ export async function fetchUnitChapters(
   subcourse: string,
   subjectId: string,
   unitId: string,
+  opts?: { force?: boolean },
 ): Promise<UnitChapterDetail[]> {
   const logicalSubjectId = normalizeSubjectId(subjectId);
-  const where = [
-    { field: 'course', op: '==' as const, value: course },
-    { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
-    { field: 'unitId', op: '==' as const, value: normalizeUnitId(unitId) },
-    { field: 'isPublished', op: '==' as const, value: true },
-  ];
+  const key = `${course}__${subcourse}__${logicalSubjectId}__${normalizeUnitId(unitId)}`;
+  const force = opts?.force === true;
 
-  try {
-    const queried = await runQuery(Collections.subjectUnitChapterDetails, {
-      where,
-      orderBy: [{ field: 'order', direction: 'asc' }],
-    });
-    if (queried.length > 0) return sortByOrder(queried.map(fromChapterDocument));
-  } catch {
-    // Older projects or missing indexes use the scan fallback below.
-  }
+  return cachedOrInFlight(
+    cachedUnitChapters,
+    inFlightUnitChapters,
+    key,
+    () => loadUnitChapters(course, subcourse, logicalSubjectId, unitId),
+    force,
+  );
+}
 
-  const documents = await listDocuments(Collections.subjectUnitChapterDetails);
-  const matching = documents.filter((document) => chapterMatches(document, logicalSubjectId, unitId));
-  const scoped = matching.filter((document) => sameScope(document, course, subcourse));
-  return sortByOrder((scoped.length > 0 ? scoped : matching).map(fromChapterDocument));
+function loadUnitChapters(
+  course: string,
+  subcourse: string,
+  logicalSubjectId: string,
+  unitId: string,
+): Promise<UnitChapterDetail[]> {
+  // Read-budget + index note: same composite-index trap as loadUnits — the
+  // five-field query throws on the REST API without a matching index, and the
+  // old scan fallback disguised the failure. A single equality filter on
+  // `course` is bounded (at most ~62 technical unit-chapters per scope), with
+  // subcourse/subjectId/unitId/isPublished matching and ordering done in
+  // memory.
+  return runQuery(Collections.subjectUnitChapterDetails, {
+    where: [{ field: 'course', op: '==' as const, value: course }],
+  }).then((queried) =>
+    sortByOrder(
+      queried
+        .filter(
+          (doc) =>
+            asString(doc.subcourse) === subcourse &&
+            normalizeCatalogId(asString(doc.subjectId)) === logicalSubjectId &&
+            normalizeUnitId(asString(doc.unitId)) === normalizeUnitId(unitId) &&
+            asBoolean(doc.isPublished, false) === true,
+        )
+        .map(fromChapterDocument),
+    ),
+  );
 }
 
 async function withProgress(

@@ -156,14 +156,15 @@ export async function deleteDiscussion(id: string): Promise<void> {
 export async function isDiscussionLiked(id: string): Promise<boolean> {
   const uid = await getCurrentUid();
   if (!uid) return false;
-  const reaction = await getDocument(`${Collections.discussionReactions(id)}/${uid}`);
-  return Boolean(reaction);
+  return isReactionLikedCached(`${Collections.discussionReactions(id)}`, uid);
 }
 
 export async function toggleLikeDiscussion(id: string, liked: boolean): Promise<void> {
   const uid = await getCurrentUid();
   if (!uid) throw new Error('AUTH_REQUIRED');
   const reactionPath = `${Collections.discussionReactions(id)}/${uid}`;
+  // Keep the reaction cache consistent with the toggle.
+  invalidateReactionCache(`${Collections.discussionReactions(id)}`, uid);
   if (liked) {
     await setDocument(reactionPath, { uid, createdAt: serverTimestamp() }, { merge: true });
     await updateDocument(`${Collections.discussions}/${id}`, { likeCount: increment(1) });
@@ -232,15 +233,59 @@ export async function deleteReply(discussionId: string, commentId: string, reply
 async function isReactionLiked(reactionPath: string): Promise<boolean> {
   const uid = await getCurrentUid();
   if (!uid) return false;
-  return Boolean(await getDocument(`${reactionPath}/${uid}`));
+  return isReactionLikedCached(reactionPath, uid);
+}
+
+// ---------- Per-user reaction cache ----------
+//
+// Every opened discussion, comment, and reply reads the current user's own
+// reaction document. Discussion lists re-read ALL of them on mount and focus.
+// Caching these for a minute keeps like checks from driving the daily quota,
+// since a user's own reaction only changes through toggleLike (below).
+
+const REACTION_STALE_MS = 60 * 1000;
+const reactionCache = new Map<string, { liked: boolean; cachedAt: number }>();
+const reactionInFlight = new Map<string, Promise<boolean>>();
+
+function reactionKey(reactionPath: string, uid: string): string {
+  return `${reactionPath}__${uid}`;
+}
+
+function isReactionLikedCached(reactionPath: string, uid: string): Promise<boolean> {
+  const key = reactionKey(reactionPath, uid);
+  const entry = reactionCache.get(key);
+  if (entry && Date.now() - entry.cachedAt < REACTION_STALE_MS) {
+    return Promise.resolve(entry.liked);
+  }
+  const inFlight = reactionInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const request = getDocument(`${reactionPath}/${uid}`)
+    .then((doc) => Boolean(doc))
+    .then((liked) => {
+      reactionCache.set(key, { liked, cachedAt: Date.now() });
+      return liked;
+    })
+    .finally(() => {
+      reactionInFlight.delete(key);
+    });
+
+  reactionInFlight.set(key, request);
+  return request;
+}
+
+function invalidateReactionCache(reactionPath: string, uid: string): void {
+  reactionCache.delete(reactionKey(reactionPath, uid));
 }
 
 async function toggleReaction(reactionPath: string, targetPath: string, liked: boolean): Promise<void> {
   const uid = await getCurrentUid();
   if (!uid) throw new Error('AUTH_REQUIRED');
-  const reactionDocument = `${reactionPath}/${uid}`;
-  const alreadyLiked = Boolean(await getDocument(reactionDocument));
+  // Reuse the cached like status instead of a fresh read — the toggle path
+  // used to add an extra read on top of the like checks already performed.
+  const alreadyLiked = await isReactionLikedCached(reactionPath, uid);
   if (liked === alreadyLiked) return;
+  const reactionDocument = `${reactionPath}/${uid}`;
   if (liked) {
     await setDocument(reactionDocument, { uid, createdAt: serverTimestamp() }, { merge: true });
     await updateDocument(targetPath, { likeCount: increment(1) });
@@ -248,6 +293,8 @@ async function toggleReaction(reactionPath: string, targetPath: string, liked: b
     await deleteDocument(reactionDocument);
     await updateDocument(targetPath, { likeCount: increment(-1) });
   }
+  // After a toggle the like status changed, so drop the stale cached read.
+  invalidateReactionCache(reactionPath, uid);
 }
 
 export async function isCommentLiked(discussionId: string, commentId: string, replyId?: string): Promise<boolean> {

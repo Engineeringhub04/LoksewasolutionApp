@@ -19,13 +19,53 @@ function statePath(uid: string, courseId?: string | null): string {
   return `${Collections.users}/${uid}/qotd/${suffix}`;
 }
 
+// ---------- Module-level cache with a stale window ----------
+//
+// Home renders this state on every mount, focus return, and pull-to-refresh.
+// Caching the per-day state for a minute prevents the same qotd document from
+// being read repeatedly as the user moves between tabs.
+
+const QOTD_STALE_MS = 60 * 1000;
+
+const qotdStateCache = new Map<string, { data: Record<string, unknown> | null; cachedAt: number }>();
+const qotdStateInFlight = new Map<string, Promise<Record<string, unknown> | null>>();
+
+function qotdKey(uid: string, courseId?: string | null): string {
+  return `${uid}__${courseId ?? ''}__${todayKey()}`;
+}
+
+function fetchQotdState(uid: string, courseId?: string | null): Promise<Record<string, unknown> | null> {
+  const key = qotdKey(uid, courseId);
+  const entry = qotdStateCache.get(key);
+  if (entry && Date.now() - entry.cachedAt < QOTD_STALE_MS) {
+    return Promise.resolve(entry.data);
+  }
+  const inFlight = qotdStateInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const request = getDocument(statePath(uid, courseId))
+    .then((data) => {
+      qotdStateCache.set(key, { data, cachedAt: Date.now() });
+      return data;
+    })
+    .finally(() => {
+      qotdStateInFlight.delete(key);
+    });
+
+  qotdStateInFlight.set(key, request);
+  return request;
+}
+
+function invalidateQotdCache(uid: string, courseId?: string | null): void {
+  qotdStateCache.delete(qotdKey(uid, courseId));
+}
+
 export async function fetchQuestionOfTheDay(
   uid: string,
   pickQuestion: () => Promise<Question | null>,
   courseId?: string | null
 ): Promise<QotdState> {
-  const question = await pickQuestion();
-  const data = await getDocument(statePath(uid, courseId));
+  const [question, data] = await Promise.all([pickQuestion(), fetchQotdState(uid, courseId)]);
 
   const answeredToday = data?.lastAnsweredDate === todayKey();
   return {
@@ -37,8 +77,12 @@ export async function fetchQuestionOfTheDay(
 
 /** Quick check used by Home — no question fetch, just whether today's is already answered. */
 export async function hasAnsweredQotdToday(uid: string, courseId?: string | null): Promise<boolean> {
-  const data = await getDocument(statePath(uid, courseId));
+  const data = await fetchQotdState(uid, courseId);
   return data?.lastAnsweredDate === todayKey();
+}
+
+export function invalidateQotdStateCache(uid: string, courseId?: string | null): void {
+  invalidateQotdCache(uid, courseId);
 }
 
 export async function submitQotdAnswer(
@@ -55,6 +99,9 @@ export async function submitQotdAnswer(
   const wasYesterday = lastDate === yesterday.toISOString().slice(0, 10);
 
   const nextStreak = wasYesterday ? currentStreak + 1 : 1;
+
+  // Keep the cached read state fresh for subsequent Home refreshes.
+  invalidateQotdCache(uid, courseId);
 
   await setDocument(
     statePath(uid, courseId),

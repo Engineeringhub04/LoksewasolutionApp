@@ -5,12 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { fetchDiscussion, fetchComments, fetchReplies, addComment, addReply, deleteComment, deleteReply, deleteDiscussion, toggleLikeDiscussion, isDiscussionLiked, isCommentLiked, toggleCommentLike, reportContent, type Reply, type Comment } from '@/src/core/firebase/services/discussions';
-import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
@@ -48,6 +48,7 @@ export default function DiscussionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const storeProfile = useProfileStore((s) => s.profile);
   const discussion = useAsyncData(() => fetchDiscussion(id), [id]);
   const comments = useAsyncData(() => fetchComments(id), [id]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -81,12 +82,14 @@ export default function DiscussionDetailScreen() {
       setPostLikeLoading(false);
       return;
     }
-    fetchUserProfile(user.uid).then((profile) => {
-      setCurrentProfile(profile ? { name: profile.name, photoURL: profile.photoURL } : null);
-      setIsAdmin(profile?.isAdmin === true);
-    }).catch(() => undefined).finally(() => setProfileLoading(false));
+    // Use the shared profile store as the primary identity source — its user
+    // document was already read at app start, so this avoids a duplicate read
+    // every time the comment screen mounts or the post id changes.
+    setCurrentProfile(storeProfile ? { name: storeProfile.name, photoURL: storeProfile.photoURL } : null);
+    setIsAdmin(storeProfile?.isAdmin === true);
+    setProfileLoading(false);
     isDiscussionLiked(id).then(setLiked).catch(() => undefined).finally(() => setPostLikeLoading(false));
-  }, [id, user]);
+  }, [id, user, storeProfile]);
 
   useEffect(() => {
     const currentComments = comments.data ?? [];
@@ -152,8 +155,10 @@ export default function DiscussionDetailScreen() {
     if (!user || !commentText.trim()) return;
     setPosting(true);
     try {
-      const profile = await fetchUserProfile(user.uid).catch(() => null);
-      await addComment(id, { body: commentText.trim(), authorName: profile?.name || user.displayName || 'Anonymous', authorPhoto: profile?.photoURL ?? user.photoURL ?? null, authorId: user.uid });
+      // Store profile is the source of truth; `user.displayName/photoURL`
+      // covers signed-out edge cases without an extra user-document read.
+      const profile = storeProfile ?? { name: user.displayName || 'Anonymous', photoURL: user.photoURL ?? null };
+      await addComment(id, { body: commentText.trim(), authorName: profile.name || 'Anonymous', authorPhoto: profile.photoURL ?? null, authorId: user.uid });
       setCommentText('');
       showToast(t('discussion.commentPosted'), 'success');
       comments.refetch();
@@ -168,8 +173,8 @@ export default function DiscussionDetailScreen() {
     if (!user || !replyText.trim()) return;
     setReplying(true);
     try {
-      const profile = await fetchUserProfile(user.uid).catch(() => null);
-      await addReply(id, commentId, { body: replyText.trim(), authorName: profile?.name || user.displayName || 'Anonymous', authorPhoto: profile?.photoURL ?? user.photoURL ?? null, authorId: user.uid });
+      const profile = storeProfile ?? { name: user.displayName || 'Anonymous', photoURL: user.photoURL ?? null };
+      await addReply(id, commentId, { body: replyText.trim(), authorName: profile.name || 'Anonymous', authorPhoto: profile.photoURL ?? null, authorId: user.uid });
       setReplyText('');
       await loadReplies(commentId);
       showToast(t('discussion.replyPosted'), 'success');
