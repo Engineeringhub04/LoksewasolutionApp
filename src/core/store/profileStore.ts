@@ -13,7 +13,7 @@
 //    Edit Profile pushes its saved values straight into it, so all screens
 //    update together the moment a save succeeds.
 import { create } from 'zustand';
-import { fetchUserProfile, ensureUserStats, type UserProfile } from '@/src/core/firebase/services/profile';
+import { fetchUserProfile, type UserProfile } from '@/src/core/firebase/services/profile';
 import { fetchUserCourseInfo, type UserCourseInfo } from '@/src/core/firebase/services/courses';
 
 interface ProfileState {
@@ -52,8 +52,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     );
 
     try {
-      // Backfills the stats map for accounts created before it existed.
-      await ensureUserStats(uid).catch(() => {});
+      // One user-document read only: `fetchUserProfile` performs the backfill
+      // itself (see profile.ts), so a separate `ensureUserStats` read here
+      // would double the cost of every app open.
       const [profile, courseInfo] = await Promise.all([
         fetchUserProfile(uid),
         fetchUserCourseInfo(uid).catch(() => null),

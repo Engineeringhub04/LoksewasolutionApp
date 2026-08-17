@@ -15,7 +15,6 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useTranslation } from '@/src/core/i18n';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
-import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
 import { fetchDevelopers } from '@/src/core/firebase/services/developer';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
@@ -92,15 +91,13 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const HOME_HEADER_MAX_HEIGHT = getHomeHeaderExpandedHeight(insets.top);
 
-  // Shared profile cache — keeps the header avatar/name/course in sync with
+    // Shared profile cache — keeps the header avatar/name/course in sync with
   // whatever Edit Profile or Course Setup last saved, without a manual refresh.
+  // Read-budget note: the profile store already warms `courseInfo` with a
+  // single direct fetch at app start, so Home derives the enrolled scope from
+  // the store instead of triggering a second `fetchUserCourseInfo` read here.
   const storeProfile = useProfileStore((s) => s.profile);
   const storeCourseInfo = useProfileStore((s) => s.courseInfo);
-
-  const courseInfo = useAsyncData(async () => {
-    if (!user) return null;
-    return fetchUserCourseInfo(user.uid);
-  }, [user?.uid]);
 
   const banners = useAsyncData(() => fetchHomeBanners(), []);
   const developers = useAsyncData(() => fetchDevelopers(), []);
@@ -108,35 +105,30 @@ export default function HomeScreen() {
     if (!user) return [];
     return fetchNotifications(user.uid);
   }, [user?.uid]);
-  // Prefer the shared profile cache for the enrolled scope. The direct fetch is
-  // still kept as a cold-start/name fallback, but a temporary name lookup issue
-  // must never make Home fall back to the default course after the user has saved
-  // a different one.
-  const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? courseInfo.data?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
-  const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? courseInfo.data?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
+  const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const subjectDetails = useAsyncData(
     () => fetchSubjectDetails(enrolledCourseId, enrolledSubcourseId),
     [enrolledCourseId, enrolledSubcourseId],
   );
+
   const qotdAnswered = useAsyncData(async () => {
     if (!user) return false;
-    return hasAnsweredQotdToday(user.uid, storeCourseInfo?.courseId ?? storeProfile?.courseId ?? courseInfo.data?.courseId ?? null);
-  }, [user?.uid, storeCourseInfo?.courseId, storeProfile?.courseId, courseInfo.data?.courseId]);
+    return hasAnsweredQotdToday(user.uid, storeCourseInfo?.courseId ?? storeProfile?.courseId ?? null);
+  }, [user?.uid, storeCourseInfo?.courseId, storeProfile?.courseId]);
 
   // qotdAnswered is included so the overlay stays up until EVERY source has
   // settled — it was refreshed but not tracked, so the loader could disappear
   // while that request was still in flight.
   const refreshing =
     banners.refreshing ||
-    courseInfo.refreshing ||
     developers.refreshing ||
     notifications.refreshing ||
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
-  const initialLoading = banners.loading || courseInfo.loading || developers.loading;
+  const initialLoading = banners.loading || developers.loading;
   const onRefresh = () => {
     banners.refresh();
-    courseInfo.refresh();
     developers.refresh();
     notifications.refresh();
     qotdAnswered.refresh();
@@ -183,8 +175,8 @@ export default function HomeScreen() {
       onToggleTheme={toggleTheme}
       onNotificationsPress={() => router.push('/notifications')}
       onProfilePress={() => router.push('/profile')}
-      courseName={storeCourseInfo?.courseName ?? courseInfo.data?.courseName ?? null}
-      subcourseName={storeCourseInfo?.subcourseName ?? courseInfo.data?.subcourseName ?? null}
+      courseName={storeCourseInfo?.courseName ?? null}
+      subcourseName={storeCourseInfo?.subcourseName ?? null}
       onCoursePress={() => router.push('/course-setup?mode=update')}
     />
 
