@@ -48,7 +48,18 @@ export default function ReadModeScreen() {
   const unitId = valueOf(params.unitId) || null;
 
   const load = useCallback(async () => {
-    if (!user?.uid || !subjectId || !chapterId) return;
+    if (!user?.uid || !subjectId || !chapterId) {
+      console.error('[ReadMode] missing required route/auth params', {
+        hasUser: Boolean(user?.uid),
+        courseId,
+        subcourseId,
+        subjectId,
+        unitId,
+        chapterId,
+      });
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError(false);
     try {
