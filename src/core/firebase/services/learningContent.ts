@@ -322,7 +322,15 @@ export function fetchLearningQuestionSet(params: LearningQuestionSetParams): Pro
   if (cached) return cached;
 
   const request = getDocument(`${Collections.subjectCucqDataAllMode}/${documentId}`)
-    .then((document) => (document ? questionsFromDocument(document, params.mode) : []))
+    .then((document) => {
+      if (!document) {
+        // Unseeded or deleted content must not be cached as empty, otherwise
+        // pages stay blank in the same session after the seed finally runs.
+        questionSetFetches.delete(key);
+        return [];
+      }
+      return questionsFromDocument(document, params.mode);
+    })
     .catch((error) => {
       questionSetFetches.delete(key);
       throw error;
@@ -381,7 +389,15 @@ export function fetchTheoryResource(params: LearningTheoryParams): Promise<Learn
   if (cached) return cached;
 
   const request = getDocument(`${Collections.subjectTheoryResources}/${documentId}`)
-    .then((document) => (document ? theoryFromDocument(document) : null))
+    .then((document) => {
+      if (!document) {
+        // Unseeded or deleted resources must not be cached as null, otherwise
+        // pages stay blank in the same session after the seed finally runs.
+        learningTheoryFetches.delete(key);
+        return null;
+      }
+      return theoryFromDocument(document);
+    })
     .catch((error) => {
       learningTheoryFetches.delete(key);
       throw error;
