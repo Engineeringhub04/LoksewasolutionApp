@@ -74,7 +74,18 @@ export default function PracticeModeScreen() {
   const premium = profilePremium || hasSpecificAccess;
 
   const load = useCallback(async () => {
-    if (!user?.uid || !subjectId || !chapterId) return;
+    if (!user?.uid || !subjectId || !chapterId) {
+      console.error('[PracticeMode] missing required route/auth params', {
+        hasUser: Boolean(user?.uid),
+        courseId,
+        subcourseId,
+        subjectId,
+        unitId,
+        chapterId,
+      });
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError(false);
     try {
