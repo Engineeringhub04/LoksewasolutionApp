@@ -105,7 +105,7 @@ export default function ReadModeScreen() {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         {modeHeader}
-        <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noReadQuestions')} onRetry={() => void load()} />
+        <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noReadQuestions')} />
       </View>
     );
   }

@@ -260,7 +260,7 @@ export default function PracticeModeScreen() {
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
-        <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noPracticeQuestions')} onRetry={() => void load()} />
+        <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noPracticeQuestions')} />
         <ConfirmDialog
           visible={showLeaveConfirm}
           title={t('learningModes.exitPracticeTitle')}
