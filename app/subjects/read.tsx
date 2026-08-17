@@ -7,7 +7,7 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
-import { fetchLearningQuestions, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
+import { fetchReadQuestionSet, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
 import { Text } from '@/src/components/misc/Text';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
@@ -28,6 +28,7 @@ export default function ReadModeScreen() {
     subcourseId?: string;
     subjectId?: string;
     chapterId?: string;
+    unitId?: string;
     subjectName?: string;
     chapterName?: string;
   }>();
@@ -44,20 +45,21 @@ export default function ReadModeScreen() {
   const subcourseId = valueOf(params.subcourseId);
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
+  const unitId = valueOf(params.unitId) || null;
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) return;
     setLoading(true);
     setLoadError(false);
     try {
-      const allQuestions = await fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId);
-      setQuestions(allQuestions.filter((question) => question.mode === 'read' && question.isPublished));
+      const readQuestions = await fetchReadQuestionSet({ courseId, subcourseId, subjectId, unitId, chapterId });
+      setQuestions(readQuestions);
     } catch {
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [chapterId, courseId, subcourseId, subjectId, user?.uid]);
+  }, [chapterId, courseId, subcourseId, subjectId, unitId, user?.uid]);
 
   useEffect(() => {
     void load();
@@ -138,7 +140,7 @@ export default function ReadModeScreen() {
                 <View style={{ gap: spacing.sm }}>
                   {question.options.map((option, optionIndex) => {
                     const correct = optionIndex === question.correctIndex;
-                    return <View key={optionIndex} style={[styles.readOption, { backgroundColor: correct ? `${colors.success}12` : colors.surface, borderColor: correct ? `${colors.success}80` : colors.border, borderRadius: radius.md }]}><View style={[styles.optionBullet, { borderColor: correct ? colors.success : colors.border, backgroundColor: correct ? colors.success : 'transparent' }]}><Text variant="caption" weight="bold" style={{ color: correct ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="bodySmall" style={{ flex: 1, lineHeight: 21 }}>{bilingual(option, question.optionsNe[optionIndex] ?? '')}</Text>{correct ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null}</View>;
+                    return <View key={optionIndex} style={[styles.readOption, { backgroundColor: correct ? `${colors.success}12` : colors.surface, borderColor: correct ? `${colors.success}80` : colors.border, borderRadius: radius.md }]}><View style={[styles.optionBullet, { borderColor: correct ? colors.success : colors.border, backgroundColor: correct ? colors.success : 'transparent' }]}><Text variant="caption" weight="bold" style={{ color: correct ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="bodySmall" style={{ flex: 1, lineHeight: 21 }}>{option}</Text>{correct ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null}</View>;
                   })}
                   <View style={[styles.explanationCard, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}55`, borderRadius: radius.md }]}>
                     <View style={styles.explanationTitle}><Ionicons name="bulb-outline" size={22} color={colors.warning} /><Text variant="bodyLarge" weight="bold" style={{ color: colors.warning }}>{t('learningModes.answerExplanation')}</Text></View>

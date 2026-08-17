@@ -1,13 +1,17 @@
 import {
   commitWrites,
   getDocument,
-  runQuery,
   serverTimestamp,
   setWrite,
   type WriteSpec,
 } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
-import { civilSubEngineerLearningCatalog, type LearningChapterSeed } from '@/src/core/firebase/learningCatalog';
+import {
+  civilSubEngineerLearningCatalog,
+  type LearningChapterSeed,
+  type LearningSubjectSeed,
+  type LearningUnitSeed,
+} from '@/src/core/firebase/learningCatalog';
 import {
   DEFAULT_LEARNING_COURSE_ID,
   DEFAULT_LEARNING_SUBCOURSE_ID,
@@ -28,10 +32,10 @@ export interface LearningQuestion {
   unitId: string | null;
   chapterId: string;
   mode: LearningQuestionMode;
+  order: number;
   text: string;
   textNe: string;
   options: string[];
-  optionsNe: string[];
   correctIndex: number;
   explanation: string;
   explanationNe: string;
@@ -43,38 +47,34 @@ export interface LearningQuestion {
 
 export interface LearningTheoryNote {
   id: string;
+  resourceId: string;
+  scopeId: string;
   courseId: string;
+  courseNameEn: string;
+  courseNameNe: string;
   subcourseId: string;
+  subcourseNameEn: string;
+  subcourseNameNe: string;
   subjectId: string;
+  subjectNameEn: string;
+  subjectNameNe: string;
   unitId: string | null;
+  unitNameEn: string | null;
+  unitNameNe: string | null;
   chapterId: string;
+  chapterNameEn: string;
+  chapterNameNe: string;
+  unitChapterId: string | null;
+  unitOrder: number | null;
+  chapterOrder: number;
   title: string;
   titleNe: string;
-  notes: string | null;
-  notesNe: string | null;
   pdfUrl: string | null;
-  notesUrl: string | null;
+  pdfProvider: string | null;
   isConfigured: boolean;
   isPublished: boolean;
   isPremium: boolean;
   price: number;
-}
-
-export interface LearningQuestionBankMeta {
-  id: string;
-  courseId: string;
-  subcourseId: string;
-  subjectId: string;
-  unitId: string | null;
-  chapterId: string;
-  practiceQuestionCount: number;
-  readQuestionCount: number;
-  isSeed: boolean;
-}
-
-export interface LearningScope {
-  courseId: string;
-  subcourseId: string;
 }
 
 export interface LearningContentSeedResult {
@@ -83,96 +83,105 @@ export interface LearningContentSeedResult {
   totalRecords: number;
 }
 
-type Phase5QuestionTemplate = Omit<LearningQuestion, 'id' | 'sourceId' | 'courseId' | 'subcourseId' | 'subjectId' | 'unitId' | 'chapterId' | 'mode' | 'isPremium' | 'price'>;
+export interface LearningContentScopeNames {
+  courseNameEn?: string;
+  courseNameNe?: string;
+  subcourseNameEn?: string;
+  subcourseNameNe?: string;
+}
 
-const QUESTION_WRITE_CHUNK_SIZE = 400;
+type Phase5QuestionTemplate = {
+  questionEn: string;
+  questionNe: string;
+  options: { id: string; textEn: string }[];
+  correctOptionId: string;
+  explanationEn: string;
+  explanationNe: string;
+  difficulty: LearningDifficulty;
+};
+
+const CONTENT_WRITE_CHUNK_SIZE = 400;
 const SAMPLE_DIFFICULTIES: LearningDifficulty[] = ['easy', 'medium', 'hard'];
 
-// User-provided Phase 5 testing questions. These same three verified records
-// are intentionally reused for every catalog chapter and every learning scope;
-// no AI-generated questions are used by the seed flow.
+// These are the three user-provided verification questions. They are reused for
+// every catalog chapter and every discovered course/subcourse scope. No AI
+// generation is used by this seed flow.
 const phase5QuestionTemplates: Phase5QuestionTemplate[] = [
   {
-    text: 'Which of the following is known as the “Light of Asia”?',
-    textNe: 'तलका मध्ये “एसियाको ज्योति” भनेर कसलाई चिनिन्छ?',
+    questionEn: 'Which of the following is known as the “Light of Asia”?',
+    questionNe: 'तलका मध्ये “एसियाको ज्योति” भनेर कसलाई चिनिन्छ?',
     options: [
-      'A) King Prithvi Narayan Shah',
-      'B) Gautam Buddha',
-      'C) Araniko',
-      'D) Bhanubhakta Acharya',
+      { id: 'A', textEn: 'King Prithvi Narayan Shah' },
+      { id: 'B', textEn: 'Gautam Buddha' },
+      { id: 'C', textEn: 'Araniko' },
+      { id: 'D', textEn: 'Bhanubhakta Acharya' },
     ],
-    optionsNe: [
-      'राजा पृथ्वीनारायण शाह',
-      'गौतम बुद्ध',
-      'अरनिको',
-      'भानुभक्त आचार्य',
-    ],
-    correctIndex: 1,
-    explanation: 'Gautam Buddha is widely known as the “Light of Asia” because his teachings on peace, compassion, non-violence, and the path to enlightenment had a profound influence across Asia and beyond. He was born in Lumbini, Nepal, which is recognized as his birthplace.',
+    correctOptionId: 'B',
+    explanationEn: 'Gautam Buddha is widely known as the “Light of Asia” because his teachings on peace, compassion, non-violence, and the path to enlightenment had a profound influence across Asia and beyond. He was born in Lumbini, Nepal, which is recognized as his birthplace.',
     explanationNe: 'गौतम बुद्धलाई “एसियाको ज्योति” भनेर चिनिन्छ, किनभने उहाँले शान्ति, करुणा, अहिंसा तथा ज्ञानप्राप्तिको मार्गसम्बन्धी दिनुभएको शिक्षाले एसिया लगायत विश्वका विभिन्न क्षेत्रमा गहिरो प्रभाव पारेको छ। उहाँको जन्मस्थल नेपालको लुम्बिनी हो, जसलाई बुद्धको जन्मस्थलका रूपमा विश्वभर मान्यता प्राप्त छ।',
     difficulty: 'easy',
-    isPublished: true,
   },
   {
-    text: 'Which of the following best describes the main purpose of a feasibility study before implementing a development project?',
-    textNe: 'कुनै विकास परियोजना कार्यान्वयन गर्नुअघि गरिने सम्भाव्यता अध्ययनको मुख्य उद्देश्य तलका मध्ये कुन हो?',
+    questionEn: 'Which of the following best describes the main purpose of a feasibility study before implementing a development project?',
+    questionNe: 'कुनै विकास परियोजना कार्यान्वयन गर्नुअघि गरिने सम्भाव्यता अध्ययनको मुख्य उद्देश्य तलका मध्ये कुन हो?',
     options: [
-      'A) To appoint the project staff immediately',
-      'B) To determine whether the project is technically, financially, and practically viable',
-      'C) To increase the estimated cost of the project',
-      'D) To prepare the final completion report',
+      { id: 'A', textEn: 'To appoint the project staff immediately' },
+      { id: 'B', textEn: 'To determine whether the project is technically, financially, and practically viable' },
+      { id: 'C', textEn: 'To increase the estimated cost of the project' },
+      { id: 'D', textEn: 'To prepare the final completion report' },
     ],
-    optionsNe: [
-      'परियोजनाका कर्मचारी तुरुन्त नियुक्त गर्नु',
-      'परियोजना प्राविधिक, आर्थिक तथा व्यावहारिक रूपमा सम्भव छ कि छैन भन्ने निर्धारण गर्नु',
-      'परियोजनाको अनुमानित लागत बढाउनु',
-      'अन्तिम सम्पन्न प्रतिवेदन तयार गर्नु',
-    ],
-    correctIndex: 1,
-    explanation: 'A feasibility study is conducted before major project implementation to assess whether the proposed project can realistically be carried out. It generally examines factors such as technical requirements, financial resources, economic benefits, available technology, risks, and practical constraints. Therefore, its main purpose is to determine the overall viability of the project before significant resources are committed.',
+    correctOptionId: 'B',
+    explanationEn: 'A feasibility study is conducted before major project implementation to assess whether the proposed project can realistically be carried out. It generally examines factors such as technical requirements, financial resources, economic benefits, available technology, risks, and practical constraints. Therefore, its main purpose is to determine the overall viability of the project before significant resources are committed.',
     explanationNe: 'सम्भाव्यता अध्ययन कुनै ठूलो परियोजना कार्यान्वयन गर्नुअघि उक्त परियोजना वास्तवमै सञ्चालन गर्न सम्भव छ कि छैन भन्ने मूल्याङ्कन गर्न गरिन्छ। यस क्रममा परियोजनाको प्राविधिक आवश्यकता, आर्थिक स्रोत, सम्भावित लाभ, उपलब्ध प्रविधि, जोखिम तथा व्यावहारिक कठिनाइहरू जस्ता पक्षहरूको अध्ययन गरिन्छ। त्यसैले परियोजनामा ठूलो स्रोत लगानी गर्नुअघि यसको समग्र सम्भाव्यता निर्धारण गर्नु नै सम्भाव्यता अध्ययनको मुख्य उद्देश्य हो।',
     difficulty: 'medium',
-    isPublished: true,
   },
   {
-    text: 'A local government plans to construct a public building. The project was originally estimated to cost NPR 50 million. During implementation, the cost of construction materials increased by 20%, while improved procurement management reduced other project costs by 10% of the original estimate. What is the revised estimated cost of the project?',
-    textNe: 'एक स्थानीय तहले सार्वजनिक भवन निर्माण गर्ने योजना बनाएको छ। उक्त परियोजनाको प्रारम्भिक अनुमानित लागत ५ करोड रुपैयाँ थियो। परियोजना कार्यान्वयनका क्रममा निर्माण सामग्रीको लागत २०% ले वृद्धि भयो भने प्रभावकारी खरिद व्यवस्थापनका कारण अन्य परियोजना लागतमा प्रारम्भिक अनुमानको १०% बराबर बचत भयो। यस्तो अवस्थामा परियोजनाको संशोधित अनुमानित लागत कति हुनेछ?',
+    questionEn: 'A local government plans to construct a public building. The project was originally estimated to cost NPR 50 million. During implementation, the cost of construction materials increased by 20%, while improved procurement management reduced other project costs by 10% of the original estimate. What is the revised estimated cost of the project?',
+    questionNe: 'एक स्थानीय तहले सार्वजनिक भवन निर्माण गर्ने योजना बनाएको छ। उक्त परियोजनाको प्रारम्भिक अनुमानित लागत ५ करोड रुपैयाँ थियो। परियोजना कार्यान्वयनका क्रममा निर्माण सामग्रीको लागत २०% ले वृद्धि भयो भने प्रभावकारी खरिद व्यवस्थापनका कारण अन्य परियोजना लागतमा प्रारम्भिक अनुमानको १०% बराबर बचत भयो। यस्तो अवस्थामा परियोजनाको संशोधित अनुमानित लागत कति हुनेछ?',
     options: [
-      'A) NPR 50 million / ५ करोड रुपैयाँ',
-      'B) NPR 55 million / ५ करोड ५० लाख रुपैयाँ',
-      'C) NPR 60 million / ६ करोड रुपैयाँ',
-      'D) NPR 65 million / ६ करोड ५० लाख रुपैयाँ',
+      { id: 'A', textEn: 'NPR 50 million' },
+      { id: 'B', textEn: 'NPR 55 million' },
+      { id: 'C', textEn: 'NPR 60 million' },
+      { id: 'D', textEn: 'NPR 65 million' },
     ],
-    optionsNe: [
-      '५ करोड रुपैयाँ',
-      '५ करोड ५० लाख रुपैयाँ',
-      '६ करोड रुपैयाँ',
-      '६ करोड ५० लाख रुपैयाँ',
-    ],
-    correctIndex: 1,
-    explanation: 'The original project estimate was NPR 50 million. A 20% increase in material costs adds NPR 10 million to the original estimate, while the improved procurement system saves NPR 5 million, which is 10% of the original estimate. Therefore, the net increase is NPR 5 million, making the revised estimated cost NPR 55 million. Hence, option B is correct.',
+    correctOptionId: 'B',
+    explanationEn: 'The original project estimate was NPR 50 million. A 20% increase in material costs adds NPR 10 million to the original estimate, while the improved procurement system saves NPR 5 million, which is 10% of the original estimate. Therefore, the net increase is NPR 5 million, making the revised estimated cost NPR 55 million. Hence, option B is correct.',
     explanationNe: 'परियोजनाको प्रारम्भिक अनुमानित लागत ५ करोड रुपैयाँ थियो। निर्माण सामग्रीको लागतमा २०% वृद्धि हुँदा प्रारम्भिक लागतमा १ करोड रुपैयाँ थपिन्छ भने प्रभावकारी खरिद व्यवस्थापनबाट प्रारम्भिक लागतको १०% अर्थात् ५० लाख रुपैयाँ बचत हुन्छ। त्यसैले कुल लागतमा भएको शुद्ध वृद्धि ५० लाख रुपैयाँ मात्र हुन्छ र संशोधित अनुमानित लागत ५ करोड ५० लाख रुपैयाँ पुग्छ। त्यसकारण सही उत्तर B) ५ करोड ५० लाख रुपैयाँ हो।',
     difficulty: 'hard',
-    isPublished: true,
   },
 ];
 
-// The canonical syllabus uses job-based-knowledge, while the Phase 1 subject
-// catalog and Phase 4 routes expose the user-facing technical-subject ID.
 function appSubjectId(subjectId: string): string {
   return subjectId === 'job-based-knowledge' ? 'technical-subject' : subjectId;
 }
 
-function scopePrefix(courseId: string, subcourseId: string): string {
+function scopeId(courseId: string, subcourseId: string): string {
   return `${courseId}__${subcourseId}`;
 }
 
-export function learningContentId(courseId: string, subcourseId: string, subjectId: string, chapterId: string): string {
-  return `${scopePrefix(courseId, subcourseId)}__${subjectId}__${chapterId}`;
+function unitSegment(unitId: string | null): string {
+  return unitId ?? 'no-unit';
 }
 
-function learningQuestionId(courseId: string, subcourseId: string, sourceId: string): string {
-  return `${scopePrefix(courseId, subcourseId)}__${sourceId}`;
+export function learningQuestionSetId(
+  courseId: string,
+  subcourseId: string,
+  subjectId: string,
+  unitId: string | null,
+  chapterId: string,
+  mode: LearningQuestionMode,
+): string {
+  return `${scopeId(courseId, subcourseId)}__${appSubjectId(subjectId)}__${unitSegment(unitId)}__${chapterId}__${mode}`;
+}
+
+export function learningTheoryResourceId(
+  courseId: string,
+  subcourseId: string,
+  subjectId: string,
+  unitId: string | null,
+  chapterId: string,
+): string {
+  return `${scopeId(courseId, subcourseId)}__${appSubjectId(subjectId)}__${unitSegment(unitId)}__${chapterId}__theory`;
 }
 
 function readString(value: unknown, fallback = ''): string {
@@ -183,91 +192,201 @@ function readNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-function readArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
 function readNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function questionFromDocument(document: Record<string, unknown>): LearningQuestion {
-  const difficulty = document.difficulty === 'hard' || document.difficulty === 'medium' ? document.difficulty : 'easy';
+function readNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readOptions(value: unknown): { id: string; textEn: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((option, index) => {
+    if (typeof option === 'string') return [{ id: String.fromCharCode(65 + index), textEn: option }];
+    if (!option || typeof option !== 'object') return [];
+    const record = option as Record<string, unknown>;
+    return [{
+      id: readString(record.id, String.fromCharCode(65 + index)),
+      textEn: readString(record.textEn, readString(record.text)),
+    }];
+  });
+}
+
+function questionFromArrayItem(
+  item: Record<string, unknown>,
+  document: Record<string, unknown>,
+  mode: LearningQuestionMode,
+  index: number,
+): LearningQuestion {
+  const options = readOptions(item.options);
+  const correctOptionId = readString(item.correctOptionId);
+  const legacyCorrectIndex = readNumber(item.correctIndex, 0);
+  const correctIndex = correctOptionId
+    ? Math.max(0, options.findIndex((option) => option.id === correctOptionId))
+    : legacyCorrectIndex;
+  const questionId = readString(item.questionId, readString(item.id, `${readString(document.id)}__question-${index + 1}`));
   return {
-    id: readString(document.id),
-    sourceId: readString(document.sourceId, readString(document.id)),
+    id: questionId,
+    sourceId: questionId,
     courseId: readString(document.courseId, DEFAULT_LEARNING_COURSE_ID),
     subcourseId: readString(document.subcourseId, DEFAULT_LEARNING_SUBCOURSE_ID),
     subjectId: readString(document.subjectId),
     unitId: readNullableString(document.unitId),
     chapterId: readString(document.chapterId),
-    mode: document.mode === 'read' ? 'read' : 'practice',
-    text: readString(document.text),
-    textNe: readString(document.textNe, readString(document.text)),
-    options: readArray(document.options),
-    optionsNe: readArray(document.optionsNe),
-    correctIndex: readNumber(document.correctIndex),
-    explanation: readString(document.explanation),
-    explanationNe: readString(document.explanationNe, readString(document.explanation)),
-    difficulty,
-    isPublished: document.isPublished !== false,
+    mode,
+    order: readNumber(item.order, index + 1),
+    text: readString(item.questionEn, readString(item.text)),
+    textNe: readString(item.questionNe, readString(item.textNe, readString(item.questionEn, readString(item.text)))),
+    options: options.map((option) => option.textEn),
+    correctIndex: correctIndex < 0 ? 0 : correctIndex,
+    explanation: readString(item.explanationEn, readString(item.explanation)),
+    explanationNe: readString(item.explanationNe, readString(item.explanationEn, readString(item.explanation))),
+    difficulty: item.difficulty === 'hard' || item.difficulty === 'medium' ? item.difficulty : 'easy',
+    isPublished: item.isActive !== false && document.isPublished !== false,
     isPremium: document.isPremium === true,
     price: readNumber(document.price),
   };
+}
+
+function questionsFromDocument(document: Record<string, unknown>, mode: LearningQuestionMode): LearningQuestion[] {
+  if (!Array.isArray(document.questions)) return [];
+  return document.questions
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item, index) => questionFromArrayItem(item, document, mode, index))
+    .filter((question) => question.isPublished)
+    .sort((a, b) => a.order - b.order);
 }
 
 function theoryFromDocument(document: Record<string, unknown>): LearningTheoryNote {
+  const pdfUrl = readNullableString(document.pdfUrl);
   return {
-    id: readString(document.id),
+    id: readString(document.id, readString(document.resourceId)),
+    resourceId: readString(document.resourceId, readString(document.id)),
+    scopeId: readString(document.scopeId),
     courseId: readString(document.courseId, DEFAULT_LEARNING_COURSE_ID),
+    courseNameEn: readString(document.courseNameEn, readString(document.courseId)),
+    courseNameNe: readString(document.courseNameNe, readString(document.courseNameEn, readString(document.courseId))),
     subcourseId: readString(document.subcourseId, DEFAULT_LEARNING_SUBCOURSE_ID),
+    subcourseNameEn: readString(document.subcourseNameEn, readString(document.subcourseId)),
+    subcourseNameNe: readString(document.subcourseNameNe, readString(document.subcourseNameEn, readString(document.subcourseId))),
     subjectId: readString(document.subjectId),
+    subjectNameEn: readString(document.subjectNameEn, readString(document.subjectId)),
+    subjectNameNe: readString(document.subjectNameNe, readString(document.subjectNameEn, readString(document.subjectId))),
     unitId: readNullableString(document.unitId),
+    unitNameEn: readNullableString(document.unitNameEn),
+    unitNameNe: readNullableString(document.unitNameNe),
     chapterId: readString(document.chapterId),
-    title: readString(document.title),
-    titleNe: readString(document.titleNe, readString(document.title)),
-    notes: readNullableString(document.notes),
-    notesNe: readNullableString(document.notesNe),
-    pdfUrl: readNullableString(document.pdfUrl),
-    notesUrl: readNullableString(document.notesUrl),
-    isConfigured: document.isConfigured === true,
+    chapterNameEn: readString(document.chapterNameEn),
+    chapterNameNe: readString(document.chapterNameNe, readString(document.chapterNameEn)),
+    unitChapterId: readNullableString(document.unitChapterId),
+    unitOrder: readNullableNumber(document.unitOrder),
+    chapterOrder: readNumber(document.chapterOrder),
+    title: readString(document.titleEn, readString(document.title, readString(document.chapterNameEn))),
+    titleNe: readString(document.titleNe, readString(document.chapterNameNe, readString(document.titleEn, readString(document.title)))),
+    pdfUrl,
+    pdfProvider: readNullableString(document.pdfProvider),
+    isConfigured: Boolean(pdfUrl),
     isPublished: document.isPublished !== false,
     isPremium: document.isPremium === true,
     price: readNumber(document.price),
   };
 }
 
-const learningQuestionFetches = new Map<string, Promise<LearningQuestion[]>>();
+const questionSetFetches = new Map<string, Promise<LearningQuestion[]>>();
 const learningTheoryFetches = new Map<string, Promise<LearningTheoryNote | null>>();
 
+export interface LearningQuestionSetParams {
+  courseId: string;
+  subcourseId: string;
+  subjectId: string;
+  unitId?: string | null;
+  chapterId: string;
+  mode: LearningQuestionMode;
+}
+
+export interface LearningTheoryParams {
+  courseId: string;
+  subcourseId: string;
+  subjectId: string;
+  unitId?: string | null;
+  chapterId: string;
+}
+
+export function fetchLearningQuestionSet(params: LearningQuestionSetParams): Promise<LearningQuestion[]> {
+  const normalizedSubjectId = appSubjectId(params.subjectId);
+  const normalizedUnitId = params.unitId || null;
+  const documentId = learningQuestionSetId(params.courseId, params.subcourseId, normalizedSubjectId, normalizedUnitId, params.chapterId, params.mode);
+  const key = `${Collections.subjectCucqDataAllMode}/${documentId}`;
+  const cached = questionSetFetches.get(key);
+  if (cached) return cached;
+
+  const request = getDocument(`${Collections.subjectCucqDataAllMode}/${documentId}`)
+    .then((document) => (document ? questionsFromDocument(document, params.mode) : []))
+    .catch((error) => {
+      questionSetFetches.delete(key);
+      throw error;
+    });
+  questionSetFetches.set(key, request);
+  return request;
+}
+
+export function fetchPracticeQuestionSet(params: Omit<LearningQuestionSetParams, 'mode'>): Promise<LearningQuestion[]> {
+  return fetchLearningQuestionSet({ ...params, mode: 'practice' });
+}
+
+export function fetchReadQuestionSet(params: Omit<LearningQuestionSetParams, 'mode'>): Promise<LearningQuestion[]> {
+  return fetchLearningQuestionSet({ ...params, mode: 'read' });
+}
+
+export async function fetchLearningQuestionsBySubject(params: {
+  courseId: string;
+  subcourseId: string;
+  subjectId: string;
+  mode?: LearningQuestionMode;
+  max?: number;
+}): Promise<LearningQuestion[]> {
+  const normalizedSubjectId = appSubjectId(params.subjectId);
+  const mode = params.mode ?? 'practice';
+  const entries = chapterEntries().filter((entry) => appSubjectId(entry.subject.id) === normalizedSubjectId);
+  const chapterQuestions = await Promise.all(entries.map((entry) => fetchLearningQuestionSet({
+    courseId: params.courseId,
+    subcourseId: params.subcourseId,
+    subjectId: normalizedSubjectId,
+    unitId: entry.unit?.id ?? null,
+    chapterId: entry.chapter.id,
+    mode,
+  })));
+  return chapterQuestions.flat().slice(0, params.max ?? 200);
+}
+
+// Kept as a small compatibility wrapper for any existing learning-mode caller.
 export function fetchLearningQuestions(
   courseId: string,
   subcourseId: string,
   subjectId: string,
   chapterId: string,
+  unitId: string | null = null,
+  mode: LearningQuestionMode = 'practice',
 ): Promise<LearningQuestion[]> {
-  const key = [courseId, subcourseId, appSubjectId(subjectId), chapterId].join('__');
-  const cached = learningQuestionFetches.get(key);
+  return fetchLearningQuestionSet({ courseId, subcourseId, subjectId, chapterId, unitId, mode });
+}
+
+export function fetchTheoryResource(params: LearningTheoryParams): Promise<LearningTheoryNote | null> {
+  const normalizedSubjectId = appSubjectId(params.subjectId);
+  const normalizedUnitId = params.unitId || null;
+  const documentId = learningTheoryResourceId(params.courseId, params.subcourseId, normalizedSubjectId, normalizedUnitId, params.chapterId);
+  const key = `${Collections.subjectTheoryResources}/${documentId}`;
+  const cached = learningTheoryFetches.get(key);
   if (cached) return cached;
 
-  const request = runQuery(Collections.subjectCucqDataAllMode, {
-    where: [
-      { field: 'courseId', op: '==', value: courseId },
-      { field: 'subcourseId', op: '==', value: subcourseId },
-      { field: 'subjectId', op: '==', value: appSubjectId(subjectId) },
-      { field: 'chapterId', op: '==', value: chapterId },
-      { field: 'isPublished', op: '==', value: true },
-    ],
-    limit: 200,
-  }).then((documents) => documents.map(questionFromDocument).sort((a, b) => {
-    if (a.mode !== b.mode) return a.mode.localeCompare(b.mode);
-    if (a.difficulty !== b.difficulty) return a.difficulty.localeCompare(b.difficulty);
-    return a.id.localeCompare(b.id);
-  })).catch((error) => {
-    learningQuestionFetches.delete(key);
-    throw error;
-  });
-  learningQuestionFetches.set(key, request);
+  const request = getDocument(`${Collections.subjectTheoryResources}/${documentId}`)
+    .then((document) => (document ? theoryFromDocument(document) : null))
+    .catch((error) => {
+      learningTheoryFetches.delete(key);
+      throw error;
+    });
+  learningTheoryFetches.set(key, request);
   return request;
 }
 
@@ -276,165 +395,201 @@ export function fetchLearningTheory(
   subcourseId: string,
   subjectId: string,
   chapterId: string,
+  unitId: string | null = null,
 ): Promise<LearningTheoryNote | null> {
-  const key = [courseId, subcourseId, appSubjectId(subjectId), chapterId].join('__');
-  const cached = learningTheoryFetches.get(key);
-  if (cached) return cached;
-
-  const request = getDocument(
-    `${Collections.subjectTheoryResources}/${learningContentId(courseId, subcourseId, subjectId, chapterId)}`,
-  ).then((document) => (document ? theoryFromDocument(document) : null)).catch((error) => {
-    learningTheoryFetches.delete(key);
-    throw error;
-  });
-  learningTheoryFetches.set(key, request);
-  return request;
+  return fetchTheoryResource({ courseId, subcourseId, subjectId, chapterId, unitId });
 }
 
-function chapterEntries(): { subjectId: string; chapter: LearningChapterSeed; unitId: string | null }[] {
+interface ChapterEntry {
+  subject: LearningSubjectSeed;
+  unit: LearningUnitSeed | null;
+  chapter: LearningChapterSeed;
+}
+
+function chapterEntries(): ChapterEntry[] {
   return civilSubEngineerLearningCatalog.flatMap((subject) => [
-    ...(subject.chapters ?? []).map((chapter) => ({ subjectId: subject.id, chapter, unitId: null })),
-    ...(subject.units ?? []).flatMap((unit) => unit.chapters.map((chapter) => ({ subjectId: subject.id, chapter, unitId: unit.id }))),
+    ...(subject.chapters ?? []).map((chapter) => ({ subject, unit: null, chapter })),
+    ...(subject.units ?? []).flatMap((unit) => unit.chapters.map((chapter) => ({ subject, unit, chapter }))),
   ]);
 }
 
-function sampleQuestionRecords(): LearningQuestion[] {
-  const selected: LearningQuestion[] = [];
-  for (const { subjectId, chapter, unitId } of chapterEntries()) {
-    for (const template of phase5QuestionTemplates) {
-      const baseSourceId = `${subjectId}__${chapter.id}__phase5-${template.difficulty}`;
-      const baseRecord = {
-        ...template,
-        subjectId,
-        unitId,
-        chapterId: chapter.id,
-      };
-      selected.push({
-        ...baseRecord,
-        id: baseSourceId,
-        sourceId: baseSourceId,
-        courseId: '',
-        subcourseId: '',
-        mode: 'practice',
-        isPremium: false,
-        price: 0,
-      });
-      selected.push({
-        ...baseRecord,
-        id: `${baseSourceId}__read`,
-        sourceId: `${baseSourceId}__read`,
-        courseId: '',
-        subcourseId: '',
-        mode: 'read',
-        isPremium: false,
-        price: 0,
-      });
-    }
-  }
-  return selected;
+function normalizeOptions(options: LearningContentScopeNames): Required<LearningContentScopeNames> {
+  return {
+    courseNameEn: options.courseNameEn ?? 'Civil Engineering',
+    courseNameNe: options.courseNameNe ?? options.courseNameEn ?? 'Civil Engineering',
+    subcourseNameEn: options.subcourseNameEn ?? 'Civil Assistance Sub Engineer',
+    subcourseNameNe: options.subcourseNameNe ?? options.subcourseNameEn ?? 'Civil Assistance Sub Engineer',
+  };
 }
 
-const phase5SampleQuestions = sampleQuestionRecords();
-
-function buildTheoryWrites(options: Required<LearningSeedOptions>): WriteSpec[] {
-  return chapterEntries().map(({ subjectId, chapter, unitId }) => {
-    const resolvedSubjectId = appSubjectId(subjectId);
-    const id = learningContentId(options.courseId, options.subcourseId, resolvedSubjectId, chapter.id);
-    return setWrite(`${Collections.subjectTheoryResources}/${id}`, {
-      id,
-      courseId: options.courseId,
-      subcourseId: options.subcourseId,
-      subjectId: resolvedSubjectId,
-      unitId,
-      chapterId: chapter.id,
-      title: `${chapter.title} Theory`,
-      titleNe: `${chapter.titleNe} सिद्धान्त`,
-      resourceType: 'pdf',
-      notes: null,
-      notesNe: null,
-      pdfUrl: PHASE5_THEORY_PDF_URL,
-      notesUrl: null,
-      isConfigured: true,
-      isPublished: true,
-      isPremium: false,
-      price: 0,
-      isSeed: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  });
+function questionSetFields(
+  options: Required<LearningSeedOptions> & LearningContentScopeNames,
+  entry: ChapterEntry,
+  mode: LearningQuestionMode,
+): Record<string, unknown> {
+  const subjectId = appSubjectId(entry.subject.id);
+  const unitId = entry.unit?.id ?? null;
+  const id = learningQuestionSetId(options.courseId, options.subcourseId, subjectId, unitId, entry.chapter.id, mode);
+  const names = normalizeOptions(options);
+  const timestamp = new Date().toISOString();
+  const questions = phase5QuestionTemplates.map((template, index) => ({
+    questionId: `${entry.chapter.id}__${template.difficulty}`,
+    order: index + 1,
+    difficulty: template.difficulty,
+    questionEn: template.questionEn,
+    questionNe: template.questionNe,
+    options: template.options,
+    correctOptionId: template.correctOptionId,
+    explanationEn: template.explanationEn,
+    explanationNe: template.explanationNe,
+    isActive: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }));
+  return {
+    contentSetId: id,
+    scopeId: scopeId(options.courseId, options.subcourseId),
+    courseId: options.courseId,
+    courseNameEn: names.courseNameEn,
+    courseNameNe: names.courseNameNe,
+    subcourseId: options.subcourseId,
+    subcourseNameEn: names.subcourseNameEn,
+    subcourseNameNe: names.subcourseNameNe,
+    subjectId,
+    subjectNameEn: entry.subject.title,
+    subjectNameNe: entry.subject.titleNe,
+    unitId,
+    unitNameEn: entry.unit?.title ?? null,
+    unitNameNe: entry.unit?.titleNe ?? null,
+    chapterId: entry.chapter.id,
+    chapterNameEn: entry.chapter.title,
+    chapterNameNe: entry.chapter.titleNe,
+    unitChapterId: entry.unit ? entry.chapter.id : null,
+    unitChapterNameEn: entry.unit ? entry.chapter.title : null,
+    unitChapterNameNe: entry.unit ? entry.chapter.titleNe : null,
+    unitOrder: entry.unit?.order ?? null,
+    chapterOrder: entry.chapter.order,
+    mode,
+    questionCount: questions.length,
+    questions,
+    isPublished: true,
+    isPremium: false,
+    price: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
 }
 
-function buildQuestionWrites(options: Required<LearningSeedOptions>): WriteSpec[] {
-  return phase5SampleQuestions.map((question) => {
-    const id = learningQuestionId(options.courseId, options.subcourseId, question.sourceId);
-    return setWrite(`${Collections.subjectCucqDataAllMode}/${id}`, {
-      id,
-      sourceId: question.sourceId,
-      courseId: options.courseId,
-      subcourseId: options.subcourseId,
-      subjectId: appSubjectId(question.subjectId),
-      unitId: question.unitId,
-      chapterId: question.chapterId,
-      mode: question.mode,
-      order: SAMPLE_DIFFICULTIES.indexOf(question.difficulty) + 1,
-      difficulty: question.difficulty,
-      text: question.text,
-      textNe: question.textNe,
-      options: question.options,
-      optionsNe: question.optionsNe,
-      correctIndex: question.correctIndex,
-      explanation: question.explanation,
-      explanationNe: question.explanationNe,
-      isPublished: question.isPublished,
-      isPremium: false,
-      price: 0,
-      isSeed: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  });
+function theoryFields(
+  options: Required<LearningSeedOptions> & LearningContentScopeNames,
+  entry: ChapterEntry,
+): Record<string, unknown> {
+  const subjectId = appSubjectId(entry.subject.id);
+  const unitId = entry.unit?.id ?? null;
+  const id = learningTheoryResourceId(options.courseId, options.subcourseId, subjectId, unitId, entry.chapter.id);
+  const names = normalizeOptions(options);
+  return {
+    resourceId: id,
+    scopeId: scopeId(options.courseId, options.subcourseId),
+    courseId: options.courseId,
+    courseNameEn: names.courseNameEn,
+    courseNameNe: names.courseNameNe,
+    subcourseId: options.subcourseId,
+    subcourseNameEn: names.subcourseNameEn,
+    subcourseNameNe: names.subcourseNameNe,
+    subjectId,
+    subjectNameEn: entry.subject.title,
+    subjectNameNe: entry.subject.titleNe,
+    unitId,
+    unitNameEn: entry.unit?.title ?? null,
+    unitNameNe: entry.unit?.titleNe ?? null,
+    chapterId: entry.chapter.id,
+    chapterNameEn: entry.chapter.title,
+    chapterNameNe: entry.chapter.titleNe,
+    unitChapterId: entry.unit ? entry.chapter.id : null,
+    unitOrder: entry.unit?.order ?? null,
+    chapterOrder: entry.chapter.order,
+    resourceType: 'pdf',
+    titleEn: `${entry.chapter.title} Theory`,
+    titleNe: `${entry.chapter.titleNe} सिद्धान्त`,
+    pdfUrl: PHASE5_THEORY_PDF_URL,
+    pdfProvider: 'google-drive',
+    isPublished: true,
+    isPremium: false,
+    price: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
 }
 
-export function buildLearningContentSlotWrites(options: LearningSeedOptions = {}): WriteSpec[] {
+export function buildQuestionSetWrites(options: LearningSeedOptions & LearningContentScopeNames = {}): WriteSpec[] {
   const normalizedOptions = {
     courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
     subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
     overwriteCatalogFields: options.overwriteCatalogFields ?? false,
+    courseNameEn: options.courseNameEn,
+    courseNameNe: options.courseNameNe,
+    subcourseNameEn: options.subcourseNameEn,
+    subcourseNameNe: options.subcourseNameNe,
   };
-  return [...buildTheoryWrites(normalizedOptions), ...buildQuestionWrites(normalizedOptions)];
+  return chapterEntries().flatMap((entry) => (['practice', 'read'] as LearningQuestionMode[]).map((mode) => {
+    const subjectId = appSubjectId(entry.subject.id);
+    const unitId = entry.unit?.id ?? null;
+    const id = learningQuestionSetId(normalizedOptions.courseId, normalizedOptions.subcourseId, subjectId, unitId, entry.chapter.id, mode);
+    return setWrite(`${Collections.subjectCucqDataAllMode}/${id}`, questionSetFields(normalizedOptions, entry, mode), { merge: true });
+  }));
 }
 
-export function buildLearningQuestionWrites(options: LearningSeedOptions = {}): WriteSpec[] {
+export function buildTheorySetWrites(options: LearningSeedOptions & LearningContentScopeNames = {}): WriteSpec[] {
   const normalizedOptions = {
     courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
     subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
     overwriteCatalogFields: options.overwriteCatalogFields ?? false,
+    courseNameEn: options.courseNameEn,
+    courseNameNe: options.courseNameNe,
+    subcourseNameEn: options.subcourseNameEn,
+    subcourseNameNe: options.subcourseNameNe,
   };
-  return buildQuestionWrites(normalizedOptions);
+  return chapterEntries().map((entry) => {
+    const subjectId = appSubjectId(entry.subject.id);
+    const unitId = entry.unit?.id ?? null;
+    const id = learningTheoryResourceId(normalizedOptions.courseId, normalizedOptions.subcourseId, subjectId, unitId, entry.chapter.id);
+    return setWrite(`${Collections.subjectTheoryResources}/${id}`, theoryFields(normalizedOptions, entry), { merge: true });
+  });
+}
+
+export function buildLearningContentSlotWrites(options: LearningSeedOptions & LearningContentScopeNames = {}): WriteSpec[] {
+  return [...buildQuestionSetWrites(options), ...buildTheorySetWrites(options)];
+}
+
+export function buildLearningQuestionWrites(options: LearningSeedOptions & LearningContentScopeNames = {}): WriteSpec[] {
+  return buildQuestionSetWrites(options);
 }
 
 export function getPhase5SeedCounts(): { questionRecords: number; theoryRecords: number; totalRecords: number } {
   const theoryRecords = chapterEntries().length;
-  const questionRecords = phase5SampleQuestions.length;
+  const questionRecords = theoryRecords * 2;
   return { questionRecords, theoryRecords, totalRecords: questionRecords + theoryRecords };
 }
 
-export async function seedLearningContentSlots(options: LearningSeedOptions = {}): Promise<LearningContentSeedResult> {
-  const normalizedOptions = {
-    courseId: options.courseId ?? DEFAULT_LEARNING_COURSE_ID,
-    subcourseId: options.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID,
-    overwriteCatalogFields: options.overwriteCatalogFields ?? false,
-  };
-  const theoryWrites = buildTheoryWrites(normalizedOptions);
-  const questionWrites = buildQuestionWrites(normalizedOptions);
-  const writes = [...theoryWrites, ...questionWrites];
-  for (let index = 0; index < writes.length; index += QUESTION_WRITE_CHUNK_SIZE) {
-    await commitWrites(writes.slice(index, index + QUESTION_WRITE_CHUNK_SIZE));
+export async function seedLearningContentSlots(options: LearningSeedOptions & LearningContentScopeNames = {}): Promise<LearningContentSeedResult> {
+  const questionWrites = buildQuestionSetWrites(options);
+  const theoryWrites = buildTheorySetWrites(options);
+  const writes = [...questionWrites, ...theoryWrites];
+  for (let index = 0; index < writes.length; index += CONTENT_WRITE_CHUNK_SIZE) {
+    await commitWrites(writes.slice(index, index + CONTENT_WRITE_CHUNK_SIZE));
   }
   return {
     questionRecords: questionWrites.length,
     theoryRecords: theoryWrites.length,
     totalRecords: writes.length,
   };
+}
+
+export function getLearningChapterCount(): number {
+  return chapterEntries().length;
+}
+
+export function getLearningQuestionTemplateCount(): number {
+  return SAMPLE_DIFFICULTIES.length;
 }

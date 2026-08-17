@@ -136,37 +136,47 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Phase 5 learning questions. Published questions are readable by signed-in
-    // learners; seed and moderation writes are restricted to administrators.
-    match /app_subject_cucqdata_Allmode/{questionId} {
+    // Phase 5 question sets. One document contains all questions for one
+    // scope + subject + chapter + mode. Reads are always direct document reads.
+    match /app_subject_cucqdata_Allmode/{contentSetId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
       allow create, update: if isAdmin() &&
         request.resource.data.keys().hasOnly([
-          'id', 'sourceId', 'courseId', 'subcourseId', 'subjectId', 'unitId',
-          'chapterId', 'mode', 'order', 'difficulty', 'text', 'textNe',
-          'options', 'optionsNe', 'correctIndex', 'explanation', 'explanationNe',
-          'isPublished', 'isPremium', 'price', 'isSeed', 'createdAt', 'updatedAt'
+          'contentSetId', 'scopeId', 'courseId', 'courseNameEn', 'courseNameNe',
+          'subcourseId', 'subcourseNameEn', 'subcourseNameNe', 'subjectId',
+          'subjectNameEn', 'subjectNameNe', 'unitId', 'unitNameEn', 'unitNameNe',
+          'chapterId', 'chapterNameEn', 'chapterNameNe', 'unitChapterId',
+          'unitChapterNameEn', 'unitChapterNameNe', 'unitOrder', 'chapterOrder',
+          'mode', 'questionCount', 'questions', 'isPublished', 'isPremium',
+          'price', 'createdAt', 'updatedAt'
         ]) &&
+        request.resource.data.contentSetId is string &&
+        request.resource.data.scopeId is string &&
         request.resource.data.courseId is string &&
         request.resource.data.subcourseId is string &&
         request.resource.data.subjectId is string &&
         request.resource.data.chapterId is string &&
         request.resource.data.mode in ['practice', 'read'] &&
-        request.resource.data.difficulty in ['easy', 'medium', 'hard'];
+        request.resource.data.questions is list &&
+        request.resource.data.questionCount is number;
       allow delete: if isAdmin();
     }
 
-    // Phase 5 theory resources. The PDF remains external/storage-backed; this
-    // collection stores only chapter metadata and the resource URL.
+    // Phase 5 theory resources. One document stores one chapter's PDF metadata.
     match /app_subject_theory_resources/{resourceId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
       allow create, update: if isAdmin() &&
         request.resource.data.keys().hasOnly([
-          'id', 'courseId', 'subcourseId', 'subjectId', 'unitId', 'chapterId',
-          'title', 'titleNe', 'resourceType', 'notes', 'notesNe', 'pdfUrl',
-          'notesUrl', 'isConfigured', 'isPublished', 'isPremium', 'price',
-          'isSeed', 'createdAt', 'updatedAt'
+          'resourceId', 'scopeId', 'courseId', 'courseNameEn', 'courseNameNe',
+          'subcourseId', 'subcourseNameEn', 'subcourseNameNe', 'subjectId',
+          'subjectNameEn', 'subjectNameNe', 'unitId', 'unitNameEn', 'unitNameNe',
+          'chapterId', 'chapterNameEn', 'chapterNameNe', 'unitChapterId',
+          'unitOrder', 'chapterOrder', 'resourceType', 'titleEn', 'titleNe',
+          'pdfUrl', 'pdfProvider', 'isPublished', 'isPremium', 'price',
+          'createdAt', 'updatedAt'
         ]) &&
+        request.resource.data.resourceId is string &&
+        request.resource.data.scopeId is string &&
         request.resource.data.courseId is string &&
         request.resource.data.subcourseId is string &&
         request.resource.data.subjectId is string &&

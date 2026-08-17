@@ -8,7 +8,7 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { showToast } from '@/src/core/store/toastStore';
-import { fetchLearningQuestions, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
+import { fetchPracticeQuestionSet, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
 import { fetchLearningProgress, saveLearningProgress, type LearningProgress } from '@/src/core/firebase/services/learningProgress';
 import { fetchMyContentPurchases } from '@/src/core/firebase/services/contentPurchases';
 import { Text } from '@/src/components/misc/Text';
@@ -79,7 +79,7 @@ export default function PracticeModeScreen() {
     setLoadError(false);
     try {
       const [allQuestions, storedProgress, purchases] = await Promise.all([
-        fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId),
+        fetchPracticeQuestionSet({ courseId, subcourseId, subjectId, unitId, chapterId }),
         fetchLearningProgress(user.uid, subjectId, chapterId),
         fetchMyContentPurchases(user.uid).catch(() => []),
       ]);
@@ -88,9 +88,7 @@ export default function PracticeModeScreen() {
         || (purchase.contentType === 'subject' && purchase.contentId === subjectId)
       ));
       const premiumForLoad = profilePremium || specificAccess;
-      const practiceQuestions = allQuestions
-        .filter((question) => question.mode === 'practice' && question.isPublished)
-        .slice(0, premiumForLoad ? 100 : undefined);
+      const practiceQuestions = allQuestions.slice(0, premiumForLoad ? 100 : undefined);
       setHasSpecificAccess(specificAccess);
       const today = dayKey();
       const nextProgress: LearningProgress = storedProgress
@@ -320,7 +318,7 @@ export default function PracticeModeScreen() {
             return (
               <Pressable key={index} onPress={() => selectOption(index)} style={[styles.option, { backgroundColor: background, borderColor: border, borderRadius: radius.md }]}>
                 <View style={[styles.optionLetter, { borderColor: border, backgroundColor: isSelected || (showResult && isCorrect) ? border : 'transparent' }]}><Text variant="bodySmall" weight="bold" style={{ color: isSelected || (showResult && isCorrect) ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + index)}</Text></View>
-                <Text variant="body" style={{ flex: 1, lineHeight: 23 }}>{bilingual(option, currentQuestion.optionsNe[index] ?? '')}</Text>
+                <Text variant="body" style={{ flex: 1, lineHeight: 23 }}>{option}</Text>
                 {showResult && isCorrect ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : showResult && isSelected ? <Ionicons name="close-circle" size={22} color={colors.error} /> : null}
               </Pressable>
             );
