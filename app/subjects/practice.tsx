@@ -241,6 +241,16 @@ export default function PracticeModeScreen() {
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
         <DataNotFound title={t('common.somethingWentWrong')} description={t('common.retry')} onRetry={() => void load()} />
+        <ConfirmDialog
+          visible={showLeaveConfirm}
+          title={t('learningModes.exitPracticeTitle')}
+          message={t('learningModes.exitPracticeMessage')}
+          confirmLabel={t('learningModes.exit')}
+          cancelLabel={t('learningModes.keepPracticing')}
+          destructive
+          onConfirm={leavePractice}
+          onCancel={() => setShowLeaveConfirm(false)}
+        />
       </View>
     );
   }
@@ -251,6 +261,16 @@ export default function PracticeModeScreen() {
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
         <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noPracticeQuestions')} onRetry={() => void load()} />
+        <ConfirmDialog
+          visible={showLeaveConfirm}
+          title={t('learningModes.exitPracticeTitle')}
+          message={t('learningModes.exitPracticeMessage')}
+          confirmLabel={t('learningModes.exit')}
+          cancelLabel={t('learningModes.keepPracticing')}
+          destructive
+          onConfirm={leavePractice}
+          onCancel={() => setShowLeaveConfirm(false)}
+        />
       </View>
     );
   }
