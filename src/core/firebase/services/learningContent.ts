@@ -340,53 +340,21 @@ export function fetchLearningQuestionSet(params: LearningQuestionSetParams): Pro
   const documentId = learningQuestionSetId(params.courseId, params.subcourseId, normalizedSubjectId, normalizedUnitId, normalizedChapterId, params.mode);
   const path = `${Collections.subjectCucqDataAllMode}/${documentId}`;
   const key = path;
-  console.info('[LearningContent] question-set lookup', {
-    mode: params.mode,
-    path,
-    requested: {
-      courseId: params.courseId,
-      subcourseId: params.subcourseId,
-      subjectId: params.subjectId,
-      unitId: params.unitId ?? null,
-      chapterId: params.chapterId,
-    },
-    normalized: {
-      subjectId: normalizedSubjectId,
-      unitId: normalizedUnitId,
-      chapterId: normalizedChapterId,
-    },
-  });
   const cached = questionSetFetches.get(key);
   if (cached) return cached;
 
   const request = getDocument(`${Collections.subjectCucqDataAllMode}/${documentId}`)
     .then((document) => {
       if (!document) {
-        console.error('[LearningContent] question-set document not found', { path, mode: params.mode });
         // Unseeded or deleted content must not be cached as empty, otherwise
         // pages stay blank in the same session after the seed finally runs.
         questionSetFetches.delete(key);
         return [];
       }
-      const questions = questionsFromDocument(document, params.mode);
-      if (questions.length === 0) {
-        console.error('[LearningContent] question-set document has no published questions', {
-          path,
-          mode: params.mode,
-          firestoreQuestionCount: document.questionCount,
-          hasQuestionsArray: Array.isArray(document.questions),
-          isPublished: document.isPublished,
-        });
-      }
-      return questions;
+      return questionsFromDocument(document, params.mode);
     })
     .catch((error) => {
       questionSetFetches.delete(key);
-      console.error('[LearningContent] question-set lookup failed', {
-        path,
-        mode: params.mode,
-        error: error instanceof Error ? error.message : String(error),
-      });
       throw error;
     });
   questionSetFetches.set(key, request);
@@ -441,45 +409,21 @@ export function fetchTheoryResource(params: LearningTheoryParams): Promise<Learn
   const documentId = learningTheoryResourceId(params.courseId, params.subcourseId, normalizedSubjectId, normalizedUnitId, normalizedChapterId);
   const path = `${Collections.subjectTheoryResources}/${documentId}`;
   const key = path;
-  console.info('[LearningContent] theory-resource lookup', {
-    path,
-    requested: {
-      courseId: params.courseId,
-      subcourseId: params.subcourseId,
-      subjectId: params.subjectId,
-      unitId: params.unitId ?? null,
-      chapterId: params.chapterId,
-    },
-    normalized: {
-      subjectId: normalizedSubjectId,
-      unitId: normalizedUnitId,
-      chapterId: normalizedChapterId,
-    },
-  });
   const cached = learningTheoryFetches.get(key);
   if (cached) return cached;
 
   const request = getDocument(`${Collections.subjectTheoryResources}/${documentId}`)
     .then((document) => {
       if (!document) {
-        console.error('[LearningContent] theory-resource document not found', { path });
         // Unseeded or deleted resources must not be cached as null, otherwise
         // pages stay blank in the same session after the seed finally runs.
         learningTheoryFetches.delete(key);
         return null;
       }
-      const theory = theoryFromDocument(document);
-      if (!theory.pdfUrl) {
-        console.error('[LearningContent] theory-resource has no pdfUrl', { path, isPublished: document.isPublished });
-      }
-      return theory;
+      return theoryFromDocument(document);
     })
     .catch((error) => {
       learningTheoryFetches.delete(key);
-      console.error('[LearningContent] theory-resource lookup failed', {
-        path,
-        error: error instanceof Error ? error.message : String(error),
-      });
       throw error;
     });
   learningTheoryFetches.set(key, request);

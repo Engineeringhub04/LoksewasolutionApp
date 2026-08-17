@@ -212,12 +212,13 @@ async function progressForChapter(
   // question bank. Questions may be seeded later, so their absence must never
   // prevent chapter cards from appearing.
   const progress = uid ? await fetchLearningProgress(uid, subjectId, chapter.id) : null;
-  const percentage = percentageFor(progress, 0);
+  const totalQuestions = progress?.totalQuestions ?? 0;
+  const percentage = percentageFor(progress, totalQuestions);
   return {
     chapterId: chapter.id,
     attempted: progress?.attemptedQuestionIds.length ?? 0,
     correct: progress?.correctQuestionIds.length ?? 0,
-    totalQuestions: 0,
+    totalQuestions,
     percentage,
     completed: progress?.completed === true || percentage >= 100,
     progress,

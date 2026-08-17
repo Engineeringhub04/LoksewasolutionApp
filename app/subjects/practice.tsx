@@ -60,6 +60,8 @@ export default function PracticeModeScreen() {
   const [loadError, setLoadError] = useState(false);
   const [current, setCurrent] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const explanationY = useRef(0);
   const [showLimit, setShowLimit] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -75,14 +77,6 @@ export default function PracticeModeScreen() {
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
-      console.error('[PracticeMode] missing required route/auth params', {
-        hasUser: Boolean(user?.uid),
-        courseId,
-        subcourseId,
-        subjectId,
-        unitId,
-        chapterId,
-      });
       setLoading(false);
       return;
     }
@@ -105,7 +99,7 @@ export default function PracticeModeScreen() {
       const nextProgress: LearningProgress = storedProgress
         ? storedProgress.dailyDate === today
           ? storedProgress
-          : { ...storedProgress, dailyDate: today, dailyQuestionIds: [], dailyAttemptedQuestionIds: [], dailyCorrectQuestionIds: [] }
+          : { ...storedProgress, dailyDate: today, dailyQuestionIds: [], dailyAttemptedQuestionIds: [], dailyCorrectQuestionIds: [], selectedAnswerIndexes: {} }
         : {
             id: `${subjectId}__${chapterId}`,
             subjectId,
@@ -113,6 +107,7 @@ export default function PracticeModeScreen() {
             chapterId,
             attemptedQuestionIds: [],
             correctQuestionIds: [],
+            totalQuestions: practiceQuestions.length,
             bookmarked: false,
             completed: false,
             lastMode: 'practice',
@@ -120,8 +115,10 @@ export default function PracticeModeScreen() {
             dailyQuestionIds: [],
             dailyAttemptedQuestionIds: [],
             dailyCorrectQuestionIds: [],
+            selectedAnswerIndexes: {},
           };
       setQuestions(practiceQuestions);
+      setSelectedAnswers(nextProgress.selectedAnswerIndexes ?? {});
       setCurrent(0);
       setProgress(nextProgress);
       progressRef.current = nextProgress;
@@ -134,6 +131,7 @@ export default function PracticeModeScreen() {
           dailyQuestionIds: [],
           dailyAttemptedQuestionIds: [],
           dailyCorrectQuestionIds: [],
+          selectedAnswerIndexes: {},
           lastMode: 'practice',
         });
       }
@@ -186,6 +184,8 @@ export default function PracticeModeScreen() {
       dailyQuestionIds: next.dailyQuestionIds,
       dailyAttemptedQuestionIds: next.dailyAttemptedQuestionIds,
       dailyCorrectQuestionIds: next.dailyCorrectQuestionIds,
+      selectedAnswerIndexes: next.selectedAnswerIndexes,
+      totalQuestions: questions.length,
     });
   };
 
@@ -195,8 +195,8 @@ export default function PracticeModeScreen() {
       setShowLimit(true);
       return;
     }
-    setSelectedAnswers((previous) => ({ ...previous, [currentQuestion.id]: optionIndex }));
     if (currentAttempted) return;
+    setSelectedAnswers((previous) => ({ ...previous, [currentQuestion.id]: optionIndex }));
     const base = progressRef.current;
     if (!base) return;
     const isCorrect = optionIndex === currentQuestion.correctIndex;
@@ -206,16 +206,21 @@ export default function PracticeModeScreen() {
     const dailyCorrect = isCorrect ? Array.from(new Set([...(base.dailyCorrectQuestionIds ?? []), currentQuestion.id])) : (base.dailyCorrectQuestionIds ?? []);
     const next: LearningProgress = {
       ...base,
+      selectedAnswerIndexes: { ...(base.selectedAnswerIndexes ?? {}), [currentQuestion.id]: optionIndex },
       attemptedQuestionIds: attempted,
       correctQuestionIds: correct,
       dailyDate: dayKey(),
       dailyQuestionIds: base.dailyQuestionIds ?? [],
       dailyAttemptedQuestionIds: dailyAttempted,
       dailyCorrectQuestionIds: dailyCorrect,
+      totalQuestions: questions.length,
       completed: premium ? dailyAttempted.length >= Math.min(100, questions.length) : dailyAttempted.length >= dailyLimit,
       lastMode: 'practice',
     };
     persist(next);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, explanationY.current - spacing.md), animated: true });
+    }, 120);
     if (!premium && dailyAttempted.length >= dailyLimit) setShowLimit(true);
   };
 
@@ -291,7 +296,7 @@ export default function PracticeModeScreen() {
       <Stack.Screen options={{ gestureEnabled: false }} />
       {modeHeader}
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
         <View style={[styles.limitRow, { backgroundColor: colors.surface, borderColor: premium ? colors.success : colors.border, borderRadius: radius.md }]}>
           <View style={{ flex: 1 }}>
             <Text variant="caption" weight="bold" style={{ color: premium ? colors.success : colors.primary, textDecorationLine: premium ? 'line-through' : 'none' }}>
@@ -302,27 +307,26 @@ export default function PracticeModeScreen() {
           {premium ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : <Ionicons name="speedometer-outline" size={22} color={colors.primary} />}
         </View>
 
-        {showHistory ? (
-          <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="time-outline" size={20} color={colors.primary} /></View>
-              <Text variant="h3" weight="semiBold" style={{ flex: 1 }}>{t('learningModes.questionHistory')}</Text>
-              <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{historyQuestions.length}</Text>
-            </View>
-            {historyQuestions.map((question) => {
-              const isCorrect = dailyCorrectIds.includes(question.id);
-              return (
-                <View key={question.id} style={[styles.historyItem, { borderTopColor: colors.divider }]}>
-                  <View style={[styles.statusDot, { backgroundColor: isCorrect ? colors.success : colors.error }]} />
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text variant="bodySmall" weight="semiBold">{bilingual(question.text, question.textNe)}</Text>
-                    <Text variant="caption" style={{ color: isCorrect ? colors.success : colors.error }}>{isCorrect ? t('learningModes.correct') : t('learningModes.incorrect')}</Text>
-                  </View>
+        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
+          <Pressable onPress={() => setShowHistory((value) => !value)} style={styles.sectionHeader} accessibilityRole="button" accessibilityLabel={t('learningModes.questionHistory')}>
+            <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="time-outline" size={20} color={colors.primary} /></View>
+            <Text variant="h3" weight="semiBold" style={{ flex: 1 }}>{t('learningModes.questionHistory')}</Text>
+            <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{historyQuestions.length}</Text>
+            <Ionicons name={showHistory ? 'chevron-up' : 'chevron-down'} size={21} color={colors.primary} />
+          </Pressable>
+          {showHistory ? historyQuestions.map((question) => {
+            const isCorrect = dailyCorrectIds.includes(question.id);
+            return (
+              <View key={question.id} style={[styles.historyItem, { borderTopColor: colors.divider }]}>
+                <View style={[styles.statusDot, { backgroundColor: isCorrect ? colors.success : colors.error }]} />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text variant="bodySmall" weight="semiBold">{bilingual(question.text, question.textNe)}</Text>
+                  <Text variant="caption" style={{ color: isCorrect ? colors.success : colors.error }}>{isCorrect ? t('learningModes.correct') : t('learningModes.incorrect')}</Text>
                 </View>
-              );
-            })}
-          </View>
-        ) : null}
+              </View>
+            );
+          }) : null}
+        </View>
 
         <View style={styles.questionMetaRow}>
           <View style={[styles.questionBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>Question {current + 1}</Text></View>
@@ -333,7 +337,7 @@ export default function PracticeModeScreen() {
         </View>
 
         <View style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
-          <Text variant="h2" weight="semiBold" style={{ lineHeight: 31 }}>{bilingual(currentQuestion.text, currentQuestion.textNe)}</Text>
+              <Text variant="h2" weight="semiBold" style={{ lineHeight: 27, fontSize: 20 }}>{bilingual(currentQuestion.text, currentQuestion.textNe)}</Text>
           <View style={[styles.difficulty, { backgroundColor: currentQuestion.difficulty === 'easy' ? `${colors.success}18` : currentQuestion.difficulty === 'medium' ? `${colors.warning}20` : `${colors.error}18` }]}>
             <Text variant="caption" weight="bold" style={{ color: currentQuestion.difficulty === 'easy' ? colors.success : currentQuestion.difficulty === 'medium' ? colors.warning : colors.error }}>{currentQuestion.difficulty.toUpperCase()}</Text>
           </View>
@@ -349,7 +353,7 @@ export default function PracticeModeScreen() {
             return (
               <Pressable key={index} onPress={() => selectOption(index)} style={[styles.option, { backgroundColor: background, borderColor: border, borderRadius: radius.md }]}>
                 <View style={[styles.optionLetter, { borderColor: border, backgroundColor: isSelected || (showResult && isCorrect) ? border : 'transparent' }]}><Text variant="bodySmall" weight="bold" style={{ color: isSelected || (showResult && isCorrect) ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + index)}</Text></View>
-                <Text variant="body" style={{ flex: 1, lineHeight: 23 }}>{option}</Text>
+                <Text variant="body" style={{ flex: 1, lineHeight: 20, fontSize: 15 }}>{option}</Text>
                 {showResult && isCorrect ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : showResult && isSelected ? <Ionicons name="close-circle" size={22} color={colors.error} /> : null}
               </Pressable>
             );
@@ -357,17 +361,28 @@ export default function PracticeModeScreen() {
         </View>
 
         {currentAttempted ? (
-          <View style={[styles.explanationCard, { backgroundColor: currentCorrect ? `${colors.success}12` : `${colors.error}10`, borderColor: currentCorrect ? `${colors.success}55` : `${colors.error}55`, borderRadius: radius.lg }]}>
-            <View style={styles.explanationHeader}><Ionicons name={currentCorrect ? 'checkmark-circle' : 'close-circle'} size={27} color={currentCorrect ? colors.success : colors.error} /><Text variant="h3" weight="semiBold" style={{ color: currentCorrect ? colors.success : colors.error }}>{currentCorrect ? t('learningModes.correct') : t('learningModes.incorrect')}</Text></View>
+          <View onLayout={(event) => { explanationY.current = event.nativeEvent.layout.y; }} style={[styles.explanationCard, { backgroundColor: currentCorrect ? `${colors.success}10` : `${colors.error}09`, borderColor: currentCorrect ? `${colors.success}65` : `${colors.error}65`, borderRadius: radius.lg }]}>
+            <View style={styles.explanationHeader}>
+              <View style={[styles.resultIcon, { backgroundColor: currentCorrect ? colors.success : colors.error }]}>
+                <Ionicons name={currentCorrect ? 'checkmark' : 'close'} size={22} color="#FFF" />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text variant="h3" weight="semiBold" style={{ color: currentCorrect ? colors.success : colors.error }}>{currentCorrect ? t('learningModes.correctAnswer') : t('learningModes.incorrectAnswer')}</Text>
+                <Text variant="caption" secondary>{currentCorrect ? t('learningModes.answerConfirmed') : t('learningModes.selectedAnswerIncorrect')}</Text>
+              </View>
+            </View>
+            <View style={[styles.resultDivider, { backgroundColor: currentCorrect ? `${colors.success}35` : `${colors.error}35` }]} />
+            {currentSelected !== undefined ? <Text variant="bodySmall" weight="semiBold" style={{ color: currentCorrect ? colors.success : colors.error }}>{t('learningModes.selectedOptionLabel', { option: currentQuestion.options[currentSelected] ?? '' })}</Text> : null}
+            {!currentCorrect ? <Text variant="bodySmall" weight="semiBold" style={{ color: colors.success }}>{t('learningModes.correctOptionLabel', { option: currentQuestion.options[currentQuestion.correctIndex] ?? '' })}</Text> : null}
             <Text variant="bodySmall" weight="semiBold">{t('learningModes.answerExplanation')}</Text>
-            <Text variant="body" style={{ color: colors.textSecondary, lineHeight: 24 }}>{bilingual(currentQuestion.explanation, currentQuestion.explanationNe)}</Text>
+            <Text variant="body" style={{ color: colors.textSecondary, lineHeight: 21, fontSize: 15 }}>{bilingual(currentQuestion.explanation, currentQuestion.explanationNe)}</Text>
           </View>
         ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.divider, paddingBottom: insets.bottom + spacing.sm }]}>
         <Pressable disabled={current === 0} onPress={() => setCurrent((value) => value - 1)} style={[styles.bottomButton, { borderColor: colors.border, borderRadius: radius.md, opacity: current === 0 ? 0.45 : 1 }]}><Ionicons name="arrow-back" size={19} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('learningModes.previous')}</Text></Pressable>
-        <Pressable disabled={!premium && dailyUsed >= dailyLimit && !currentAttempted} onPress={() => (isLast ? setShowLimit(true) : setCurrent((value) => value + 1))} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md }]}><Text variant="bodySmall" weight="bold" style={{ color: '#FFF' }}>{isLast ? t('learningModes.dailyLimitReachedTitle') : t('learningModes.nextQuestion')}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable>
+        <Pressable disabled={!premium && dailyUsed >= dailyLimit && !currentAttempted} onPress={() => (isLast ? setShowLimit(true) : setCurrent((value) => value + 1))} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLast ? t('learningModes.dailyLimitReachedTitle') : t('learningModes.nextQuestion')}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable>
       </View>
 
       <Modal visible={showLimit} transparent animationType="fade" onRequestClose={() => setShowLimit(false)}>
@@ -383,16 +398,25 @@ export default function PracticeModeScreen() {
         </Pressable>
       </Modal>
 
-      <ConfirmDialog
-        visible={showLeaveConfirm}
-        title={t('learningModes.exitPracticeTitle')}
-        message={t('learningModes.exitPracticeMessage')}
-        confirmLabel={t('learningModes.exit')}
-        cancelLabel={t('learningModes.keepPracticing')}
-        destructive
-        onConfirm={leavePractice}
-        onCancel={() => setShowLeaveConfirm(false)}
-      />
+      <Modal visible={showLeaveConfirm} transparent animationType="fade" onRequestClose={() => setShowLeaveConfirm(false)}>
+        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowLeaveConfirm(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.leaveModal, { backgroundColor: colors.surface, borderColor: `${colors.warning}55`, borderRadius: radius.lg }]}>
+            <View style={[styles.leaveHero, { backgroundColor: colors.warning }]}>
+              <View style={styles.leaveIcon}><Ionicons name="pause" size={26} color={colors.warning} /></View>
+              <Text variant="h2" weight="semiBold" style={{ color: '#FFF', textAlign: 'center' }}>{t('learningModes.pausePracticeTitle')}</Text>
+              <Text variant="body" style={{ color: 'rgba(255,255,255,0.84)', textAlign: 'center' }}>{t('learningModes.pausePracticeMessage')}</Text>
+            </View>
+            <View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}>
+              <Ionicons name="cloud-done-outline" size={19} color={colors.success} />
+              <Text variant="caption" weight="bold" style={{ color: colors.success }}>{t('learningModes.progressSynced')}</Text>
+            </View>
+            <View style={styles.leaveActions}>
+              <Button label={t('learningModes.returnToSession')} variant="secondary" onPress={() => setShowLeaveConfirm(false)} />
+              <Button label={t('learningModes.leaveSession')} onPress={leavePractice} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -414,10 +438,13 @@ const styles = StyleSheet.create({
   option: { minHeight: 66, borderWidth: 1.4, paddingHorizontal: 13, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   optionLetter: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   explanationCard: { borderWidth: 1, padding: 16, gap: 10 },
-  explanationHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  explanationHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  resultIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  resultDivider: { height: 1 },
   bottomBar: { borderTopWidth: 1, paddingHorizontal: 14, paddingTop: 10, flexDirection: 'row', gap: 10 },
   bottomButton: { minHeight: 50, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, flex: 0.85 },
   nextButton: { minHeight: 50, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, flex: 1.35 },
+  nextButtonLabel: { color: '#FFF', flex: 1, textAlign: 'center', lineHeight: 18, fontSize: 13 },
   historyCard: { borderWidth: 1, padding: 15, gap: 10 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -426,4 +453,9 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 22 },
   limitModal: { width: '100%', padding: 22, gap: 13, alignItems: 'stretch' },
   modalIcon: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
+  leaveModal: { width: '100%', overflow: 'hidden', borderWidth: 1, elevation: 8 },
+  leaveHero: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 25, alignItems: 'center', gap: 8 },
+  leaveIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.78)', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  saveBadge: { marginHorizontal: 22, marginTop: 18, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  leaveActions: { padding: 22, gap: 10 },
 });
