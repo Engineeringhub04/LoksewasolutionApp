@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -14,8 +14,6 @@ import {
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
-import { getPhase5SeedCounts } from '@/src/core/firebase/services/learningContent';
-import { seedPhase5ContentData } from '@/src/core/firebase/services/learningSeed';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
@@ -59,8 +57,6 @@ export default function SubjectListScreen() {
   const course = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
-  const [seedBusy, setSeedBusy] = useState(false);
-  const [seedProgress, setSeedProgress] = useState({ scopeIndex: 0, scopeTotal: 0 });
 
   const subjectData = useAsyncData(
     () => fetchSubjectDetails(course, subcourse),
@@ -81,48 +77,6 @@ export default function SubjectListScreen() {
   );
   const courseName = courseInfo?.courseName || (course === DEFAULT_LEARNING_COURSE_ID ? 'Civil Engineering' : course);
   const scopeLabel = `${courseName} • ${subcourseName}`;
-
-  const handlePhase5Seed = () => {
-    if (seedBusy) return;
-    const counts = getPhase5SeedCounts();
-    Alert.alert(
-      t('subjects.phase5SeedTitle'),
-      t('subjects.phase5SeedMessage', {
-        scopes: 6,
-        questions: counts.questionRecords * 6,
-        theory: counts.theoryRecords * 6,
-      }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('subjects.phase5SeedConfirm'),
-          onPress: () => {
-            void (async () => {
-              setSeedBusy(true);
-              setSeedProgress({ scopeIndex: 0, scopeTotal: 0 });
-              try {
-                const result = await seedPhase5ContentData((progress) => {
-                  setSeedProgress({ scopeIndex: progress.scopeIndex, scopeTotal: progress.scopeTotal });
-                });
-                showToast(
-                  t('subjects.phase5SeedSuccess', {
-                    questions: result.questionRecords,
-                    theory: result.theoryRecords,
-                  }),
-                  'success',
-                );
-              } catch (error) {
-                console.warn('[Subjects] Phase 5 seed failed', error);
-                showToast(t('subjects.phase5SeedFailed'), 'error');
-              } finally {
-                setSeedBusy(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
-  };
 
   const handleSubjectAction = (subject: SubjectDetail) => {
     const subjectKey = `${subject.id} ${subject.name}`.toLowerCase();
@@ -145,17 +99,6 @@ export default function SubjectListScreen() {
 
   const headerActions = (
     <View style={styles.headerActions}>
-      {profile?.isAdmin ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('subjects.phase5SeedConfirm')}
-          disabled={seedBusy}
-          onPress={handlePhase5Seed}
-          style={[styles.seedButton, { opacity: seedBusy ? 0.55 : 1 }]}
-        >
-          <Ionicons name={seedBusy ? 'cloud-upload' : 'cloud-upload-outline'} size={19} color="#FFFFFF" />
-        </Pressable>
-      ) : null}
       <ThemeToggleButton
         isDark={effective === 'dark'}
         onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')}
@@ -223,9 +166,7 @@ export default function SubjectListScreen() {
         )}
       </ScrollView> : null}
 
-      <PageLoaderOverlay visible={subjectData.loading || seedBusy} label={seedBusy
-        ? t('subjects.phase5SeedRunning', { current: seedProgress.scopeIndex, total: seedProgress.scopeTotal || 6 })
-        : t('common.loading')} />
+      <PageLoaderOverlay visible={subjectData.loading} label={t('common.loading')} />
 
       <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
@@ -257,14 +198,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  seedButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   journeyCard: {
     minHeight: 252,
