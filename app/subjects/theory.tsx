@@ -114,7 +114,7 @@ export default function TheoryModeScreen() {
       <View style={[styles.screen, { backgroundColor: colors.background }]}> 
         <Stack.Screen options={{ headerShown: false }} />
         {header}
-        <DataNotFound title={t('learningModes.noTheoryResource')} description={`${chapterName} · ${subjectName}`} onRetry={() => void load()} />
+        <DataNotFound title={t('learningModes.noTheoryResource')} description={`${chapterName} · ${subjectName}`} />
       </View>
     );
   }
