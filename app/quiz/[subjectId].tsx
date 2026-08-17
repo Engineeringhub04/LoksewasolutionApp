@@ -4,6 +4,7 @@ import { View, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchQuestionsBySubject } from '@/src/core/firebase/services/questions';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
@@ -14,14 +15,29 @@ import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
+
+function bilingual(english: string | undefined, nepali: string | undefined): string {
+  const en = (english ?? '').trim();
+  const ne = (nepali ?? '').trim();
+  if (!en) return ne;
+  if (!ne || ne === en) return en;
+  return `${en} | ${ne}`;
+}
 
 export default function QuizPracticeScreen() {
   const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
   const { colors, spacing } = useTheme();
+  const { courseInfo, profile } = useProfileStore();
   const { t } = useTranslation();
   const router = useRouter();
+  const courseId = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
+  const subcourseId = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
 
-  const { data: questions, loading, error, refetch } = useAsyncData(() => fetchQuestionsBySubject(subjectId), [subjectId]);
+  const { data: questions, loading, error, refetch } = useAsyncData(
+    () => fetchQuestionsBySubject(subjectId, 50, courseId, subcourseId),
+    [courseId, subcourseId, subjectId],
+  );
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -103,7 +119,7 @@ export default function QuizPracticeScreen() {
         <ProgressBar progress={(index + 1) / questions.length} />
       </View>
       <View style={{ padding: spacing.screenPadding, gap: spacing.md, flex: 1 }}>
-        <Text variant="h3" weight="semiBold">{current?.text}</Text>
+        <Text variant="h3" weight="semiBold">{bilingual(current?.text, current?.textNe)}</Text>
         {current?.options.map((option, i) => {
           const isSelected = selected === i;
           const isCorrect = i === current.correctIndex;
@@ -123,7 +139,7 @@ export default function QuizPracticeScreen() {
           );
         })}
         {selected !== null ? (
-          <Text variant="body" secondary>{current?.explanation}</Text>
+          <Text variant="body" secondary>{bilingual(current?.explanation, current?.explanationNe)}</Text>
         ) : null}
       </View>
       <View style={{ padding: spacing.screenPadding }}>

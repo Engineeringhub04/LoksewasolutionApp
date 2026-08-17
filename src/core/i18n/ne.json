@@ -128,10 +128,10 @@
     "seedStructureSuccess": "Subject structure सफलतापूर्वक seed भयो।",
     "seedStructureFailed": "Subject structure seed हुन सकेन। फेरि प्रयास गर्नुहोस्।",
     "phase5SeedTitle": "Phase 5 Learning Content Seed",
-    "phase5SeedMessage": "{{scopes}} वटा learning scope मा {{questions}} sample questions र {{theory}} theory resources seed हुँदैछ। अगाडि बढ्ने?",
+    "phase5SeedMessage": "{{scopes}} वटा learning scope मा {{questions}} question-set documents र {{theory}} theory documents seed हुँदैछन्। हरेक question-set मा स्वीकृत ३ वटा sample questions हुन्छन्। अगाडि बढ्ने?",
     "phase5SeedConfirm": "Learning Content Seed",
     "phase5SeedRunning": "Learning content seed हुँदैछ ({{total}} मध्ये {{current}} scope)...",
-    "phase5SeedSuccess": "Phase 5 सफलतापूर्वक seed भयो: {{questions}} questions र {{theory}} theory resources।",
+    "phase5SeedSuccess": "Phase 5 सफलतापूर्वक seed भयो: {{questions}} question-set documents र {{theory}} theory documents।",
     "phase5SeedFailed": "Phase 5 content seed हुन सकेन। फेरि प्रयास गर्नुहोस्।",
     "chaptersPage": {
       "chapter": "अध्याय",

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
-import { fetchLearningTheory, type LearningTheoryNote } from '@/src/core/firebase/services/learningContent';
+import { fetchTheoryResource, type LearningTheoryNote } from '@/src/core/firebase/services/learningContent';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
@@ -31,6 +31,7 @@ export default function TheoryModeScreen() {
     subcourseId?: string;
     subjectId?: string;
     chapterId?: string;
+    unitId?: string;
     subjectName?: string;
     chapterName?: string;
   }>();
@@ -46,6 +47,7 @@ export default function TheoryModeScreen() {
   const subcourseId = valueOf(params.subcourseId);
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
+  const unitId = valueOf(params.unitId) || null;
   const subjectName = valueOf(params.subjectName, subjectId);
   const chapterName = valueOf(params.chapterName, chapterId);
 
@@ -54,14 +56,14 @@ export default function TheoryModeScreen() {
     setLoading(true);
     setLoadError(false);
     try {
-      const resource = await fetchLearningTheory(courseId, subcourseId, subjectId, chapterId);
+      const resource = await fetchTheoryResource({ courseId, subcourseId, subjectId, unitId, chapterId });
       setTheory(resource);
     } catch {
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [chapterId, courseId, subcourseId, subjectId, user?.uid]);
+  }, [chapterId, courseId, subcourseId, subjectId, unitId, user?.uid]);
 
   useEffect(() => {
     void load();
@@ -120,15 +122,6 @@ export default function TheoryModeScreen() {
           <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>{chapterName} · {subjectName}</Text>
         </View>
 
-        {theory.notes || theory.notesNe ? (
-          <View style={[styles.notesCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}> 
-            <View style={styles.sectionTitle}>
-              <Ionicons name="document-text-outline" size={21} color={colors.warning} />
-              <Text variant="bodyLarge" weight="bold" style={{ color: colors.warning }}>{t('learningModes.theoryResource')}</Text>
-            </View>
-            <Text variant="bodySmall" style={{ lineHeight: 23 }}>{bilingual(theory.notes, theory.notesNe)}</Text>
-          </View>
-        ) : null}
 
         <View style={[styles.pdfCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}> 
           <View style={{ flex: 1 }}>
@@ -154,8 +147,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   heroCard: { alignItems: 'center', padding: 22, borderWidth: 1, gap: 10, elevation: 1 },
   iconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  notesCard: { padding: 16, borderWidth: 1, gap: 12, elevation: 1 },
-  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pdfCard: { padding: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 1 },
 });
 

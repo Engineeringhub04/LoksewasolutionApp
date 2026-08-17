@@ -1,6 +1,6 @@
 import { runQuery } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
-import { fetchLearningQuestions, type LearningQuestion, type LearningQuestionMode } from '@/src/core/firebase/services/learningContent';
+import { fetchLearningQuestions, fetchLearningQuestionsBySubject, type LearningQuestion, type LearningQuestionMode } from '@/src/core/firebase/services/learningContent';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
 
 export interface Question {
@@ -14,7 +14,6 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   mode?: LearningQuestionMode;
   textNe?: string;
-  optionsNe?: string[];
   explanationNe?: string;
 }
 
@@ -30,12 +29,25 @@ function toQuestion(question: LearningQuestion): Question {
     difficulty: question.difficulty,
     mode: question.mode,
     textNe: question.textNe,
-    optionsNe: question.optionsNe,
     explanationNe: question.explanationNe,
   };
 }
 
-export async function fetchQuestionsBySubject(subjectId: string, max = 50): Promise<Question[]> {
+export async function fetchQuestionsBySubject(
+  subjectId: string,
+  max = 50,
+  courseId = DEFAULT_LEARNING_COURSE_ID,
+  subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+): Promise<Question[]> {
+  const learningQuestions = await fetchLearningQuestionsBySubject({
+    courseId,
+    subcourseId,
+    subjectId,
+    mode: 'practice',
+    max,
+  });
+  if (learningQuestions.length > 0) return learningQuestions.map(toQuestion).slice(0, max);
+
   return (await runQuery(Collections.questions, {
     where: [{ field: 'subjectId', op: '==', value: subjectId }],
     limit: max,
@@ -48,8 +60,10 @@ export async function fetchQuestionsByChapter(
   max = 100,
   courseId = DEFAULT_LEARNING_COURSE_ID,
   subcourseId = DEFAULT_LEARNING_SUBCOURSE_ID,
+  unitId: string | null = null,
+  mode: LearningQuestionMode = 'practice',
 ): Promise<Question[]> {
-  const learningQuestions = await fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId);
+  const learningQuestions = await fetchLearningQuestions(courseId, subcourseId, subjectId, chapterId, unitId, mode);
   if (learningQuestions.length > 0) return learningQuestions.map(toQuestion).slice(0, max);
 
   return (await runQuery(Collections.questions, {
