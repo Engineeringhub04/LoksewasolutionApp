@@ -61,6 +61,8 @@ export default function PracticeModeScreen() {
   const [current, setCurrent] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const scrollRef = useRef<ScrollView | null>(null);
+  const scrollYRef = useRef(0);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explanationY = useRef(0);
   const [showLimit, setShowLimit] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -151,7 +153,10 @@ export default function PracticeModeScreen() {
       setShowLeaveConfirm(true);
       return true;
     });
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
   }, []);
 
   const dailyAttemptedIds = useMemo(() => progress?.dailyAttemptedQuestionIds ?? [], [progress?.dailyAttemptedQuestionIds]);
@@ -189,6 +194,26 @@ export default function PracticeModeScreen() {
     });
   };
 
+  const smoothScrollTo = (targetY: number) => {
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    const startY = scrollYRef.current;
+    const distance = targetY - startY;
+    const duration = 600;
+    const startedAt = Date.now();
+
+    const tick = () => {
+      const progress = Math.min(1, (Date.now() - startedAt) / duration);
+      const eased = progress < 0.5 ? 2 * progress * progress : 1 - ((-2 * progress + 2) ** 2) / 2;
+      const nextY = startY + distance * eased;
+      scrollYRef.current = nextY;
+      scrollRef.current?.scrollTo({ y: nextY, animated: false });
+      if (progress < 1) scrollTimerRef.current = setTimeout(tick, 16);
+      else scrollTimerRef.current = null;
+    };
+
+    tick();
+  };
+
   const selectOption = (optionIndex: number) => {
     if (!currentQuestion) return;
     if (!premium && dailyUsed >= dailyLimit && !currentAttempted) {
@@ -219,8 +244,8 @@ export default function PracticeModeScreen() {
     };
     persist(next);
     setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, explanationY.current - spacing.md), animated: true });
-    }, 120);
+      smoothScrollTo(Math.max(0, explanationY.current - spacing.md));
+    }, 180);
     if (!premium && dailyAttempted.length >= dailyLimit) setShowLimit(true);
   };
 
@@ -296,7 +321,13 @@ export default function PracticeModeScreen() {
       <Stack.Screen options={{ gestureEnabled: false }} />
       {modeHeader}
 
-      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        onScroll={(event) => { scrollYRef.current = event.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.limitRow, { backgroundColor: colors.surface, borderColor: premium ? colors.success : colors.border, borderRadius: radius.md }]}>
           <View style={{ flex: 1 }}>
             <Text variant="caption" weight="bold" style={{ color: premium ? colors.success : colors.primary, textDecorationLine: premium ? 'line-through' : 'none' }}>
@@ -401,18 +432,20 @@ export default function PracticeModeScreen() {
       <Modal visible={showLeaveConfirm} transparent animationType="fade" onRequestClose={() => setShowLeaveConfirm(false)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowLeaveConfirm(false)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={[styles.leaveModal, { backgroundColor: colors.surface, borderColor: `${colors.warning}55`, borderRadius: radius.lg }]}>
-            <View style={[styles.leaveHero, { backgroundColor: colors.warning }]}>
-              <View style={styles.leaveIcon}><Ionicons name="pause" size={26} color={colors.warning} /></View>
-              <Text variant="h2" weight="semiBold" style={{ color: '#FFF', textAlign: 'center' }}>{t('learningModes.pausePracticeTitle')}</Text>
-              <Text variant="body" style={{ color: 'rgba(255,255,255,0.84)', textAlign: 'center' }}>{t('learningModes.pausePracticeMessage')}</Text>
+            <View style={styles.leaveTopRow}>
+              <View style={[styles.leaveIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="pause-circle-outline" size={29} color={colors.warning} /></View>
+              <View style={styles.leaveTitleBlock}>
+                <Text variant="h2" weight="semiBold">{t('learningModes.pausePracticeTitle')}</Text>
+                <Text variant="bodySmall" secondary>{t('learningModes.pausePracticeMessage')}</Text>
+              </View>
             </View>
             <View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}>
               <Ionicons name="cloud-done-outline" size={19} color={colors.success} />
               <Text variant="caption" weight="bold" style={{ color: colors.success }}>{t('learningModes.progressSynced')}</Text>
             </View>
             <View style={styles.leaveActions}>
-              <Button label={t('learningModes.returnToSession')} variant="secondary" onPress={() => setShowLeaveConfirm(false)} />
-              <Button label={t('learningModes.leaveSession')} onPress={leavePractice} />
+              <Button label={t('learningModes.keepPracticing')} variant="secondary" onPress={() => setShowLeaveConfirm(false)} />
+              <Button label={t('learningModes.leavePractice')} onPress={leavePractice} />
             </View>
           </Pressable>
         </Pressable>
@@ -454,8 +487,9 @@ const styles = StyleSheet.create({
   limitModal: { width: '100%', padding: 22, gap: 13, alignItems: 'stretch' },
   modalIcon: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
   leaveModal: { width: '100%', overflow: 'hidden', borderWidth: 1, elevation: 8 },
-  leaveHero: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 25, alignItems: 'center', gap: 8 },
-  leaveIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.78)', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  saveBadge: { marginHorizontal: 22, marginTop: 18, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  leaveActions: { padding: 22, gap: 10 },
+  leaveTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 22, paddingBottom: 8 },
+  leaveTitleBlock: { flex: 1, gap: 5, paddingTop: 2 },
+  leaveIcon: { width: 56, height: 56, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  saveBadge: { marginHorizontal: 22, marginTop: 12, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  leaveActions: { padding: 22, paddingTop: 18, gap: 10 },
 });
