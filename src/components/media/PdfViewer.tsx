@@ -27,7 +27,7 @@ export interface PdfViewerProps {
 }
 
 /** Page tracking and rendering live in the WebView; RN only draws the chrome. */
-function buildHtml(base64: string, backgroundColor: string): string {
+function buildHtml(base64: string): string {
   // The base64 payload is embedded directly in the HTML source (as a plain JS
   // string literal) rather than delivered via
   // injectedJavaScriptBeforeContentLoaded. That injection API races against
@@ -44,9 +44,9 @@ function buildHtml(base64: string, backgroundColor: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: ${backgroundColor}; }
-    #pages { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 24px; }
-    canvas { max-width: 100%; height: auto; display: block; box-shadow: 0 2px 10px rgba(0,0,0,0.25); background: #fff; }
+    body { background: #ffffff; }
+    #pages { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 0 24px; background: #ffffff; }
+    canvas { max-width: 100%; height: auto; display: block; box-shadow: none; background: #ffffff; }
   </style>
 </head>
 <body>
@@ -181,8 +181,8 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
   }, [uri, attempt]);
 
   const html = useMemo(
-    () => (base64 ? buildHtml(base64, colors.background) : null),
-    [base64, colors.background]
+    () => (base64 ? buildHtml(base64) : null),
+    [base64]
   );
 
   const handleMessage = useCallback(
