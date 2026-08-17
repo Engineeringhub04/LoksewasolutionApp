@@ -244,13 +244,13 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
   const progress = phase === 'downloading' ? downloadProgress * 0.5 : 0.5 + renderProgress * 0.5;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {html ? (
         <WebView
           originWhitelist={['*']}
           source={{ html }}
           onMessage={handleMessage}
-          style={{ flex: 1, backgroundColor: colors.background }}
+          style={{ flex: 1, backgroundColor: '#FFFFFF' }}
           showsVerticalScrollIndicator
           scalesPageToFit={false}
           javaScriptEnabled
@@ -261,7 +261,7 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
 
       {/* Determinate progress across both phases: download then render. */}
       {busy ? (
-        <View style={[styles.progressOverlay, { backgroundColor: colors.background }]}>
+        <View style={[styles.progressOverlay, { backgroundColor: '#FFFFFF' }]}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text variant="bodySmall" weight="semiBold" style={{ marginTop: 12 }}>
             {phase === 'downloading' ? 'Downloading paper…' : 'Preparing pages…'}

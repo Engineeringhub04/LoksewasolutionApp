@@ -14,6 +14,8 @@ export interface LearningProgress {
   chapterId: string;
   attemptedQuestionIds: string[];
   correctQuestionIds: string[];
+  selectedAnswerIndexes: Record<string, number>;
+  totalQuestions: number;
   bookmarked: boolean;
   completed: boolean;
   lastMode: LearningMode;
@@ -24,8 +26,30 @@ export interface LearningProgress {
   updatedAt?: { toMillis?: () => number } | string | null;
 }
 
+function normalizeLogicalId(value: string): string {
+  const parts = value.split('__').filter(Boolean);
+  const logicalPart = parts[parts.length - 1] ?? value;
+  return logicalPart
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function canonicalSubjectId(subjectId: string): string {
+  return normalizeLogicalId(subjectId);
+}
+
+function canonicalChapterId(chapterId: string): string {
+  return normalizeLogicalId(chapterId);
+}
+
+function canonicalUnitId(unitId: string | null | undefined): string | null {
+  return unitId ? normalizeLogicalId(unitId) : null;
+}
+
 function progressId(subjectId: string, chapterId: string): string {
-  return `${subjectId}__${chapterId}`.replace(/[^A-Za-z0-9_-]/g, '_');
+  return `${canonicalSubjectId(subjectId)}__${canonicalChapterId(chapterId)}`.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
 function progressPath(uid: string, subjectId: string, chapterId: string): string {
@@ -37,16 +61,22 @@ export async function fetchLearningProgress(
   subjectId: string,
   chapterId: string,
 ): Promise<LearningProgress | null> {
-  const document = await getDocument(progressPath(uid, subjectId, chapterId));
+  const normalizedSubjectId = canonicalSubjectId(subjectId);
+  const normalizedChapterId = canonicalChapterId(chapterId);
+  const document = await getDocument(progressPath(uid, normalizedSubjectId, normalizedChapterId));
   if (!document) return null;
   return {
     id: String(document.id),
-    subjectId: String(document.subjectId ?? subjectId),
-    unitId: typeof document.unitId === 'string' ? document.unitId : null,
-    chapterId: String(document.chapterId ?? chapterId),
+    subjectId: String(document.subjectId ?? normalizedSubjectId),
+    unitId: typeof document.unitId === 'string' ? canonicalUnitId(document.unitId) : null,
+    chapterId: String(document.chapterId ?? normalizedChapterId),
     attemptedQuestionIds: Array.isArray(document.attemptedQuestionIds)
       ? document.attemptedQuestionIds.filter((value): value is string => typeof value === 'string')
       : [],
+    selectedAnswerIndexes: document.selectedAnswerIndexes && typeof document.selectedAnswerIndexes === 'object'
+      ? Object.fromEntries(Object.entries(document.selectedAnswerIndexes).filter(([, value]) => typeof value === 'number')) as Record<string, number>
+      : {},
+    totalQuestions: typeof document.totalQuestions === 'number' ? Math.max(0, document.totalQuestions) : 0,
     correctQuestionIds: Array.isArray(document.correctQuestionIds)
       ? document.correctQuestionIds.filter((value): value is string => typeof value === 'string')
       : [],
@@ -75,6 +105,8 @@ export async function saveLearningProgress(
     chapterId: string;
     attemptedQuestionIds?: string[];
     correctQuestionIds?: string[];
+    selectedAnswerIndexes?: Record<string, number>;
+    totalQuestions?: number;
     bookmarked?: boolean;
     completed?: boolean;
     lastMode?: LearningMode;
@@ -84,14 +116,20 @@ export async function saveLearningProgress(
     dailyCorrectQuestionIds?: string[];
   },
 ): Promise<void> {
+  const normalizedSubjectId = canonicalSubjectId(input.subjectId);
+  const normalizedChapterId = canonicalChapterId(input.chapterId);
+  const normalizedUnitId = canonicalUnitId(input.unitId);
+
   await setDocument(
-    progressPath(uid, input.subjectId, input.chapterId),
+    progressPath(uid, normalizedSubjectId, normalizedChapterId),
     {
-      subjectId: input.subjectId,
-      unitId: input.unitId ?? null,
-      chapterId: input.chapterId,
+      subjectId: normalizedSubjectId,
+      unitId: normalizedUnitId,
+      chapterId: normalizedChapterId,
       attemptedQuestionIds: input.attemptedQuestionIds ?? [],
       correctQuestionIds: input.correctQuestionIds ?? [],
+      ...(input.selectedAnswerIndexes !== undefined ? { selectedAnswerIndexes: input.selectedAnswerIndexes } : {}),
+      ...(input.totalQuestions !== undefined ? { totalQuestions: Math.max(0, input.totalQuestions) } : {}),
       bookmarked: input.bookmarked ?? false,
       completed: input.completed ?? false,
       lastMode: input.lastMode ?? 'practice',

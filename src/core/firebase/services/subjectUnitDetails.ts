@@ -40,6 +40,7 @@ export interface UnitChapterWithProgress extends UnitChapterDetail {
     chapterId: string;
     attempted: number;
     correct: number;
+    totalQuestions: number;
     percentage: number;
     completed: boolean;
     progress: LearningProgress | null;
@@ -287,13 +288,18 @@ async function withProgress(
       // A missing or temporarily unavailable progress document must not hide chapter metadata.
     }
   }
-  const percentage = progress?.completed ? 100 : 0;
+  const totalQuestions = progress?.totalQuestions ?? 0;
+  const attempted = progress?.attemptedQuestionIds.length ?? 0;
+  const percentage = totalQuestions > 0
+    ? Math.min(100, Math.round((attempted / totalQuestions) * 100))
+    : progress?.completed ? 100 : 0;
   return {
     ...chapter,
     progress: {
       chapterId: chapter.id,
-      attempted: progress?.attemptedQuestionIds.length ?? 0,
+      attempted,
       correct: progress?.correctQuestionIds.length ?? 0,
+      totalQuestions,
       percentage,
       completed: progress?.completed === true,
       progress,

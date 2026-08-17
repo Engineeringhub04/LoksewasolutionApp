@@ -49,14 +49,6 @@ export default function ReadModeScreen() {
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
-      console.error('[ReadMode] missing required route/auth params', {
-        hasUser: Boolean(user?.uid),
-        courseId,
-        subcourseId,
-        subjectId,
-        unitId,
-        chapterId,
-      });
       setLoading(false);
       return;
     }
@@ -130,13 +122,13 @@ export default function ReadModeScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
         <View style={[styles.sectionHeader, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
           <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="bookmark" size={22} color={colors.primary} /></View>
-          <View style={{ flex: 1 }}>
-            <Text variant="h2" weight="semiBold">Important Question</Text>
+          <View style={styles.sectionTitle}>
+            <Text variant="h3" weight="semiBold" style={{ lineHeight: 23 }}>{t('learningModes.importantQuestion')}</Text>
             <Text variant="caption" secondary>{questions.length} {t('learning.questionsAttempted')}</Text>
           </View>
           <Pressable onPress={allExpanded ? collapseAll : expandAll} style={styles.expandButton} accessibilityLabel={allExpanded ? t('learningModes.collapseAll') : t('learningModes.expandAll')}>
             <Ionicons name={allExpanded ? 'chevron-up-outline' : 'chevron-down-outline'} size={19} color={colors.primary} />
-            <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{allExpanded ? t('learningModes.collapseAll') : t('learningModes.expandAll')}</Text>
+            <Text variant="caption" weight="bold" style={styles.expandButtonLabel}>{allExpanded ? t('learningModes.collapseAll') : t('learningModes.expandAll')}</Text>
           </Pressable>
         </View>
 
@@ -152,7 +144,7 @@ export default function ReadModeScreen() {
                 <Pressable onPress={() => showToast(t('learningModes.bookmarkComingSoon'), 'info')} style={styles.smallAction} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={21} color={colors.primary} /></Pressable>
                 <Pressable onPress={() => showToast(t('learningModes.reportComingSoon'), 'info')} style={styles.smallAction} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={21} color={colors.error} /></Pressable>
               </View>
-              <Text variant="h3" weight="semiBold" style={{ lineHeight: 27 }}>{bilingual(question.text, question.textNe)}</Text>
+              <Text variant="h3" weight="semiBold" style={{ lineHeight: 24, fontSize: 18 }}>{bilingual(question.text, question.textNe)}</Text>
               <Pressable onPress={() => setExpanded((previous) => ({ ...previous, [question.id]: !isOpen }))} style={styles.answerToggle}>
                 <Ionicons name={isOpen ? 'chevron-up-circle-outline' : 'chevron-down-circle-outline'} size={24} color={colors.primary} />
                 <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{isOpen ? t('learningModes.collapseAnswer') : t('learningModes.showAnswer')}</Text>
@@ -161,11 +153,11 @@ export default function ReadModeScreen() {
                 <View style={{ gap: spacing.sm }}>
                   {question.options.map((option, optionIndex) => {
                     const correct = optionIndex === question.correctIndex;
-                    return <View key={optionIndex} style={[styles.readOption, { backgroundColor: correct ? `${colors.success}12` : colors.surface, borderColor: correct ? `${colors.success}80` : colors.border, borderRadius: radius.md }]}><View style={[styles.optionBullet, { borderColor: correct ? colors.success : colors.border, backgroundColor: correct ? colors.success : 'transparent' }]}><Text variant="caption" weight="bold" style={{ color: correct ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="bodySmall" style={{ flex: 1, lineHeight: 21 }}>{option}</Text>{correct ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null}</View>;
+                    return <View key={optionIndex} style={[styles.readOption, { backgroundColor: correct ? `${colors.success}12` : colors.surface, borderColor: correct ? `${colors.success}80` : colors.border, borderRadius: radius.md }]}><View style={[styles.optionBullet, { borderColor: correct ? colors.success : colors.border, backgroundColor: correct ? colors.success : 'transparent' }]}><Text variant="caption" weight="bold" style={{ color: correct ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="bodySmall" style={{ flex: 1, lineHeight: 19, fontSize: 14 }}>{option}</Text>{correct ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null}</View>;
                   })}
                   <View style={[styles.explanationCard, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}55`, borderRadius: radius.md }]}>
                     <View style={styles.explanationTitle}><Ionicons name="bulb-outline" size={22} color={colors.warning} /><Text variant="bodyLarge" weight="bold" style={{ color: colors.warning }}>{t('learningModes.answerExplanation')}</Text></View>
-                    <Text variant="bodySmall" style={{ lineHeight: 23 }}>{bilingual(question.explanation, question.explanationNe)}</Text>
+                    <Text variant="bodySmall" style={{ lineHeight: 20, fontSize: 14 }}>{bilingual(question.explanation, question.explanationNe)}</Text>
                   </View>
                 </View>
               ) : null}
@@ -184,9 +176,11 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   headerTitle: { color: '#FFF' },
   headerSubtitle: { color: 'rgba(255,255,255,0.78)', marginTop: 2 },
-  sectionHeader: { borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 1 },
+  sectionHeader: { borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10, elevation: 1 },
+  sectionTitle: { flex: 1, minWidth: 0, gap: 2 },
   sectionIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 7, paddingHorizontal: 5 },
+  expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 7, paddingHorizontal: 5, flexShrink: 1, maxWidth: 132 },
+  expandButtonLabel: { color: '#2559C7', flexShrink: 1, textAlign: 'right', lineHeight: 17, fontSize: 13 },
   questionCard: { borderWidth: 1, padding: 15, gap: 14, elevation: 1 },
   questionTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   numberBadge: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 10 },

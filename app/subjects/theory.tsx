@@ -53,14 +53,6 @@ export default function TheoryModeScreen() {
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
-      console.error('[TheoryMode] missing required route/auth params', {
-        hasUser: Boolean(user?.uid),
-        courseId,
-        subcourseId,
-        subjectId,
-        unitId,
-        chapterId,
-      });
       setLoading(false);
       return;
     }
