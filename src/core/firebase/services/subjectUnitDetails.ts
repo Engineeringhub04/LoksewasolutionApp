@@ -1,5 +1,5 @@
 import { Collections } from '@/src/core/firebase/collections';
-import { listDocuments, runQuery } from '@/src/core/firebase/firestoreRest';
+import { runQuery } from '@/src/core/firebase/firestoreRest';
 import {
   fetchLearningProgress,
   type LearningProgress,
@@ -85,11 +85,6 @@ function normalizeUnitId(unitId: string): string {
   return normalizeCatalogId(parts[parts.length - 1] ?? unitId);
 }
 
-function sameScope(document: Record<string, unknown>, course: string, subcourse: string): boolean {
-  return normalizeCatalogId(asString(document.course)) === normalizeCatalogId(course)
-    && normalizeCatalogId(asString(document.subcourse)) === normalizeCatalogId(subcourse);
-}
-
 function fromUnitDocument(document: Record<string, unknown>): SubjectUnitDetail {
   return {
     id: asString(document.id),
@@ -128,27 +123,37 @@ function sortByOrder<T extends { order: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.order - b.order);
 }
 
-function unitMatches(document: Record<string, unknown>, logicalSubjectId: string): boolean {
-  return document.isPublished !== false
-    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId;
-}
-
-function chapterMatches(
-  document: Record<string, unknown>,
-  logicalSubjectId: string,
-  unitId: string,
-): boolean {
-  return document.isPublished !== false
-    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId
-    && normalizeUnitId(asString(document.unitId)) === normalizeUnitId(unitId);
-}
-
+/**
+ * Read-budget note: the old implementation re-scanned the entire
+ * `app_subjects_units_details` collection whenever a structured query failed,
+ * which silently multiplied read usage on every index/rules error and every
+ * focus-driven refresh. The scan is gone — scoped queries are bounded reads,
+ * and the module-level cache below deduplicates repeated refreshes.
+ */
 export async function fetchSubjectUnits(
   course: string,
   subcourse: string,
   subjectId: string,
+  opts?: { force?: boolean },
 ): Promise<SubjectUnitDetail[]> {
   const logicalSubjectId = normalizeSubjectId(subjectId);
+  const key = `${course}__${subcourse}__${logicalSubjectId}`;
+  const force = opts?.force === true;
+
+  return cachedOrInFlight(
+    cachedUnits,
+    inFlightUnits,
+    key,
+    () => loadUnits(course, subcourse, logicalSubjectId),
+    force,
+  );
+}
+
+function loadUnits(
+  course: string,
+  subcourse: string,
+  logicalSubjectId: string,
+): Promise<SubjectUnitDetail[]> {
   const where = [
     { field: 'course', op: '==' as const, value: course },
     { field: 'subcourse', op: '==' as const, value: subcourse },
@@ -156,20 +161,63 @@ export async function fetchSubjectUnits(
     { field: 'isPublished', op: '==' as const, value: true },
   ];
 
-  try {
-    const queried = await runQuery(Collections.subjectUnitDetails, {
-      where,
-      orderBy: [{ field: 'order', direction: 'asc' }],
-    });
-    if (queried.length > 0) return sortByOrder(queried.map(fromUnitDocument));
-  } catch {
-    // Older projects or missing indexes use the scan fallback below.
-  }
+  return runQuery(Collections.subjectUnitDetails, {
+    where,
+    orderBy: [{ field: 'order', direction: 'asc' }],
+  }).then((queried) => sortByOrder(queried.map(fromUnitDocument))).catch(() => {
+    // Collection scan removed to protect the daily read budget; query
+    // failures surface as an empty unit list instead of a full scan.
+    return [];
+  });
+}
 
-  const documents = await listDocuments(Collections.subjectUnitDetails);
-  const matching = documents.filter((document) => unitMatches(document, logicalSubjectId));
-  const scoped = matching.filter((document) => sameScope(document, course, subcourse));
-  return sortByOrder((scoped.length > 0 ? scoped : matching).map(fromUnitDocument));
+// ---------- Module-level cache with a stale window ----------
+
+const STALE_MS = 3 * 60 * 1000;
+
+interface CacheEntry<T> {
+  result: T;
+  cachedAt: number;
+}
+
+function isStale(entry: CacheEntry<unknown> | undefined): boolean {
+  return !entry || Date.now() - entry.cachedAt > STALE_MS;
+}
+
+function cachedOrInFlight<T>(
+  cache: Map<string, CacheEntry<T>>,
+  inFlight: Map<string, Promise<T>>,
+  key: string,
+  loader: () => Promise<T>,
+  force: boolean,
+): Promise<T> {
+  if (!force && !isStale(cache.get(key))) return Promise.resolve(cache.get(key)!.result);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const request = loader()
+    .then((result) => {
+      cache.set(key, { result, cachedAt: Date.now() });
+      return result;
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
+
+  inFlight.set(key, request);
+  return request;
+}
+
+const cachedUnits = new Map<string, CacheEntry<SubjectUnitDetail[]>>();
+const inFlightUnits = new Map<string, Promise<SubjectUnitDetail[]>>();
+const cachedUnitChapters = new Map<string, CacheEntry<UnitChapterDetail[]>>();
+const inFlightUnitChapters = new Map<string, Promise<UnitChapterDetail[]>>();
+
+export function clearUnitDetailCache(): void {
+  cachedUnits.clear();
+  inFlightUnits.clear();
+  cachedUnitChapters.clear();
+  inFlightUnitChapters.clear();
 }
 
 export async function fetchUnitChapters(
@@ -177,8 +225,27 @@ export async function fetchUnitChapters(
   subcourse: string,
   subjectId: string,
   unitId: string,
+  opts?: { force?: boolean },
 ): Promise<UnitChapterDetail[]> {
   const logicalSubjectId = normalizeSubjectId(subjectId);
+  const key = `${course}__${subcourse}__${logicalSubjectId}__${normalizeUnitId(unitId)}`;
+  const force = opts?.force === true;
+
+  return cachedOrInFlight(
+    cachedUnitChapters,
+    inFlightUnitChapters,
+    key,
+    () => loadUnitChapters(course, subcourse, logicalSubjectId, unitId),
+    force,
+  );
+}
+
+function loadUnitChapters(
+  course: string,
+  subcourse: string,
+  logicalSubjectId: string,
+  unitId: string,
+): Promise<UnitChapterDetail[]> {
   const where = [
     { field: 'course', op: '==' as const, value: course },
     { field: 'subcourse', op: '==' as const, value: subcourse },
@@ -187,20 +254,14 @@ export async function fetchUnitChapters(
     { field: 'isPublished', op: '==' as const, value: true },
   ];
 
-  try {
-    const queried = await runQuery(Collections.subjectUnitChapterDetails, {
-      where,
-      orderBy: [{ field: 'order', direction: 'asc' }],
-    });
-    if (queried.length > 0) return sortByOrder(queried.map(fromChapterDocument));
-  } catch {
-    // Older projects or missing indexes use the scan fallback below.
-  }
-
-  const documents = await listDocuments(Collections.subjectUnitChapterDetails);
-  const matching = documents.filter((document) => chapterMatches(document, logicalSubjectId, unitId));
-  const scoped = matching.filter((document) => sameScope(document, course, subcourse));
-  return sortByOrder((scoped.length > 0 ? scoped : matching).map(fromChapterDocument));
+  return runQuery(Collections.subjectUnitChapterDetails, {
+    where,
+    orderBy: [{ field: 'order', direction: 'asc' }],
+  }).then((queried) => sortByOrder(queried.map(fromChapterDocument))).catch(() => {
+    // Collection scan removed to protect the daily read budget; query
+    // failures surface as an empty chapter list instead of a full scan.
+    return [];
+  });
 }
 
 async function withProgress(

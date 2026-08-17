@@ -14,7 +14,6 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { deleteDiscussion, fetchDiscussions, isDiscussionLiked, toggleLikeDiscussion, reportContent, type DiscussionPost } from '@/src/core/firebase/services/discussions';
 import { fetchDiscussionGuidelines, type DiscussionGuidelines } from '@/src/core/firebase/services/discussionGuidelines';
-import { fetchUserProfile } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { Avatar } from '@/src/components/misc/Avatar';
@@ -49,6 +48,10 @@ export default function DiscussionFeedScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
+  // Admin state comes from the shared profile store instead of a dedicated
+  // fetchUserProfile() read — the store's user document was already fetched
+  // at app start, so this saves one read every time the Discussion tab mounts.
+  const storeProfile = useProfileStore((s) => s.profile);
   useRefreshOnFocus(refresh);
 
   useEffect(() => {
@@ -65,9 +68,8 @@ export default function DiscussionFeedScreen() {
   }, [data]);
 
   useEffect(() => {
-    if (!user) return;
-    fetchUserProfile(user.uid).then((value) => setIsAdmin(value?.isAdmin === true)).catch(() => undefined);
-  }, [user]);
+    setIsAdmin(storeProfile?.isAdmin === true);
+  }, [storeProfile?.isAdmin]);
 
   useEffect(() => {
     let active = true;

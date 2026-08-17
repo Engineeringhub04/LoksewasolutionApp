@@ -1,5 +1,5 @@
 import { Collections } from '@/src/core/firebase/collections';
-import { runQuery, listDocuments } from '@/src/core/firebase/firestoreRest';
+import { runQuery } from '@/src/core/firebase/firestoreRest';
 import {
   fetchLearningProgress,
   type LearningProgress,
@@ -65,15 +65,6 @@ function normalizeSubjectId(subjectId: string): string {
   return normalizeCatalogId(parts[parts.length - 1] ?? subjectId);
 }
 
-function isDirectChapterDocument(
-  document: Record<string, unknown>,
-  logicalSubjectId: string,
-): boolean {
-  return document.unitId == null
-    && document.isPublished !== false
-    && normalizeCatalogId(asString(document.subjectId)) === logicalSubjectId;
-}
-
 function sortChapterDocuments(documents: Record<string, unknown>[]): SubjectChapterDetail[] {
   return documents.map(fromDocument).sort((a, b) => a.order - b.order);
 }
@@ -101,13 +92,38 @@ function fromDocument(document: Record<string, unknown>): SubjectChapterDetail {
 /**
  * Fetches direct chapters only. Technical subject unit-chapters deliberately do
  * not belong to this Phase 3 screen and are excluded by the null unitId filter.
+ *
+ * Read-budget note: a scoped structured query is a bounded read (only the
+ * matching seeded documents come back), while the old `listDocuments`
+ * recovery path re-scanned the entire collection on every index or rules
+ * failure. That fallback has been removed — failures now surface as an empty
+ * array, and the module-level cache below guarantees the same scope never
+ * triggers duplicate Firestore requests from focus refreshes.
  */
 export async function fetchSubjectChapters(
   course: string,
   subcourse: string,
   subjectId: string,
+  opts?: { force?: boolean },
 ): Promise<SubjectChapterDetail[]> {
   const logicalSubjectId = normalizeSubjectId(subjectId);
+  const key = `${course}__${subcourse}__${logicalSubjectId}`;
+  const force = opts?.force === true;
+
+  return cachedOrInFlight(
+    cachedChapters,
+    inFlightChapters,
+    key,
+    () => loadDirectChapters(course, subcourse, logicalSubjectId),
+    force,
+  );
+}
+
+function loadDirectChapters(
+  course: string,
+  subcourse: string,
+  logicalSubjectId: string,
+): Promise<SubjectChapterDetail[]> {
   const where = [
     { field: 'course', op: '==' as const, value: course },
     { field: 'subcourse', op: '==' as const, value: subcourse },
@@ -116,33 +132,63 @@ export async function fetchSubjectChapters(
     { field: 'isPublished', op: '==' as const, value: true },
   ];
 
-  let queriedDocuments: Record<string, unknown>[] = [];
-  try {
-    queriedDocuments = await runQuery(Collections.subjectChapterDetails, {
-      where,
-      orderBy: [{ field: 'order', direction: 'asc' }],
+  return runQuery(Collections.subjectChapterDetails, {
+    where,
+    orderBy: [{ field: 'order', direction: 'asc' }],
+  }).then((documents) => sortChapterDocuments(documents)).catch(() => {
+    // The collection scan fallback was removed to protect the daily read
+    // budget. Index and rules failures now return an empty catalogue instead
+    // of silently scanning every chapter document in the project.
+    return [];
+  });
+}
+
+// ---------- Module-level cache with a stale window ----------
+//
+// Returns in-memory results within the stale window and deduplicates
+// concurrent callers (e.g. repeated focus refreshes) to a single request.
+
+const STALE_MS = 3 * 60 * 1000;
+
+interface CacheEntry<T> {
+  result: T;
+  cachedAt: number;
+}
+
+const cachedChapters = new Map<string, CacheEntry<SubjectChapterDetail[]>>();
+const inFlightChapters = new Map<string, Promise<SubjectChapterDetail[]>>();
+
+function isStale(entry: CacheEntry<unknown> | undefined): boolean {
+  return !entry || Date.now() - entry.cachedAt > STALE_MS;
+}
+
+function cachedOrInFlight<T>(
+  cache: Map<string, CacheEntry<T>>,
+  inFlight: Map<string, Promise<T>>,
+  key: string,
+  loader: () => Promise<T>,
+  force: boolean,
+): Promise<T> {
+  if (!force && !isStale(cache.get(key))) return Promise.resolve(cache.get(key)!.result);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const request = loader()
+    .then((result) => {
+      cache.set(key, { result, cachedAt: Date.now() });
+      return result;
+    })
+    .finally(() => {
+      inFlight.delete(key);
     });
-  } catch {
-    // Fall through to the client-side scan when an index or an older rules
-    // deployment rejects the scoped query.
-  }
 
-  if (queriedDocuments.length > 0) {
-    return sortChapterDocuments(queriedDocuments);
-  }
+  inFlight.set(key, request);
+  return request;
+}
 
-  // Seeded projects may contain the same subject under a different scope
-  // spelling, or an older seed may have omitted unitId/isPublished fields.
-  // Prefer the requested course/subcourse when available, then safely fall
-  // back to the canonical subject ID so cards are not hidden by scope drift.
-  const documents = await listDocuments(Collections.subjectChapterDetails);
-  const directDocuments = documents.filter((document) => isDirectChapterDocument(document, logicalSubjectId));
-  const scopedDocuments = directDocuments.filter((document) => (
-    normalizeCatalogId(asString(document.course)) === normalizeCatalogId(course)
-    && normalizeCatalogId(asString(document.subcourse)) === normalizeCatalogId(subcourse)
-  ));
-
-  return sortChapterDocuments(scopedDocuments.length > 0 ? scopedDocuments : directDocuments);
+export function clearChapterDetailCache(): void {
+  cachedChapters.clear();
+  inFlightChapters.clear();
 }
 
 function percentageFor(progress: LearningProgress | null, totalQuestions: number): number {

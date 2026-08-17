@@ -93,10 +93,15 @@ export default function CourseSetupScreen() {
     applySaved(storeCourseInfo?.courseId ?? null, storeCourseInfo?.subcourseId ?? null);
   }, [storeCourseInfo?.courseId, storeCourseInfo?.subcourseId, applySaved]);
 
-  // Source 2: direct fetch, covering a cold open straight into this route where
-  // the store hasn't been warmed yet.
+  // Source 2: direct fetch, ONLY as a cold-open fallback when the store hasn't
+  // been warmed yet. A single flight is guaranteed here, and it backs off the
+  // moment the store provides an enrolled scope, so normal navigation never
+  // triggers a second user-course-info read.
+  const storeCourseId = useProfileStore((s) => s.courseInfo?.courseId);
+  const storeSubcourseId = useProfileStore((s) => s.courseInfo?.subcourseId);
   useEffect(() => {
     if (!user?.uid) return;
+    if (storeCourseId || storeSubcourseId) return;
     (async () => {
       try {
         const info = await fetchUserCourseInfo(user.uid);
@@ -105,7 +110,7 @@ export default function CourseSetupScreen() {
         // Non-fatal — the screen still works as a fresh setup.
       }
     })();
-  }, [user?.uid, applySaved]);
+  }, [user?.uid, storeCourseId, storeSubcourseId, applySaved]);
 
   /**
    * User tapped a course. This is the ONLY place the subcourse selection is

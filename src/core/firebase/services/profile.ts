@@ -106,6 +106,14 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
   const storedLast = (doc.lastName as string | undefined) ?? '';
   const derived = splitName(name);
 
+  // Backfill the stats map on the same read that fetched the profile, so
+  // callers no longer need a separate getDocument() for ensureUserStats().
+  if (!doc.stats) {
+    await setDocument(userPath(uid), { stats: EMPTY_STATS, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {
+      // A failed backfill must never block profile loading.
+    });
+  }
+
   return {
     uid,
     name,
