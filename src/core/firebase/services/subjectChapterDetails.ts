@@ -124,23 +124,29 @@ function loadDirectChapters(
   subcourse: string,
   logicalSubjectId: string,
 ): Promise<SubjectChapterDetail[]> {
-  const where = [
-    { field: 'course', op: '==' as const, value: course },
-    { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
-    { field: 'unitId', op: '==' as const, value: null },
-    { field: 'isPublished', op: '==' as const, value: true },
-  ];
-
+  // Read-budget + index note: a compound equality query across course, subcourse,
+  // subjectId, unitId and isPublished with an orderBy requires a composite
+  // Firestore index that does not exist in the project, and the REST API fails
+  // the whole query instead of returning results. The scan-based code before
+  // the low-read change masked that failure behind a full collection scan, so
+  // chapter pages looked fine while burning reads. This keeps a bounded read
+  // without any index dependency: a single equality filter on `course` (the
+  // chapter collection is tiny per course, ~150 documents at most), with the
+  // remaining scope and visibility rules applied client-side and the order
+  // enforced in memory.
   return runQuery(Collections.subjectChapterDetails, {
-    where,
-    orderBy: [{ field: 'order', direction: 'asc' }],
-  }).then((documents) => sortChapterDocuments(documents)).catch(() => {
-    // The collection scan fallback was removed to protect the daily read
-    // budget. Index and rules failures now return an empty catalogue instead
-    // of silently scanning every chapter document in the project.
-    return [];
-  });
+    where: [{ field: 'course', op: '==' as const, value: course }],
+  }).then((documents) =>
+    sortChapterDocuments(
+      documents.filter(
+        (doc) =>
+          asString(doc.subcourse) === subcourse &&
+          normalizeCatalogId(asString(doc.subjectId)) === logicalSubjectId &&
+          asBoolean(doc.isPublished, false) === true &&
+          (typeof doc.unitId !== 'string' || !doc.unitId.trim()),
+      ),
+    ),
+  );
 }
 
 // ---------- Module-level cache with a stale window ----------

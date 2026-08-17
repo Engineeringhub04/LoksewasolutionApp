@@ -154,21 +154,26 @@ function loadUnits(
   subcourse: string,
   logicalSubjectId: string,
 ): Promise<SubjectUnitDetail[]> {
-  const where = [
-    { field: 'course', op: '==' as const, value: course },
-    { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
-    { field: 'isPublished', op: '==' as const, value: true },
-  ];
-
+  // Read-budget + index note: the multi-field equality query with an orderBy
+  // needs a composite Firestore index that does not exist, and the REST API
+  // fails the whole request instead of returning results — the previous code
+  // hid that failure behind a full collection scan. This keeps a single
+  // bounded read on the small units collection (3 units per scope) with the
+  // remaining scope rules and ordering applied client-side.
   return runQuery(Collections.subjectUnitDetails, {
-    where,
-    orderBy: [{ field: 'order', direction: 'asc' }],
-  }).then((queried) => sortByOrder(queried.map(fromUnitDocument))).catch(() => {
-    // Collection scan removed to protect the daily read budget; query
-    // failures surface as an empty unit list instead of a full scan.
-    return [];
-  });
+    where: [{ field: 'course', op: '==' as const, value: course }],
+  }).then((queried) =>
+    sortByOrder(
+      queried
+        .filter(
+          (doc) =>
+            asString(doc.subcourse) === subcourse &&
+            normalizeCatalogId(asString(doc.subjectId)) === logicalSubjectId &&
+            asBoolean(doc.isPublished, false) === true,
+        )
+        .map(fromUnitDocument),
+    ),
+  );
 }
 
 // ---------- Module-level cache with a stale window ----------
@@ -246,22 +251,27 @@ function loadUnitChapters(
   logicalSubjectId: string,
   unitId: string,
 ): Promise<UnitChapterDetail[]> {
-  const where = [
-    { field: 'course', op: '==' as const, value: course },
-    { field: 'subcourse', op: '==' as const, value: subcourse },
-    { field: 'subjectId', op: '==' as const, value: logicalSubjectId },
-    { field: 'unitId', op: '==' as const, value: normalizeUnitId(unitId) },
-    { field: 'isPublished', op: '==' as const, value: true },
-  ];
-
+  // Read-budget + index note: same composite-index trap as loadUnits — the
+  // five-field query throws on the REST API without a matching index, and the
+  // old scan fallback disguised the failure. A single equality filter on
+  // `course` is bounded (at most ~62 technical unit-chapters per scope), with
+  // subcourse/subjectId/unitId/isPublished matching and ordering done in
+  // memory.
   return runQuery(Collections.subjectUnitChapterDetails, {
-    where,
-    orderBy: [{ field: 'order', direction: 'asc' }],
-  }).then((queried) => sortByOrder(queried.map(fromChapterDocument))).catch(() => {
-    // Collection scan removed to protect the daily read budget; query
-    // failures surface as an empty chapter list instead of a full scan.
-    return [];
-  });
+    where: [{ field: 'course', op: '==' as const, value: course }],
+  }).then((queried) =>
+    sortByOrder(
+      queried
+        .filter(
+          (doc) =>
+            asString(doc.subcourse) === subcourse &&
+            normalizeCatalogId(asString(doc.subjectId)) === logicalSubjectId &&
+            normalizeUnitId(asString(doc.unitId)) === normalizeUnitId(unitId) &&
+            asBoolean(doc.isPublished, false) === true,
+        )
+        .map(fromChapterDocument),
+    ),
+  );
 }
 
 async function withProgress(
