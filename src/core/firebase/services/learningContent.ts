@@ -152,7 +152,13 @@ const phase5QuestionTemplates: Phase5QuestionTemplate[] = [
 ];
 
 function appSubjectId(subjectId: string): string {
-  return subjectId === 'job-based-knowledge' ? 'technical-subject' : subjectId;
+  // Subject catalogue documents use scoped IDs such as
+  // `course__subcourse__general-awareness`, while Phase 5 content documents
+  // use the canonical catalog slug (`general-awareness`). Normalize at this
+  // boundary so all mode fetches and deterministic IDs address the same doc.
+  const parts = subjectId.split('__').filter(Boolean);
+  const canonicalSubjectId = parts[parts.length - 1] ?? subjectId;
+  return canonicalSubjectId === 'job-based-knowledge' ? 'technical-subject' : canonicalSubjectId;
 }
 
 function scopeId(courseId: string, subcourseId: string): string {
