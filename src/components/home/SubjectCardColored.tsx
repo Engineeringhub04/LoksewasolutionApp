@@ -1,6 +1,4 @@
-// Premium subject card for Home's "Subjects" section: gradient background
-// (2-tone, derived from the base color), decorative corner glow, icon in a
-// glassy rounded box, and optional premium/footer actions.
+// Compact premium subject card for Home's "Subjects" section.
 import React from 'react';
 import { Pressable, View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,8 +18,6 @@ export interface SubjectCardColoredProps {
   onFooterPress?: () => void;
 }
 
-// Darkens a hex color by a percentage, to build a 2-tone gradient from a
-// single base color without needing a second color per subject.
 function darken(hex: string, amount: number): string {
   const clean = hex.replace('#', '');
   const num = parseInt(clean, 16);
@@ -47,30 +43,34 @@ export function SubjectCardColored({
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
-        <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, footerLabel ? styles.cardWithFooter : null, premium && !footerLabel ? styles.cardWithStatus : null]}>
+      <LinearGradient colors={[backgroundColor, darkerShade]} style={styles.card}>
         <View style={styles.glow} />
+
+        {premium ? (
+          <View style={[styles.statusTag, purchased ? styles.purchasedTag : styles.premiumTag]}>
+            <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={9} color="#FFF" />
+            <Text
+              variant="caption"
+              weight="bold"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={styles.statusText}
+            >
+              {purchased ? purchasedLabel : premiumLabel}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.topRow}>
           <View style={styles.iconBox}>
             <Ionicons name={icon} size={24} color="#FFF" />
           </View>
-          {premium ? (
-            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={9} color="#FFF" />
-              <Text
-                variant="caption"
-                weight="bold"
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={purchased ? styles.purchasedText : styles.premiumText}
-              >
-                {purchased ? purchasedLabel : premiumLabel}
-              </Text>
-            </View>
-          ) : null}
         </View>
+
         <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
           {name}
         </Text>
+
         {footerLabel ? (
           <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
             <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   card: {
     width: 150,
     height: 130,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     borderRadius: 18,
     padding: 14,
     overflow: 'hidden',
@@ -95,65 +95,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
-  },
-  cardWithFooter: {
-    height: 166,
-  },
-  cardWithStatus: {
-    height: 130,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  premiumTag: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    maxWidth: 80,
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    borderRadius: 7,
-    backgroundColor: '#9A3412',
-    borderWidth: 1,
-    borderColor: 'rgba(255,213,166,0.62)',
-  },
-  premiumText: {
-    color: '#FFF',
-    fontSize: 8,
-    letterSpacing: 0,
-    flexShrink: 1,
-  },
-  purchasedTag: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    maxWidth: 80,
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    borderRadius: 7,
-    backgroundColor: '#047857',
-    borderWidth: 1,
-    borderColor: 'rgba(209,250,229,0.78)',
-  },
-  purchasedText: {
-    color: '#FFF',
-    fontSize: 8,
-    letterSpacing: 0,
-    flexShrink: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 4,
-  },
-  footerText: {
-    color: '#FFF',
   },
   glow: {
     position: 'absolute',
@@ -164,6 +105,11 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
+  topRow: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   iconBox: {
     width: 40,
     height: 40,
@@ -172,5 +118,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { color: '#FFF' },
+  statusTag: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    maxWidth: 76,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  premiumTag: {
+    backgroundColor: '#9A3412',
+    borderColor: 'rgba(255,213,166,0.62)',
+  },
+  purchasedTag: {
+    backgroundColor: '#047857',
+    borderColor: 'rgba(209,250,229,0.78)',
+  },
+  statusText: {
+    color: '#FFF',
+    fontSize: 8,
+    letterSpacing: 0,
+    flexShrink: 1,
+  },
+  name: {
+    color: '#FFF',
+    marginTop: 12,
+    paddingRight: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  footerText: {
+    color: '#FFF',
+  },
 });
