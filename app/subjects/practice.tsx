@@ -343,12 +343,20 @@ export default function PracticeModeScreen() {
       >
         <View style={[styles.limitRow, { backgroundColor: colors.surface, borderColor: premium ? colors.success : colors.border, borderRadius: radius.md }]}>
           <View style={{ flex: 1 }}>
-            <Text variant="caption" weight="bold" style={{ color: premium ? colors.success : colors.primary, textDecorationLine: premium ? 'line-through' : 'none' }}>
-              {t('learningModes.dailyLimit', { used: dailyUsed, limit: premium ? 100 : dailyLimit })}
-            </Text>
-            {!premium ? <Text variant="caption" secondary>{t('learning.dailyReset')}</Text> : null}
+            {profilePremium ? (
+              <Text variant="caption" weight="bold" style={{ color: colors.success }}>
+                {t('learningModes.proAccessActive')}
+              </Text>
+            ) : (
+              <>
+                <Text variant="caption" weight="bold" style={{ color: colors.primary }}>
+                  {t('learningModes.dailyLimit', { used: dailyUsed, limit: dailyLimit })}
+                </Text>
+                <Text variant="caption" secondary>{t('learning.dailyReset')}</Text>
+              </>
+            )}
           </View>
-          {premium ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : <Ionicons name="speedometer-outline" size={22} color={colors.primary} />}
+          {profilePremium ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : <Ionicons name="speedometer-outline" size={22} color={colors.primary} />}
         </View>
 
         <View style={styles.questionMetaRow}>

@@ -54,20 +54,22 @@ export function SubjectCardColored({
             <Ionicons name={icon} size={24} color="#FFF" />
           </View>
         </View>
-        {premium ? (
-          <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-            <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
-            <Text
-              variant="caption"
-              weight="bold"
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              style={purchased ? styles.purchasedText : styles.premiumText}
-            >
-              {purchased ? purchasedLabel : premiumLabel}
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.statusSlot}>
+          {premium ? (
+            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
+              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
+              <Text
+                variant="caption"
+                weight="bold"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={purchased ? styles.purchasedText : styles.premiumText}
+              >
+                {purchased ? purchasedLabel : premiumLabel}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
           {name}
         </Text>
@@ -85,7 +87,7 @@ export function SubjectCardColored({
 const styles = StyleSheet.create({
   card: {
     width: 164,
-    height: 130,
+    height: 172,
     borderRadius: 18,
     padding: 14,
     justifyContent: 'space-between',
@@ -100,11 +102,15 @@ const styles = StyleSheet.create({
     height: 172,
   },
   cardWithStatus: {
-    height: 180,
+    height: 172,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  statusSlot: {
+    minHeight: 24,
+    justifyContent: 'flex-start',
   },
   premiumTag: {
     alignSelf: 'flex-start',
