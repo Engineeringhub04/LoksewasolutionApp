@@ -52,11 +52,14 @@ export default function SubjectListScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { courseInfo, profile } = useProfileStore();
-  const user = useAuthStore((state) => state.user);
+  const { courseInfo, profile, loading: profileLoading, loadedUid } = useProfileStore();
+  const { user, initializing: authInitializing } = useAuthStore();
+  // Wait for auth and the authenticated user's course scope before fetching subjects.
+  // Otherwise the first render can fetch the default catalogue, flash it, and
+  // then refetch the real course once the profile store hydrates.
+  const profileReady = !authInitializing && (!user?.uid || (!profileLoading && loadedUid === user.uid));
   // `courseInfo` also carries names and is refreshed separately. Keep the raw
-  // profile IDs as a fallback so a temporary course-name lookup failure cannot
-  // silently switch the subject catalogue to the default course.
+  // profile IDs as a fallback only after the profile scope is ready.
   const course = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
@@ -64,6 +67,7 @@ export default function SubjectListScreen() {
   const subjectData = useAsyncData(
     () => fetchSubjectDetails(course, subcourse),
     [course, subcourse],
+    { enabled: profileReady },
   );
   useRefreshOnFocus(subjectData.refresh);
 
@@ -81,6 +85,11 @@ export default function SubjectListScreen() {
     [user?.uid, course, subcourse, subjectIds],
     { enabled: Boolean(user?.uid && subjectIds.length) },
   );
+  const progressNeedsLoad = Boolean(user?.uid && subjectIds.length);
+  const progressReady = !progressNeedsLoad || (
+    !progressStats.loading && (progressStats.data !== null || progressStats.error)
+  );
+  const pageContentReady = profileReady && !subjectData.loading && progressReady;
   useRefreshOnFocus(progressStats.refresh);
 
   const stats = useMemo(() => ({
@@ -130,7 +139,7 @@ export default function SubjectListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('subjects.title')} actions={headerActions} />
-      {!subjectData.loading ? <ScrollView
+      {pageContentReady ? <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={subjectData.refreshing} onRefresh={subjectData.refresh} />}
       >
@@ -184,7 +193,10 @@ export default function SubjectListScreen() {
         )}
       </ScrollView> : null}
 
-      <PageLoaderOverlay visible={subjectData.loading} label={t('common.loading')} />
+      <PageLoaderOverlay
+        visible={!pageContentReady}
+        label={t('common.loading')}
+      />
 
       <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
         <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
