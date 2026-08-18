@@ -49,38 +49,34 @@ export function SubjectCardColored({
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
         <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, footerLabel ? styles.cardWithFooter : null, premium && !footerLabel ? styles.cardWithStatus : null]}>
         <View style={styles.glow} />
-        <View style={styles.cardBody}>
-          <View style={styles.topRow}>
-            <View style={styles.iconBox}>
-              <Ionicons name={icon} size={24} color="#FFF" />
+        <View style={styles.topRow}>
+          <View style={styles.iconBox}>
+            <Ionicons name={icon} size={24} color="#FFF" />
+          </View>
+          {premium ? (
+            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
+              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={9} color="#FFF" />
+              <Text
+                variant="caption"
+                weight="bold"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={purchased ? styles.purchasedText : styles.premiumText}
+              >
+                {purchased ? purchasedLabel : premiumLabel}
+              </Text>
             </View>
-            {premium ? (
-              <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-                <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={9} color="#FFF" />
-                <Text
-                  variant="caption"
-                  weight="bold"
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={purchased ? styles.purchasedText : styles.premiumText}
-                >
-                  {purchased ? purchasedLabel : premiumLabel}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.titleSlot}>
-            <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-              {name}
-            </Text>
-          </View>
-          {footerLabel ? (
-            <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
-              <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
-              <Ionicons name="arrow-forward" size={14} color="#FFF" />
-            </Pressable>
           ) : null}
         </View>
+        <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+          {name}
+        </Text>
+        {footerLabel ? (
+          <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
+            <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
+            <Ionicons name="arrow-forward" size={14} color="#FFF" />
+          </Pressable>
+        ) : null}
       </LinearGradient>
     </Pressable>
   );
@@ -88,8 +84,9 @@ export function SubjectCardColored({
 
 const styles = StyleSheet.create({
   card: {
-    width: 164,
-    height: 172,
+    width: 150,
+    height: 130,
+    justifyContent: 'space-between',
     borderRadius: 18,
     padding: 14,
     overflow: 'hidden',
@@ -100,31 +97,24 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   cardWithFooter: {
-    height: 172,
+    height: 166,
   },
   cardWithStatus: {
-    height: 172,
-  },
-  cardBody: {
-    flex: 1,
+    height: 130,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-  },
-  titleSlot: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingTop: 2,
+    gap: 6,
   },
   premiumTag: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    maxWidth: 92,
-    paddingHorizontal: 5,
+    maxWidth: 80,
+    paddingHorizontal: 4,
     paddingVertical: 3,
     borderRadius: 7,
     backgroundColor: '#9A3412',
@@ -133,7 +123,7 @@ const styles = StyleSheet.create({
   },
   premiumText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 8,
     letterSpacing: 0,
     flexShrink: 1,
   },
@@ -142,8 +132,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    maxWidth: 92,
-    paddingHorizontal: 5,
+    maxWidth: 80,
+    paddingHorizontal: 4,
     paddingVertical: 3,
     borderRadius: 7,
     backgroundColor: '#047857',
@@ -152,7 +142,7 @@ const styles = StyleSheet.create({
   },
   purchasedText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 8,
     letterSpacing: 0,
     flexShrink: 1,
   },
