@@ -20,6 +20,7 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import {
   DEFAULT_LEARNING_COURSE_ID,
@@ -125,7 +126,8 @@ export default function SubjectUnitsScreen() {
   const { colors, spacing, radius, effective, setMode } = useTheme();
   const { t, language } = useTranslation();
   const user = useAuthStore((state) => state.user);
-  const { courseInfo } = useProfileStore();
+  const { courseInfo, profile } = useProfileStore();
+  const hasActivePro = hasActivePremium(profile);
   const params = useLocalSearchParams<{
     subjectId: string;
     course?: string;
@@ -229,7 +231,7 @@ export default function SubjectUnitsScreen() {
   const showNextUpdate = () => showToast(t('subjects.unitsPage.nextUpdate'), 'info');
 
   const showChapterActions = (chapter: DisplayChapter) => {
-    if (chapter.pro) {
+    if (chapter.pro && !hasActivePro) {
       setPremiumChapter(chapter);
       return;
     }
@@ -248,6 +250,8 @@ export default function SubjectUnitsScreen() {
 
   const renderChapterCard = (chapter: DisplayChapter) => {
     const progress = chapter.progress.percentage;
+    const isLocked = chapter.pro && !hasActivePro;
+    const isPurchased = chapter.pro && hasActivePro;
     const softPrimary = effective === 'dark' ? `${colors.primary}28` : '#E7EEFF';
     const softSuccess = effective === 'dark' ? `${colors.success}28` : '#E7F7F0';
     const softWarning = effective === 'dark' ? `${colors.warning}30` : '#FFF0DE';
@@ -262,9 +266,9 @@ export default function SubjectUnitsScreen() {
         ]}
       >
         <View style={styles.chapterCardTop}>
-          <View style={[styles.chapterNumber, { backgroundColor: chapter.pro ? softWarning : softPrimary }]}>
+          <View style={[styles.chapterNumber, { backgroundColor: isLocked ? softWarning : isPurchased ? softSuccess : softPrimary }]>
 
-            <Text variant="bodySmall" weight="bold" style={{ color: chapter.pro ? colors.warning : colors.primary }}>
+            <Text variant="bodySmall" weight="bold" style={{ color: isLocked ? colors.warning : isPurchased ? colors.success : colors.primary }}>
               {String(chapter.order).padStart(2, '0')}
             </Text>
           </View>
@@ -275,9 +279,11 @@ export default function SubjectUnitsScreen() {
             </Text>
           </View>
           {chapter.pro ? (
-            <View style={[styles.premiumBadge, { backgroundColor: softWarning }]}>
-              <Ionicons name="lock-closed" size={12} color={colors.warning} />
-              <Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: colors.warning }]}>{t('subjects.unitsPage.premium')}</Text>
+            <View style={[styles.premiumBadge, { backgroundColor: isPurchased ? softSuccess : softWarning }]}>
+              <Ionicons name={isPurchased ? 'checkmark-circle' : 'lock-closed'} size={12} color={isPurchased ? colors.success : colors.warning} />
+              <Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: isPurchased ? colors.success : colors.warning }]}>
+                {isPurchased ? t('subjects.unitsPage.purchasedActive') : t('subjects.unitsPage.premium')}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -293,7 +299,7 @@ export default function SubjectUnitsScreen() {
               <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: progress >= 100 ? '#059669' : '#2563EB' }]} />
             </View>
           </View>
-          <Ionicons name={chapter.pro ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={chapter.pro ? colors.warning : colors.textSecondary} />
+          <Ionicons name={isLocked ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={isLocked ? colors.warning : colors.textSecondary} />
         </View>
       </Pressable>
     );
@@ -301,6 +307,7 @@ export default function SubjectUnitsScreen() {
 
   const renderUnitCard = (track: UnitTrack) => {
     const isExpanded = expandedUnit === track.id;
+    const isUnitPurchased = Boolean(track.unit?.pro && hasActivePro);
     return (
       <View key={track.id} style={[styles.unitCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.lg }]}>
         <Pressable
@@ -313,7 +320,7 @@ export default function SubjectUnitsScreen() {
             <Text variant="caption" secondary>{track.chapters.length} {t('subjects.unitsPage.chapters')}</Text>
           </View>
           {track.unit?.pro ? (
-            <View style={[styles.premiumBadge, { backgroundColor: effective === 'dark' ? `${colors.warning}30` : '#FFF0DE' }]}><Ionicons name="lock-closed" size={12} color={colors.warning} /><Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: colors.warning }]}>{t('subjects.unitsPage.premium')}</Text></View>
+            <View style={[styles.premiumBadge, { backgroundColor: isUnitPurchased ? (effective === 'dark' ? `${colors.success}30` : '#D1FAE5') : (effective === 'dark' ? `${colors.warning}30` : '#FFF0DE') }]}><Ionicons name={isUnitPurchased ? 'checkmark-circle' : 'lock-closed'} size={12} color={isUnitPurchased ? colors.success : colors.warning} /><Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: isUnitPurchased ? colors.success : colors.warning }]}>{isUnitPurchased ? t('subjects.unitsPage.purchasedActive') : t('subjects.unitsPage.premium')}</Text></View>
           ) : null}
           <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
         </Pressable>
@@ -428,7 +435,7 @@ export default function SubjectUnitsScreen() {
             <Text variant="h2" weight="bold" style={styles.modalTitle}>{t('subjects.unitsPage.premiumTitle')}</Text>
             <Text variant="body" secondary style={styles.modalCenteredText}>{premiumChapter ? chapterTitle(premiumChapter, language) : ''}</Text>
             <Text variant="bodySmall" secondary style={styles.modalCenteredText}>{t('subjects.unitsPage.premiumMessage')}</Text>
-            <Button label={t('subjects.unitsPage.subscriptionRequired')} onPress={() => { setPremiumChapter(null); showNextUpdate(); }} icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />} />
+            <Button label={t('subjects.unitsPage.goToSubscriptionPlan')} onPress={() => { setPremiumChapter(null); router.push('/subscription'); }} icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />} />
             <Button label={t('common.close')} variant="text" onPress={() => setPremiumChapter(null)} />
           </Pressable>
         </Pressable>

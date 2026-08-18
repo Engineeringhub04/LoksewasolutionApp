@@ -61,6 +61,14 @@ export interface UserProfile {
 
 export const EMPTY_STATS: UserStats = { testsTaken: 0, streak: 0, rank: 0, points: 0 };
 
+/** Returns true only while the user's mirrored premium entitlement is active. */
+export function hasActivePremium(profile: Pick<UserProfile, 'isPremium' | 'premiumExpiryDate'> | null): boolean {
+  if (!profile?.isPremium) return false;
+  if (!profile.premiumExpiryDate) return true;
+  const expiryTime = new Date(profile.premiumExpiryDate).getTime();
+  return Number.isFinite(expiryTime) && expiryTime > Date.now();
+}
+
 function userPath(uid: string): string {
   return `${Collections.users}/${uid}`;
 }
