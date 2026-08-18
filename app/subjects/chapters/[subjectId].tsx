@@ -66,11 +66,13 @@ export default function SubjectChaptersScreen() {
     course?: string;
     subcourse?: string;
     subjectName?: string;
+    subjectPro?: string;
   }>();
   const subjectId = Array.isArray(params.subjectId) ? params.subjectId[0] : params.subjectId;
   const course = Array.isArray(params.course) ? params.course[0] : params.course;
   const subcourse = Array.isArray(params.subcourse) ? params.subcourse[0] : params.subcourse;
   const subjectNameParam = Array.isArray(params.subjectName) ? params.subjectName[0] : params.subjectName;
+  const subjectPro = Array.isArray(params.subjectPro) ? params.subjectPro[0] : params.subjectPro;
   const resolvedCourse = course || courseInfo?.courseId || DEFAULT_LEARNING_COURSE_ID;
   const resolvedSubcourse = subcourse || courseInfo?.subcourseId || DEFAULT_LEARNING_SUBCOURSE_ID;
   const subjectName = subjectNameParam || subjectId || t('subjects.chaptersPage.chapter');
@@ -269,9 +271,9 @@ export default function SubjectChaptersScreen() {
             <Text variant="h3" weight="bold">{selectedChapter ? chapterName(selectedChapter, chapterLanguage) : ''}</Text>
             <Text variant="bodySmall" secondary>{t('subjects.chaptersPage.free')}</Text>
             <View style={styles.sheetButtons}>
-              <Button label={t('subjects.chaptersPage.practiceMode')} onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/practice', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '' } }); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
-              <Button label={t('subjects.chaptersPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/read', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '' } }); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
-              <Button label={t('subjects.chaptersPage.theoryMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/theory', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '' } }); }} icon={<Ionicons name="school-outline" size={18} color={colors.primary} />} />
+              <Button label={t('subjects.chaptersPage.practiceMode')} onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/practice', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '', subjectPro: subjectPro ?? 'false', chapterPro: String(Boolean(selectedChapter?.pro)) } }); }} icon={<Ionicons name="play-circle-outline" size={18} color={colors.onPrimary} />} />
+              <Button label={t('subjects.chaptersPage.readMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/read', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '', subjectPro: subjectPro ?? 'false', chapterPro: String(Boolean(selectedChapter?.pro)) } }); }} icon={<Ionicons name="book-outline" size={18} color={colors.primary} />} />
+              <Button label={t('subjects.chaptersPage.theoryMode')} variant="secondary" onPress={() => { setSelectedChapter(null); router.push({ pathname: '/subjects/theory', params: { courseId: resolvedCourse, subcourseId: resolvedSubcourse, subjectId, chapterId: selectedChapter?.id ?? '', unitId: selectedChapter?.unitId ?? '', subjectName, chapterName: selectedChapter ? chapterName(selectedChapter, chapterLanguage) : '', subjectPro: subjectPro ?? 'false', chapterPro: String(Boolean(selectedChapter?.pro)) } }); }} icon={<Ionicons name="school-outline" size={18} color={colors.primary} />} />
             </View>
           </Pressable>
         </Pressable>

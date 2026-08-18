@@ -47,21 +47,27 @@ export function SubjectCardColored({
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
-      <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, footerLabel ? styles.cardWithFooter : null]}>
+        <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, footerLabel ? styles.cardWithFooter : null, premium && !footerLabel ? styles.cardWithStatus : null]}>
         <View style={styles.glow} />
         <View style={styles.topRow}>
           <View style={styles.iconBox}>
             <Ionicons name={icon} size={24} color="#FFF" />
           </View>
-          {premium ? (
-            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
-              <Text variant="caption" weight="bold" style={purchased ? styles.purchasedText : styles.premiumText}>
-                {purchased ? purchasedLabel : premiumLabel}
-              </Text>
-            </View>
-          ) : null}
         </View>
+        {premium ? (
+          <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
+            <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
+            <Text
+              variant="caption"
+              weight="bold"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={purchased ? styles.purchasedText : styles.premiumText}
+            >
+              {purchased ? purchasedLabel : premiumLabel}
+            </Text>
+          </View>
+        ) : null}
         <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
           {name}
         </Text>
@@ -93,17 +99,20 @@ const styles = StyleSheet.create({
   cardWithFooter: {
     height: 172,
   },
+  cardWithStatus: {
+    height: 180,
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 6,
   },
   premiumTag: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
+    maxWidth: '100%',
+    paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: '#9A3412',
@@ -112,14 +121,17 @@ const styles = StyleSheet.create({
   },
   premiumText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   purchasedTag: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
+    maxWidth: '100%',
+    paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: '#047857',
@@ -128,8 +140,9 @@ const styles = StyleSheet.create({
   },
   purchasedText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   footer: {
     flexDirection: 'row',
