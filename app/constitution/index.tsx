@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated as RNAnimated, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -12,15 +12,17 @@ import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchConstitutionIndex, type ConstitutionFileEntry, type ConstitutionLanguage } from '@/src/core/services/constitution';
+import { constitutionLabels } from '@/src/core/i18n/constitution';
 
 function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
 function sectionLabel(item: ConstitutionFileEntry, language: ConstitutionLanguage): string {
-  if (item.sectionType === 'preamble') return language === 'np' ? 'प्रस्तावना' : 'Preamble';
-  if (item.sectionType === 'schedule') return language === 'np' ? `अनुसूची ${item.scheduleNo ?? ''}` : `Schedule ${item.scheduleNo ?? ''}`;
-  return language === 'np' ? `भाग ${item.partNo ?? ''}` : `Part ${item.partNo ?? ''}`;
+  const labels = constitutionLabels[language];
+  if (item.sectionType === 'preamble') return labels.preamble;
+  if (item.sectionType === 'schedule') return labels.schedule(item.scheduleNo ?? '');
+  return labels.part(item.partNo ?? '');
 }
 
 export default function ConstitutionIndexScreen() {
@@ -28,6 +30,7 @@ export default function ConstitutionIndexScreen() {
   const router = useRouter();
   const [language, setLanguage] = useState<ConstitutionLanguage>('np');
   const [query, setQuery] = useState('');
+  const languageOpacity = useRef(new RNAnimated.Value(1)).current;
   const constitution = useAsyncData(fetchConstitutionIndex, []);
   const index = constitution.data;
 
@@ -49,8 +52,14 @@ export default function ConstitutionIndexScreen() {
     });
   }, [index, query]);
 
-  const title = language === 'np' ? index?.titleNp ?? 'नेपालको संविधान' : index?.titleEn ?? 'The Constitution of Nepal';
-  const switchLanguage = () => setLanguage((current) => current === 'np' ? 'en' : 'np');
+  const labels = constitutionLabels[language];
+  const title = language === 'np' ? index?.titleNp ?? labels.title : index?.titleEn ?? labels.title;
+  const switchLanguage = () => {
+    RNAnimated.timing(languageOpacity, { toValue: 0, duration: 100, useNativeDriver: true }).start(() => {
+      setLanguage((current) => current === 'np' ? 'en' : 'np');
+      RNAnimated.timing(languageOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    });
+  };
 
   const openPart = (item: ConstitutionFileEntry) => {
     const filename = item.file.split('/').pop() ?? item.file;
@@ -62,7 +71,7 @@ export default function ConstitutionIndexScreen() {
       <Pressable
         onPress={switchLanguage}
         accessibilityRole="button"
-        accessibilityLabel="Change Constitution language"
+        accessibilityLabel={labels.changeLanguage}
         style={styles.languageButton}
       >
         <Ionicons name="language-outline" size={17} color="#FFF" />
@@ -75,7 +84,7 @@ export default function ConstitutionIndexScreen() {
   if (constitution.loading && !index) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SubpageHeader title="नेपालको संविधान" rightSlot={rightSlot} />
+        <SubpageHeader title={labels.title} rightSlot={rightSlot} />
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text variant="bodySmall" weight="semiBold" secondary style={styles.stateText}>संविधान सामग्री तयार हुँदैछ...</Text>
@@ -87,12 +96,12 @@ export default function ConstitutionIndexScreen() {
   if (constitution.error && !index) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SubpageHeader title="नेपालको संविधान" rightSlot={rightSlot} />
+        <SubpageHeader title={labels.title} rightSlot={rightSlot} />
         <View style={styles.centerState}>
           <Ionicons name="cloud-offline-outline" size={46} color={colors.textSecondary} />
-          <Text variant="h3" weight="bold" style={[styles.stateTitle, { color: colors.textPrimary }]}>Content unavailable</Text>
-          <Text variant="bodySmall" secondary style={styles.stateDescription}>Internet जोडेर फेरि प्रयास गर्नुहोस्। पहिले download भएको content भए offline मा पनि खुल्नेछ।</Text>
-          <Button label="Retry" onPress={constitution.refetch} />
+          <Text variant="h3" weight="bold" style={[styles.stateTitle, { color: colors.textPrimary }]}>{labels.unavailableTitle}</Text>
+          <Text variant="bodySmall" secondary style={styles.stateDescription}>{labels.unavailableDescription}</Text>
+          <Button label={labels.retry} onPress={constitution.refetch} />
         </View>
       </View>
     );
@@ -105,17 +114,19 @@ export default function ConstitutionIndexScreen() {
           <Ionicons name="library-outline" size={26} color={colors.primary} />
         </View>
         <View style={styles.introCopy}>
-          <Text variant="body" weight="bold">{language === 'np' ? 'संविधानका भागहरू' : 'Constitution Sections'}</Text>
-          <Text variant="caption" secondary>{index?.totalContentFiles ?? filteredFiles.length} {language === 'np' ? 'वटा section' : 'sections'}</Text>
+          <Text variant="body" weight="bold">{labels.sectionsTitle}</Text>
+          <Text variant="caption" secondary>{labels.sectionCount(index?.totalContentFiles ?? filteredFiles.length)}</Text>
         </View>
       </View>
-      <SearchBar
-        value={query}
-        onChangeText={setQuery}
-        placeholder={language === 'np' ? 'संविधानका भागहरू खोज्नुहोस्' : 'Search Constitution sections'}
-      />
+      <View style={styles.searchWrap}>
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={labels.searchPlaceholder}
+        />
+      </View>
       <Text variant="body" weight="bold" style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-        {language === 'np' ? 'भागहरू र अनुसूचीहरू' : 'Parts and Schedules'}
+        {labels.partsAndSchedules}
       </Text>
     </View>
   );
@@ -123,7 +134,8 @@ export default function ConstitutionIndexScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <SubpageHeader title={title} rightSlot={rightSlot} />
-      <FlatList
+      <RNAnimated.View style={[styles.listShell, { opacity: languageOpacity }]}>
+        <FlatList
         data={filteredFiles}
         keyExtractor={(item) => item.file}
         renderItem={({ item, index: indexPosition }) => (
@@ -153,29 +165,32 @@ export default function ConstitutionIndexScreen() {
         ListEmptyComponent={(
           <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
             <Ionicons name="search-outline" size={34} color={colors.textSecondary} />
-            <Text variant="body" weight="semiBold" style={{ color: colors.textPrimary, marginTop: spacing.sm }}>No matching section</Text>
-            <Text variant="caption" secondary style={styles.emptyText}>Search गरेर अर्को Part वा Schedule खोज्नुहोस्।</Text>
+            <Text variant="body" weight="semiBold" style={{ color: colors.textPrimary, marginTop: spacing.sm }}>{labels.noMatchingSection}</Text>
+            <Text variant="caption" secondary style={styles.emptyText}>{labels.searchEmptyHint}</Text>
           </View>
         )}
         refreshControl={<AppRefreshControl refreshing={constitution.refreshing} onRefresh={constitution.refresh} />}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingHorizontal: spacing.md, paddingBottom: spacing.xl }]}
         showsVerticalScrollIndicator={false}
-      />
+        />
+      </RNAnimated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  listShell: { flex: 1 },
   content: { paddingTop: 16, gap: 12 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   languageButton: { height: 36, minWidth: 42, paddingHorizontal: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
   languageText: { color: '#FFF' },
-  introCard: { borderRadius: 18, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center' },
+  introCard: { borderRadius: 18, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  searchWrap: { marginBottom: 16 },
   introIcon: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   introCopy: { marginLeft: 12, gap: 2 },
-  sectionHeading: { marginTop: 6, marginBottom: 1 },
+  sectionHeading: { marginTop: 0, marginBottom: 10 },
   partCard: { minHeight: 76, borderRadius: 18, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   orderBadge: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   partCopy: { flex: 1, marginHorizontal: 12, gap: 3 },
