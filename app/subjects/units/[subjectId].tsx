@@ -368,12 +368,13 @@ export default function SubjectUnitsScreen() {
                 </Pressable>
               </LinearGradient>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={[styles.trackScroller, { backgroundColor: colors.background }]}
-                contentContainerStyle={styles.trackRow}
-              >
+              <View style={[styles.trackStickyHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={[styles.trackScroller, { backgroundColor: colors.background }]}
+                  contentContainerStyle={styles.trackRow}
+                >
                 <Pressable
                   onPress={() => selectTrack('all')}
                   style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === 'all' ? colors.primary : colors.surface, borderColor: selectedTrack === 'all' ? colors.primary : colors.border }, selectedTrack === 'all' && styles.trackChipActive, pressed && styles.trackChipPressed]}
@@ -381,17 +382,18 @@ export default function SubjectUnitsScreen() {
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackTextActive : { color: colors.textSecondary }}>{t('subjects.unitsPage.all')}</Text>
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackCountActive : { color: colors.textSecondary }}>{allChapters.length}</Text>
                 </Pressable>
-                {tracks.map((track) => (
-                  <Pressable
-                    key={track.id}
-                    onPress={() => selectTrack(track.id)}
-                    style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === track.id ? colors.primary : colors.surface, borderColor: selectedTrack === track.id ? colors.primary : colors.border }, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
-                  >
-                    <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
-                    <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                  {tracks.map((track) => (
+                    <Pressable
+                      key={track.id}
+                      onPress={() => selectTrack(track.id)}
+                      style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === track.id ? colors.primary : colors.surface, borderColor: selectedTrack === track.id ? colors.primary : colors.border }, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                    >
+                      <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
+                      <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
 
               <View style={styles.listHeader}>
                 <View style={styles.listHeaderTitleBlock}>
@@ -465,6 +467,7 @@ const styles = StyleSheet.create({
   summaryStatLabel: { color: 'rgba(255,255,255,0.78)', textAlign: 'center', fontSize: 10 },
   analyticsButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9, marginTop: 20 },
   analyticsButtonText: { color: '#0C2D91' },
+  trackStickyHeader: { marginHorizontal: -16, paddingHorizontal: 16, borderBottomWidth: 1, zIndex: 5, elevation: 3 },
   trackScroller: { flexGrow: 0 },
   trackRow: { gap: 8, paddingVertical: 8 },
   trackChip: { minHeight: 40, maxWidth: 180, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 20, borderWidth: 1, paddingHorizontal: 13 },
