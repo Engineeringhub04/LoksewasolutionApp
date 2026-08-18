@@ -56,7 +56,7 @@ const quickLinks: LinkItem[] = [
 // otherwise to the Under Construction placeholder (no dead links).
 const additionalFeatures: LinkItem[] = [
   { key: 'historical-question', icon: 'time', label: 'Historical Questions', route: '/exam-history' },
-  { key: 'constitution', icon: 'library', label: 'Nepal Constitution', route: '/under-construction?page=Nepal Constitution' },
+  { key: 'constitution', icon: 'library', label: 'Nepal Constitution', route: '/constitution' },
   { key: 'practice', icon: 'create', label: 'Practice', route: '/subjects' },
   { key: 'gk', icon: 'bulb', label: 'GK', route: '/under-construction?page=General Knowledge' },
   { key: 'pm', icon: 'briefcase', label: 'PM', route: '/under-construction?page=Public Management' },
