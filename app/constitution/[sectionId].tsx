@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated as RNAnimated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -9,6 +9,7 @@ import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchConstitutionPart, type ConstitutionContentNode, type ConstitutionLanguage } from '@/src/core/services/constitution';
+import { constitutionLabels } from '@/src/core/i18n/constitution';
 
 function childNodes(node: ConstitutionContentNode): ConstitutionContentNode[] {
   const childKeys: Array<keyof ConstitutionContentNode> = ['children', 'items', 'rows', 'cells', 'content'];
@@ -53,7 +54,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'heading') {
     return (
       <View style={[styles.headingBlock, { borderLeftColor: colors.primary, paddingLeft: spacing.sm, marginLeft: Math.min(depth, 2) * 4 }]}>
-        {text ? <Text variant="body" weight="bold" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+        {text ? <Text selectable variant="body" weight="bold" style={[styles.boldText, { color: colors.textPrimary }]}>{text}</Text> : null}
         {hasChildren ? renderChildren() : null}
       </View>
     );
@@ -62,7 +63,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'article') {
     return (
       <View style={[styles.articleBlock, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
-        {articleTitle ? <Text variant="body" weight="bold" style={{ color: colors.textPrimary }}>{articleTitle}</Text> : text ? <Text variant="body" weight="bold" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+        {articleTitle ? <Text selectable variant="body" weight="bold" style={[styles.boldText, { color: colors.textPrimary }]}>{articleTitle}</Text> : text ? <Text selectable variant="body" weight="bold" style={[styles.boldText, { color: colors.textPrimary }]}>{text}</Text> : null}
         {hasChildren ? <View style={styles.articleChildren}>{renderChildren()}</View> : null}
       </View>
     );
@@ -71,7 +72,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'note') {
     return (
       <View style={[styles.noteBlock, { backgroundColor: colors.surfaceAlt, borderRadius: radius.md }]}>
-        {text ? <Text variant="caption" secondary style={styles.noteText}>{text}</Text> : null}
+        {text ? <Text selectable variant="caption" secondary style={styles.noteText}>{text}</Text> : null}
         {hasChildren ? renderChildren() : null}
       </View>
     );
@@ -80,9 +81,9 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'list-item') {
     return (
       <View style={[styles.listItem, { marginLeft: Math.min(depth, 3) * 10 }]}>
-        <Text variant="body" weight="bold" color={colors.primary} style={styles.listDot}>•</Text>
+        <Text selectable variant="body" weight="bold" color={colors.primary} style={[styles.listDot, styles.boldText]}>•</Text>
         <View style={styles.listContent}>
-          {text ? <Text variant="body" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+          {text ? <Text selectable variant="body" style={{ color: colors.textPrimary }}>{text}</Text> : null}
           {hasChildren ? renderChildren() : null}
         </View>
       </View>
@@ -92,7 +93,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'table') {
     return (
       <View style={[styles.tableBlock, { borderColor: colors.divider, backgroundColor: colors.surface }]}>
-        {text ? <Text variant="caption" weight="semiBold" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+        {text ? <Text selectable variant="caption" weight="semiBold" style={{ color: colors.textPrimary }}>{text}</Text> : null}
         {hasChildren ? renderChildren() : null}
       </View>
     );
@@ -101,7 +102,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'row') {
     return (
       <View style={[styles.tableRow, { borderBottomColor: colors.divider }]}>
-        {text ? <Text variant="caption" style={{ color: colors.textPrimary, flex: 1 }}>{text}</Text> : null}
+        {text ? <Text selectable variant="caption" style={{ color: colors.textPrimary, flex: 1 }}>{text}</Text> : null}
         {hasChildren ? renderChildren() : null}
       </View>
     );
@@ -110,7 +111,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
   if (tag === 'cell') {
     return (
       <View style={styles.tableCell}>
-        {text ? <Text variant="caption" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+        {text ? <Text selectable variant="caption" style={{ color: colors.textPrimary }}>{text}</Text> : null}
         {hasChildren ? renderChildren() : null}
       </View>
     );
@@ -118,7 +119,7 @@ function ContentNodeView({ node, depth = 0, language }: { node: ConstitutionCont
 
   return (
     <View style={[styles.paragraphBlock, { marginLeft: Math.min(depth, 3) * 8 }]}>
-      {text ? <Text variant="body" style={{ color: colors.textPrimary }}>{text}</Text> : null}
+      {text ? <Text selectable variant="body" style={{ color: colors.textPrimary }}>{text}</Text> : null}
       {hasChildren ? renderChildren() : null}
     </View>
   );
@@ -128,18 +129,25 @@ export default function ConstitutionDetailScreen() {
   const { colors, effective, setMode } = useTheme();
   const params = useLocalSearchParams<{ sectionId?: string | string[] }>();
   const [language, setLanguage] = useState<ConstitutionLanguage>('np');
+  const fadeOpacity = useRef(new RNAnimated.Value(1)).current;
+  const labels = constitutionLabels[language];
   const sectionId = Array.isArray(params.sectionId) ? params.sectionId[0] : params.sectionId;
   const part = useAsyncData(() => fetchConstitutionPart(sectionId ?? ''), [sectionId], { enabled: Boolean(sectionId) });
   const content = useMemo(() => {
     if (!part.data) return [];
     return language === 'np' ? part.data.containnp : part.data.containen;
   }, [language, part.data]);
-  const title = language === 'np' ? part.data?.titleNp ?? 'संविधान' : part.data?.titleEn ?? 'Constitution';
-  const switchLanguage = () => setLanguage((current) => current === 'np' ? 'en' : 'np');
+  const title = language === 'np' ? part.data?.titleNp ?? labels.title : part.data?.titleEn ?? labels.title;
+  const switchLanguage = () => {
+    RNAnimated.timing(fadeOpacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+      setLanguage((current) => current === 'np' ? 'en' : 'np');
+      RNAnimated.timing(fadeOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    });
+  };
 
   const rightSlot = (
     <View style={styles.headerActions}>
-      <Pressable onPress={switchLanguage} accessibilityRole="button" accessibilityLabel="Change Constitution language" style={styles.languageButton}>
+      <Pressable onPress={switchLanguage} accessibilityRole="button" accessibilityLabel={labels.changeLanguage} style={styles.languageButton}>
         <Ionicons name="language-outline" size={17} color="#FFF" />
         <Text variant="caption" weight="bold" style={styles.languageText}>{language === 'np' ? 'EN' : 'ने'}</Text>
       </Pressable>
@@ -150,10 +158,10 @@ export default function ConstitutionDetailScreen() {
   if (part.loading && !part.data) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SubpageHeader title="संविधान" rightSlot={rightSlot} />
+        <SubpageHeader title={labels.title} rightSlot={rightSlot} />
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text variant="bodySmall" weight="semiBold" secondary style={styles.stateText}>Content loading...</Text>
+          <Text variant="bodySmall" weight="semiBold" secondary style={styles.stateText}>{labels.loading}</Text>
         </View>
       </View>
     );
@@ -162,12 +170,12 @@ export default function ConstitutionDetailScreen() {
   if (part.error && !part.data) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SubpageHeader title="संविधान" rightSlot={rightSlot} />
+        <SubpageHeader title={labels.title} rightSlot={rightSlot} />
         <View style={styles.centerState}>
           <Ionicons name="cloud-offline-outline" size={46} color={colors.textSecondary} />
-          <Text variant="h3" weight="bold" style={styles.stateTitle}>Content unavailable</Text>
-          <Text variant="bodySmall" secondary style={styles.stateDescription}>यो section खोल्न internet connection आवश्यक छ। पहिले download भएको section भए offline मा पनि खुल्छ।</Text>
-          <Button label="Retry" onPress={part.refetch} />
+          <Text variant="h3" weight="bold" style={[styles.stateTitle, styles.boldText]}>{labels.unavailableTitle}</Text>
+          <Text variant="bodySmall" secondary style={styles.stateDescription}>{labels.unavailableDescription}</Text>
+          <Button label={labels.retry} onPress={part.refetch} />
         </View>
       </View>
     );
@@ -176,17 +184,19 @@ export default function ConstitutionDetailScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <SubpageHeader title={title} rightSlot={rightSlot} />
+      <RNAnimated.View style={{ flex: 1, opacity: fadeOpacity }}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.readerHeader, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
-          <Text variant="caption" weight="semiBold" secondary>
+          <Text selectable variant="caption" weight="semiBold" secondary>
             {language === 'np' ? part.data?.legalReferenceNp ?? part.data?.sectionType : part.data?.legalReferenceEn ?? part.data?.sectionType}
           </Text>
-          <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, marginTop: 5 }}>{title}</Text>
+          <Text selectable variant="h2" weight="bold" style={[styles.boldText, { color: colors.textPrimary, marginTop: 5 }]}>{title}</Text>
         </View>
         <View style={styles.readerBody}>
           {content.map((node, index) => <ContentNodeView key={`${node.tag ?? 'node'}-${index}`} node={node} language={language} />)}
         </View>
       </ScrollView>
+      </RNAnimated.View>
     </View>
   );
 }
@@ -200,6 +210,7 @@ const styles = StyleSheet.create({
   readerHeader: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 16 },
   readerBody: { gap: 10 },
   headingBlock: { borderLeftWidth: 3, paddingVertical: 6, marginTop: 6 },
+  boldText: { fontWeight: '800' },
   articleBlock: { borderRadius: 16, borderWidth: 1, padding: 14, marginTop: 4 },
   articleChildren: { marginTop: 8, gap: 6 },
   paragraphBlock: { paddingVertical: 3 },
