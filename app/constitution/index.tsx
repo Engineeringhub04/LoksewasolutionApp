@@ -13,6 +13,13 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchConstitutionIndex, type ConstitutionFileEntry, type ConstitutionLanguage } from '@/src/core/services/constitution';
 import { constitutionLabels } from '@/src/core/i18n/constitution';
+import { constitutionFontFamily, useConstitutionFonts } from '@/src/core/constitution/fonts';
+
+function constitutionIndexTextStyle(language: ConstitutionLanguage, weight: 'regular' | 'medium' | 'semiBold' | 'bold') {
+  return language === 'np'
+    ? { fontFamily: constitutionFontFamily(weight), fontWeight: 'normal' as const }
+    : undefined;
+}
 
 function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase();
@@ -27,6 +34,7 @@ function sectionLabel(item: ConstitutionFileEntry, language: ConstitutionLanguag
 
 export default function ConstitutionIndexScreen() {
   const { colors, spacing, radius, effective, setMode } = useTheme();
+  const fontsLoaded = useConstitutionFonts();
   const router = useRouter();
   const [language, setLanguage] = useState<ConstitutionLanguage>('np');
   const [query, setQuery] = useState('');
@@ -81,7 +89,7 @@ export default function ConstitutionIndexScreen() {
     </View>
   );
 
-  if (constitution.loading && !index) {
+  if (!fontsLoaded || (constitution.loading && !index)) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <SubpageHeader title={labels.title} rightSlot={rightSlot} />
@@ -114,8 +122,8 @@ export default function ConstitutionIndexScreen() {
           <Ionicons name="library-outline" size={26} color={colors.primary} />
         </View>
         <View style={styles.introCopy}>
-          <Text variant="body" weight="bold">{labels.sectionsTitle}</Text>
-          <Text variant="caption" secondary>{labels.sectionCount(index?.totalContentFiles ?? filteredFiles.length)}</Text>
+          <Text variant="body" weight="bold" style={constitutionIndexTextStyle(language, 'bold')}>{labels.sectionsTitle}</Text>
+          <Text variant="caption" secondary style={constitutionIndexTextStyle(language, 'regular')}>{labels.sectionCount(index?.totalContentFiles ?? filteredFiles.length)}</Text>
         </View>
       </View>
       <View style={styles.searchWrap}>
@@ -125,7 +133,7 @@ export default function ConstitutionIndexScreen() {
           placeholder={labels.searchPlaceholder}
         />
       </View>
-      <Text variant="body" weight="bold" style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+      <Text variant="body" weight="bold" style={[constitutionIndexTextStyle(language, 'bold'), styles.sectionHeading, { color: colors.textPrimary }]}>
         {labels.partsAndSchedules}
       </Text>
     </View>
@@ -149,11 +157,11 @@ export default function ConstitutionIndexScreen() {
               ]}
             >
               <View style={[styles.orderBadge, { backgroundColor: colors.primary + '18' }]}>
-                <Text variant="caption" weight="bold" color={colors.primary}>{String(item.order).padStart(2, '0')}</Text>
+                <Text variant="caption" weight="bold" color={colors.primary} style={constitutionIndexTextStyle(language, 'bold')}>{String(item.order).padStart(2, '0')}</Text>
               </View>
               <View style={styles.partCopy}>
-                <Text variant="caption" weight="semiBold" secondary>{sectionLabel(item, language)}</Text>
-                <Text variant="body" weight="bold" numberOfLines={2} style={{ color: colors.textPrimary }}>
+                <Text variant="caption" weight="semiBold" secondary style={constitutionIndexTextStyle(language, 'semiBold')}>{sectionLabel(item, language)}</Text>
+                <Text variant="body" weight="bold" numberOfLines={2} style={[constitutionIndexTextStyle(language, 'bold'), { color: colors.textPrimary }]}>
                   {language === 'np' ? item.titleNp : item.titleEn}
                 </Text>
               </View>
