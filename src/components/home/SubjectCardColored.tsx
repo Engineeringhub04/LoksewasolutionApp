@@ -49,42 +49,46 @@ export function SubjectCardColored({
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
         <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, footerLabel ? styles.cardWithFooter : null, premium && !footerLabel ? styles.cardWithStatus : null]}>
         <View style={styles.glow} />
-        <View style={styles.topRow}>
-          <View style={styles.iconBox}>
-            <Ionicons name={icon} size={24} color="#FFF" />
+        <View style={styles.cardBody}>
+          <View style={styles.topRow}>
+            <View style={styles.iconBox}>
+              <Ionicons name={icon} size={24} color="#FFF" />
+            </View>
           </View>
-        </View>
-        <View style={styles.statusSlot}>
+          <View style={[styles.statusSlot, !premium && styles.nonPremiumStatusSlot]}>
+            {premium ? (
+              <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
+                <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
+                <Text
+                  variant="caption"
+                  weight="bold"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={purchased ? styles.purchasedText : styles.premiumText}
+                >
+                  {purchased ? purchasedLabel : premiumLabel}
+                </Text>
+              </View>
+            ) : (
+              <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+                {name}
+              </Text>
+            )}
+          </View>
           {premium ? (
-            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
-              <Text
-                variant="caption"
-                weight="bold"
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={purchased ? styles.purchasedText : styles.premiumText}
-              >
-                {purchased ? purchasedLabel : premiumLabel}
+            <View style={styles.premiumTitleSlot}>
+              <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+                {name}
               </Text>
             </View>
-          ) : (
-            <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-              {name}
-            </Text>
-          )}
+          ) : null}
+          {footerLabel ? (
+            <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
+              <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFF" />
+            </Pressable>
+          ) : null}
         </View>
-        {premium ? (
-          <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-            {name}
-          </Text>
-        ) : null}
-        {footerLabel ? (
-          <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
-            <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
-            <Ionicons name="arrow-forward" size={14} color="#FFF" />
-          </Pressable>
-        ) : null}
       </LinearGradient>
     </Pressable>
   );
@@ -96,7 +100,6 @@ const styles = StyleSheet.create({
     height: 172,
     borderRadius: 18,
     padding: 14,
-    justifyContent: 'space-between',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.18,
@@ -110,13 +113,25 @@ const styles = StyleSheet.create({
   cardWithStatus: {
     height: 172,
   },
+  cardBody: {
+    flex: 1,
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   statusSlot: {
-    minHeight: 24,
+    height: 24,
     justifyContent: 'flex-start',
+  },
+  nonPremiumStatusSlot: {
+    flex: 1,
+    height: 'auto',
+    justifyContent: 'center',
+  },
+  premiumTitleSlot: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   premiumTag: {
     alignSelf: 'flex-start',
