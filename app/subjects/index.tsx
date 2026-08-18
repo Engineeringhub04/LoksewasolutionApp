@@ -9,13 +9,13 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAuthStore } from '@/src/core/store/authStore';
-import { showToast } from '@/src/core/store/toastStore';
 import {
   DEFAULT_LEARNING_COURSE_ID,
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
 import { fetchSubjectLearningStats } from '@/src/core/firebase/services/learningProgress';
+import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
@@ -62,6 +62,7 @@ export default function SubjectListScreen() {
   // profile IDs as a fallback only after the profile scope is ready.
   const course = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourse = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
+  const hasActivePro = hasActivePremium(profile);
   const [premiumSubject, setPremiumSubject] = useState<SubjectDetail | null>(null);
 
   const subjectData = useAsyncData(
@@ -109,7 +110,7 @@ export default function SubjectListScreen() {
     const subjectKey = `${subject.id} ${subject.name}`.toLowerCase();
     const hasUnits = subjectKey.includes('technical') || subjectKey.includes('प्राविधिक');
     const pathname = hasUnits ? '/subjects/units/[subjectId]' : '/subjects/chapters/[subjectId]';
-    if (subject.pro && !hasUnits) {
+    if (subject.pro && !hasActivePro && !hasUnits) {
       setPremiumSubject(subject);
       return;
     }
@@ -184,6 +185,8 @@ export default function SubjectListScreen() {
                 backgroundColor={SUBJECT_COLORS[index % SUBJECT_COLORS.length]}
                 premium={subject.pro}
                 premiumLabel={t('subjects.premium')}
+                purchased={subject.pro && hasActivePro}
+                purchasedLabel={t('subjects.purchasedActive')}
                 footerLabel={t('subjects.viewChapter')}
                 onPress={() => handleSubjectAction(subject)}
                 onFooterPress={() => handleSubjectAction(subject)}
@@ -208,10 +211,10 @@ export default function SubjectListScreen() {
             <Text variant="body" secondary style={{ textAlign: 'center' }}>{premiumSubject?.name}</Text>
             <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>{t('subjects.premiumMessage')}</Text>
             <Button
-              label={t('subjects.subscriptionRequired')}
+              label={t('subjects.goToSubscriptionPlan')}
               onPress={() => {
                 setPremiumSubject(null);
-                showToast(t('subjects.nextUpdate'), 'info');
+                router.push('/subscription');
               }}
               icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />}
             />

@@ -9,6 +9,7 @@ import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import {
   DEFAULT_LEARNING_COURSE_ID,
@@ -58,7 +59,8 @@ export default function SubjectChaptersScreen() {
   const { colors, spacing, radius, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
-  const { courseInfo } = useProfileStore();
+  const { courseInfo, profile } = useProfileStore();
+  const hasActivePro = hasActivePremium(profile);
   const params = useLocalSearchParams<{
     subjectId: string;
     course?: string;
@@ -97,7 +99,7 @@ export default function SubjectChaptersScreen() {
   }, [chapters]);
 
   const showChapterActions = (chapter: ChapterWithProgress) => {
-    if (chapter.pro) {
+    if (chapter.pro && !hasActivePro) {
       setPremiumChapter(chapter);
       return;
     }
@@ -186,6 +188,8 @@ export default function SubjectChaptersScreen() {
             <View style={{ gap: spacing.sm }}>
               {chapters.map((chapter) => {
                 const progress = chapter.progress.percentage;
+                const isLocked = chapter.pro && !hasActivePro;
+                const isPurchased = chapter.pro && hasActivePro;
                 return (
                   <Pressable
                     key={chapter.id}
@@ -197,8 +201,8 @@ export default function SubjectChaptersScreen() {
                     ]}
                   >
                     <View style={styles.chapterCardTop}>
-                      <View style={[styles.chapterNumber, { backgroundColor: chapter.pro ? '#FFF0DE' : '#E7EEFF' }]}>
-                        <Text variant="bodySmall" weight="bold" style={{ color: chapter.pro ? '#B45309' : '#0C2D91' }}>
+                      <View style={[styles.chapterNumber, { backgroundColor: isLocked ? '#FFF0DE' : isPurchased ? '#D1FAE5' : '#E7EEFF' }]}>
+                        <Text variant="bodySmall" weight="bold" style={{ color: isLocked ? '#B45309' : isPurchased ? '#047857' : '#0C2D91' }}>
                           {String(chapter.order).padStart(2, '0')}
                         </Text>
                       </View>
@@ -209,9 +213,11 @@ export default function SubjectChaptersScreen() {
                         </Text>
                       </View>
                       {chapter.pro ? (
-                        <View style={styles.premiumBadge}>
-                          <Ionicons name="lock-closed" size={12} color="#B45309" />
-                          <Text variant="caption" weight="bold" style={styles.premiumBadgeText}>{t('subjects.chaptersPage.premium')}</Text>
+                        <View style={[styles.premiumBadge, { backgroundColor: isPurchased ? '#D1FAE5' : '#FFF0DE' }]}>
+                          <Ionicons name={isPurchased ? 'checkmark-circle' : 'lock-closed'} size={12} color={isPurchased ? '#047857' : '#B45309'} />
+                          <Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: isPurchased ? '#047857' : '#B45309' }]}>
+                            {isPurchased ? t('subjects.chaptersPage.purchasedActive') : t('subjects.chaptersPage.premium')}
+                          </Text>
                         </View>
                       ) : null}
                     </View>
@@ -227,7 +233,7 @@ export default function SubjectChaptersScreen() {
                           <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: progress >= 100 ? '#059669' : '#2563EB' }]} />
                         </View>
                       </View>
-                      <Ionicons name={chapter.pro ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={chapter.pro ? '#B45309' : colors.textSecondary} />
+                      <Ionicons name={isLocked ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={isLocked ? '#B45309' : colors.textSecondary} />
                     </View>
                   </Pressable>
                 );
@@ -247,8 +253,8 @@ export default function SubjectChaptersScreen() {
             <Text variant="body" secondary style={styles.modalCenteredText}>{premiumChapter ? chapterName(premiumChapter, chapterLanguage) : ''}</Text>
             <Text variant="bodySmall" secondary style={styles.modalCenteredText}>{t('subjects.chaptersPage.premiumMessage')}</Text>
             <Button
-              label={t('subjects.chaptersPage.subscriptionRequired')}
-              onPress={() => { setPremiumChapter(null); showNextUpdate(); }}
+              label={t('subjects.chaptersPage.goToSubscriptionPlan')}
+              onPress={() => { setPremiumChapter(null); router.push('/subscription'); }}
               icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />}
             />
             <Button label={t('common.close')} variant="text" onPress={() => setPremiumChapter(null)} />

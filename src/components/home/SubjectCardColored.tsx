@@ -14,6 +14,8 @@ export interface SubjectCardColoredProps {
   onPress: () => void;
   premium?: boolean;
   premiumLabel?: string;
+  purchased?: boolean;
+  purchasedLabel?: string;
   footerLabel?: string;
   onFooterPress?: () => void;
 }
@@ -36,6 +38,8 @@ export function SubjectCardColored({
   onPress,
   premium = false,
   premiumLabel = 'Premium',
+  purchased = false,
+  purchasedLabel = 'Purchased (Active)',
   footerLabel,
   onFooterPress,
 }: SubjectCardColoredProps) {
@@ -50,9 +54,11 @@ export function SubjectCardColored({
             <Ionicons name={icon} size={24} color="#FFF" />
           </View>
           {premium ? (
-            <View style={styles.premiumTag}>
-              <Ionicons name="lock-closed" size={11} color="#FFF" />
-              <Text variant="caption" weight="bold" style={styles.premiumText}>{premiumLabel}</Text>
+            <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
+              <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
+              <Text variant="caption" weight="bold" style={purchased ? styles.purchasedText : styles.premiumText}>
+                {purchased ? purchasedLabel : premiumLabel}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -105,6 +111,22 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,213,166,0.62)',
   },
   premiumText: {
+    color: '#FFF',
+    fontSize: 9,
+    letterSpacing: 0.1,
+  },
+  purchasedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#047857',
+    borderWidth: 1,
+    borderColor: 'rgba(209,250,229,0.78)',
+  },
+  purchasedText: {
     color: '#FFF',
     fontSize: 9,
     letterSpacing: 0.1,
