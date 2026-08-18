@@ -121,6 +121,7 @@ export default function SubjectListScreen() {
         course,
         subcourse,
         subjectName: subject.name,
+        subjectPro: String(Boolean(subject.pro)),
       },
     });
   };

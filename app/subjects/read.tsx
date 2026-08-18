@@ -22,6 +22,15 @@ function bilingual(english: string, nepali: string): string {
   return ne && ne !== english.trim() ? `${english} | ${ne}` : english;
 }
 
+function shuffleQuestions(questions: LearningQuestion[]): LearningQuestion[] {
+  const shuffled = [...questions];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 export default function ReadModeScreen() {
   const params = useLocalSearchParams<{
     courseId?: string;
@@ -57,7 +66,7 @@ export default function ReadModeScreen() {
     setLoadError(false);
     try {
       const readQuestions = await fetchReadQuestionSet({ courseId, subcourseId, subjectId, unitId, chapterId });
-      setQuestions(readQuestions);
+      setQuestions(shuffleQuestions(readQuestions));
     } catch {
       setLoadError(true);
     } finally {

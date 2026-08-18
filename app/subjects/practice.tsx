@@ -32,6 +32,15 @@ function bilingual(english: string, nepali: string): string {
   return ne && ne !== english.trim() ? `${english} | ${ne}` : english;
 }
 
+function shuffleQuestions(questions: LearningQuestion[]): LearningQuestion[] {
+  const shuffled = [...questions];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 function isActivePremium(profile: ReturnType<typeof useProfileStore.getState>['profile']): boolean {
   if (!profile?.isPremium) return false;
   if (!profile.premiumExpiryDate) return true;
@@ -47,6 +56,8 @@ export default function PracticeModeScreen() {
     unitId?: string;
     subjectName?: string;
     chapterName?: string;
+    subjectPro?: string;
+    chapterPro?: string;
   }>();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
@@ -65,7 +76,7 @@ export default function PracticeModeScreen() {
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explanationY = useRef(0);
   const [showLimit, setShowLimit] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showWaiting, setShowWaiting] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [hasSpecificAccess, setHasSpecificAccess] = useState(false);
 
@@ -74,8 +85,10 @@ export default function PracticeModeScreen() {
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
   const unitId = valueOf(params.unitId) || null;
+  const premiumContent = valueOf(params.subjectPro) === 'true' || valueOf(params.chapterPro) === 'true';
   const profilePremium = isActivePremium(profile);
   const premium = profilePremium || hasSpecificAccess;
+  const proSubjectActive = profilePremium && premiumContent;
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
@@ -95,7 +108,7 @@ export default function PracticeModeScreen() {
         || (purchase.contentType === 'subject' && purchase.contentId === subjectId)
       ));
       const premiumForLoad = profilePremium || specificAccess;
-      const practiceQuestions = allQuestions.slice(0, premiumForLoad ? 100 : undefined);
+      const practiceQuestions = shuffleQuestions(allQuestions.slice(0, premiumForLoad ? 100 : undefined));
       setHasSpecificAccess(specificAccess);
       const today = dayKey();
       const nextProgress: LearningProgress = storedProgress
@@ -168,11 +181,6 @@ export default function PracticeModeScreen() {
   const currentAttempted = currentQuestion ? dailyAttemptedIds.includes(currentQuestion.id) : false;
   const currentCorrect = currentQuestion ? dailyCorrectIds.includes(currentQuestion.id) : false;
   const isLast = current === questions.length - 1;
-  const historyQuestions = useMemo(
-    () => questions.filter((question) => dailyAttemptedIds.includes(question.id)),
-    [dailyAttemptedIds, questions],
-  );
-
   const persist = (next: LearningProgress) => {
     progressRef.current = next;
     setProgress(next);
@@ -254,6 +262,11 @@ export default function PracticeModeScreen() {
     router.push('/subscription');
   };
 
+  const openEndOfQuestions = () => {
+    if (proSubjectActive) setShowWaiting(true);
+    else setShowLimit(true);
+  };
+
   const leavePractice = () => {
     setShowLeaveConfirm(false);
     router.back();
@@ -333,30 +346,9 @@ export default function PracticeModeScreen() {
             <Text variant="caption" weight="bold" style={{ color: premium ? colors.success : colors.primary, textDecorationLine: premium ? 'line-through' : 'none' }}>
               {t('learningModes.dailyLimit', { used: dailyUsed, limit: premium ? 100 : dailyLimit })}
             </Text>
-            {premium ? <Text variant="caption" secondary>Pro access active · up to 100 questions</Text> : <Text variant="caption" secondary>{t('learning.dailyReset')}</Text>}
+            {!premium ? <Text variant="caption" secondary>{t('learning.dailyReset')}</Text> : null}
           </View>
           {premium ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : <Ionicons name="speedometer-outline" size={22} color={colors.primary} />}
-        </View>
-
-        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
-          <Pressable onPress={() => setShowHistory((value) => !value)} style={styles.sectionHeader} accessibilityRole="button" accessibilityLabel={t('learningModes.questionHistory')}>
-            <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="time-outline" size={20} color={colors.primary} /></View>
-            <Text variant="h3" weight="semiBold" style={{ flex: 1 }}>{t('learningModes.questionHistory')}</Text>
-            <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{historyQuestions.length}</Text>
-            <Ionicons name={showHistory ? 'chevron-up' : 'chevron-down'} size={21} color={colors.primary} />
-          </Pressable>
-          {showHistory ? historyQuestions.map((question) => {
-            const isCorrect = dailyCorrectIds.includes(question.id);
-            return (
-              <View key={question.id} style={[styles.historyItem, { borderTopColor: colors.divider }]}>
-                <View style={[styles.statusDot, { backgroundColor: isCorrect ? colors.success : colors.error }]} />
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text variant="bodySmall" weight="semiBold">{bilingual(question.text, question.textNe)}</Text>
-                  <Text variant="caption" style={{ color: isCorrect ? colors.success : colors.error }}>{isCorrect ? t('learningModes.correct') : t('learningModes.incorrect')}</Text>
-                </View>
-              </View>
-            );
-          }) : null}
         </View>
 
         <View style={styles.questionMetaRow}>
@@ -413,7 +405,7 @@ export default function PracticeModeScreen() {
 
       <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.divider, paddingBottom: insets.bottom + spacing.sm }]}>
         <Pressable disabled={current === 0} onPress={() => setCurrent((value) => value - 1)} style={[styles.bottomButton, { borderColor: colors.border, borderRadius: radius.md, opacity: current === 0 ? 0.45 : 1 }]}><Ionicons name="arrow-back" size={19} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('learningModes.previous')}</Text></Pressable>
-        <Pressable disabled={!premium && dailyUsed >= dailyLimit && !currentAttempted} onPress={() => (isLast ? setShowLimit(true) : setCurrent((value) => value + 1))} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLast ? t('learningModes.dailyLimitReachedTitle') : t('learningModes.nextQuestion')}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable>
+        <Pressable disabled={!premium && dailyUsed >= dailyLimit && !currentAttempted} onPress={() => (isLast ? openEndOfQuestions() : setCurrent((value) => value + 1))} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLast ? (proSubjectActive ? t('learningModes.waitingForQuestions') : t('learningModes.dailyLimitReachedTitle')) : t('learningModes.nextQuestion')}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable>
       </View>
 
       <Modal visible={showLimit} transparent animationType="fade" onRequestClose={() => setShowLimit(false)}>
@@ -422,9 +414,19 @@ export default function PracticeModeScreen() {
             <View style={[styles.modalIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="speedometer-outline" size={30} color={colors.warning} /></View>
             <Text variant="h2" weight="semiBold" style={{ textAlign: 'center' }}>{t('learningModes.dailyLimitReachedTitle')}</Text>
             <Text variant="body" secondary style={{ textAlign: 'center' }}>{t('learningModes.dailyLimitReachedMessage')}</Text>
-            <Button label={t('learningModes.viewMyHistory')} variant="secondary" onPress={() => { setShowLimit(false); setShowHistory(true); }} />
             <Text variant="caption" secondary style={{ textAlign: 'center' }}>{t('learningModes.subscribeToCrackLimit')}</Text>
             <Button label={t('learningModes.subscription')} onPress={openSubscription} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showWaiting} transparent animationType="fade" onRequestClose={() => setShowWaiting(false)}>
+        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowWaiting(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.limitModal, { backgroundColor: colors.surface, borderRadius: radius.lg }]}>
+            <View style={[styles.modalIcon, { backgroundColor: `${colors.success}18` }]}><Ionicons name="checkmark-done-outline" size={30} color={colors.success} /></View>
+            <Text variant="h2" weight="semiBold" style={{ textAlign: 'center' }}>{t('learningModes.availableQuestionsCompleteTitle')}</Text>
+            <Text variant="body" secondary style={{ textAlign: 'center' }}>{t('learningModes.availableQuestionsCompleteMessage')}</Text>
+            <Button label={t('learningModes.waitingForQuestions')} variant="secondary" disabled onPress={() => undefined} />
           </Pressable>
         </Pressable>
       </Modal>
