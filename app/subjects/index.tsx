@@ -8,12 +8,14 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
 import {
   DEFAULT_LEARNING_COURSE_ID,
   DEFAULT_LEARNING_SUBCOURSE_ID,
 } from '@/src/core/firebase/services/learning';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
+import { fetchSubjectLearningStats } from '@/src/core/firebase/services/learningProgress';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
@@ -51,6 +53,7 @@ export default function SubjectListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { courseInfo, profile } = useProfileStore();
+  const user = useAuthStore((state) => state.user);
   // `courseInfo` also carries names and is refreshed separately. Keep the raw
   // profile IDs as a fallback so a temporary course-name lookup failure cannot
   // silently switch the subject catalogue to the default course.
@@ -65,12 +68,27 @@ export default function SubjectListScreen() {
   useRefreshOnFocus(subjectData.refresh);
 
   const subjects = useMemo(() => subjectData.data ?? [], [subjectData.data]);
+  const subjectIds = useMemo(() => subjects.map((subject) => subject.id), [subjects]);
+  const progressStats = useAsyncData(
+    () => user?.uid
+      ? fetchSubjectLearningStats({
+          uid: user.uid,
+          courseId: course,
+          subcourseId: subcourse,
+          subjectIds,
+        })
+      : Promise.resolve({ complete: 0, inProgress: 0 }),
+    [user?.uid, course, subcourse, subjectIds],
+    { enabled: Boolean(user?.uid && subjectIds.length) },
+  );
+  useRefreshOnFocus(progressStats.refresh);
+
   const stats = useMemo(() => ({
     total: subjects.length,
     premium: subjects.filter((subject) => subject.pro).length,
-    complete: 0,
-    inProgress: 0,
-  }), [subjects]);
+    complete: progressStats.data?.complete ?? 0,
+    inProgress: progressStats.data?.inProgress ?? 0,
+  }), [subjects, progressStats.data]);
 
   const subcourseName = courseInfo?.subcourseName || (
     subcourse === DEFAULT_LEARNING_SUBCOURSE_ID ? 'Civil Assistant Sub Engineer' : subcourse

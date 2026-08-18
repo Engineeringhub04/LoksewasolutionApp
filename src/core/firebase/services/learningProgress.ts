@@ -1,8 +1,10 @@
 import {
   getDocument,
+  runQuery,
   serverTimestamp,
   setDocument,
 } from '@/src/core/firebase/firestoreRest';
+import { fetchPracticeQuestionSet } from '@/src/core/firebase/services/learningContent';
 import { Collections } from '@/src/core/firebase/collections';
 
 export type LearningMode = 'practice' | 'read' | 'theory';
@@ -56,20 +58,18 @@ function progressPath(uid: string, subjectId: string, chapterId: string): string
   return `${Collections.learningProgress(uid)}/${progressId(subjectId, chapterId)}`;
 }
 
-export async function fetchLearningProgress(
-  uid: string,
-  subjectId: string,
-  chapterId: string,
-): Promise<LearningProgress | null> {
-  const normalizedSubjectId = canonicalSubjectId(subjectId);
-  const normalizedChapterId = canonicalChapterId(chapterId);
-  const document = await getDocument(progressPath(uid, normalizedSubjectId, normalizedChapterId));
-  if (!document) return null;
+function learningProgressFromDocument(
+  document: Record<string, unknown>,
+  fallbackSubjectId = '',
+  fallbackChapterId = '',
+): LearningProgress {
+  const normalizedSubjectId = canonicalSubjectId(String(document.subjectId ?? fallbackSubjectId));
+  const normalizedChapterId = canonicalChapterId(String(document.chapterId ?? fallbackChapterId));
   return {
-    id: String(document.id),
-    subjectId: String(document.subjectId ?? normalizedSubjectId),
+    id: String(document.id ?? progressId(normalizedSubjectId, normalizedChapterId)),
+    subjectId: normalizedSubjectId,
     unitId: typeof document.unitId === 'string' ? canonicalUnitId(document.unitId) : null,
-    chapterId: String(document.chapterId ?? normalizedChapterId),
+    chapterId: normalizedChapterId,
     attemptedQuestionIds: Array.isArray(document.attemptedQuestionIds)
       ? document.attemptedQuestionIds.filter((value): value is string => typeof value === 'string')
       : [],
@@ -95,6 +95,71 @@ export async function fetchLearningProgress(
       : [],
     updatedAt: (document.updatedAt as LearningProgress['updatedAt']) ?? null,
   };
+}
+
+export async function fetchLearningProgress(
+  uid: string,
+  subjectId: string,
+  chapterId: string,
+): Promise<LearningProgress | null> {
+  const normalizedSubjectId = canonicalSubjectId(subjectId);
+  const normalizedChapterId = canonicalChapterId(chapterId);
+  const document = await getDocument(progressPath(uid, normalizedSubjectId, normalizedChapterId));
+  if (!document) return null;
+  return learningProgressFromDocument(document, normalizedSubjectId, normalizedChapterId);
+}
+
+export type SubjectLearningStats = {
+  complete: number;
+  inProgress: number;
+};
+
+/**
+ * Reads only progress documents for the requested subjects, then refreshes the
+ * denominator from the current practice question-set document for chapters that
+ * already have progress. This keeps the subject summary accurate when a set
+ * grows from the original seed size without scanning every question document.
+ */
+export async function fetchSubjectLearningStats(params: {
+  uid: string;
+  courseId: string;
+  subcourseId: string;
+  subjectIds: string[];
+}): Promise<SubjectLearningStats> {
+  const subjectIds = [...new Set(params.subjectIds.map(canonicalSubjectId).filter(Boolean))];
+  if (!subjectIds.length) return { complete: 0, inProgress: 0 };
+
+  const documents = await runQuery(Collections.learningProgress(params.uid), {
+    where: [{ field: 'subjectId', op: 'in', value: subjectIds }],
+  });
+
+  const progressEntries = documents.map((document) => learningProgressFromDocument(document));
+  const refreshed = await Promise.all(progressEntries.map(async (progress) => {
+    let currentTotal = progress.totalQuestions;
+    try {
+      const questions = await fetchPracticeQuestionSet({
+        courseId: params.courseId,
+        subcourseId: params.subcourseId,
+        subjectId: progress.subjectId,
+        unitId: progress.unitId,
+        chapterId: progress.chapterId,
+      });
+      if (questions.length > 0) currentTotal = questions.length;
+    } catch {
+      // Keep the persisted denominator when current content is unavailable.
+    }
+    return { progress, currentTotal };
+  }));
+
+  return refreshed.reduce<SubjectLearningStats>((stats, { progress, currentTotal }) => {
+    const attempted = progress.attemptedQuestionIds.length;
+    const percentage = currentTotal > 0
+      ? Math.min(100, Math.round((attempted / currentTotal) * 100))
+      : progress.completed ? 100 : 0;
+    if (percentage >= 100 || (progress.completed && currentTotal <= attempted)) stats.complete += 1;
+    else if (percentage > 0) stats.inProgress += 1;
+    return stats;
+  }, { complete: 0, inProgress: 0 });
 }
 
 export async function saveLearningProgress(
