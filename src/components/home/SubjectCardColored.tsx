@@ -54,11 +54,9 @@ export function SubjectCardColored({
             <View style={styles.iconBox}>
               <Ionicons name={icon} size={24} color="#FFF" />
             </View>
-          </View>
-          <View style={[styles.statusSlot, !premium && styles.nonPremiumStatusSlot]}>
             {premium ? (
               <View style={purchased ? styles.purchasedTag : styles.premiumTag}>
-                <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={11} color="#FFF" />
+                <Ionicons name={purchased ? 'checkmark-circle' : 'lock-closed'} size={9} color="#FFF" />
                 <Text
                   variant="caption"
                   weight="bold"
@@ -69,19 +67,13 @@ export function SubjectCardColored({
                   {purchased ? purchasedLabel : premiumLabel}
                 </Text>
               </View>
-            ) : (
-              <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-                {name}
-              </Text>
-            )}
+            ) : null}
           </View>
-          {premium ? (
-            <View style={styles.premiumTitleSlot}>
-              <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-                {name}
-              </Text>
-            </View>
-          ) : null}
+          <View style={styles.titleSlot}>
+            <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+              {name}
+            </Text>
+          </View>
           {footerLabel ? (
             <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
               <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
@@ -119,56 +111,49 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  statusSlot: {
-    height: 24,
-    justifyContent: 'flex-start',
-  },
-  nonPremiumStatusSlot: {
+  titleSlot: {
     flex: 1,
-    height: 'auto',
     justifyContent: 'center',
-  },
-  premiumTitleSlot: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    paddingTop: 2,
   },
   premiumTag: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    maxWidth: '100%',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 2,
+    maxWidth: 92,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 7,
     backgroundColor: '#9A3412',
     borderWidth: 1,
     borderColor: 'rgba(255,213,166,0.62)',
   },
   premiumText: {
     color: '#FFF',
-    fontSize: 10,
-    letterSpacing: 0.1,
+    fontSize: 9,
+    letterSpacing: 0,
     flexShrink: 1,
   },
   purchasedTag: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    maxWidth: '100%',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 2,
+    maxWidth: 92,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 7,
     backgroundColor: '#047857',
     borderWidth: 1,
     borderColor: 'rgba(209,250,229,0.78)',
   },
   purchasedText: {
     color: '#FFF',
-    fontSize: 10,
-    letterSpacing: 0.1,
+    fontSize: 9,
+    letterSpacing: 0,
     flexShrink: 1,
   },
   footer: {
