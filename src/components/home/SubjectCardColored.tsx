@@ -68,11 +68,17 @@ export function SubjectCardColored({
                 {purchased ? purchasedLabel : premiumLabel}
               </Text>
             </View>
-          ) : null}
+          ) : (
+            <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+              {name}
+            </Text>
+          )}
         </View>
-        <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
-          {name}
-        </Text>
+        {premium ? (
+          <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={2}>
+            {name}
+          </Text>
+        ) : null}
         {footerLabel ? (
           <Pressable onPress={onFooterPress ?? onPress} style={({ pressed }) => [styles.footer, pressed && { opacity: 0.72 }]}>
             <Text variant="caption" weight="semiBold" style={styles.footerText}>{footerLabel}</Text>
