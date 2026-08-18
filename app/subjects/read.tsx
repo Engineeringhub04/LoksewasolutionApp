@@ -46,6 +46,7 @@ export default function ReadModeScreen() {
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
   const unitId = valueOf(params.unitId) || null;
+  const chapterName = valueOf(params.chapterName);
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
@@ -124,7 +125,7 @@ export default function ReadModeScreen() {
           <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="bookmark" size={22} color={colors.primary} /></View>
           <View style={styles.sectionTitle}>
             <Text variant="h3" weight="semiBold" style={{ lineHeight: 23 }}>{t('learningModes.importantQuestion')}</Text>
-            <Text variant="caption" secondary>{questions.length} {t('learning.questionsAttempted')}</Text>
+            <Text variant="caption" secondary numberOfLines={2} ellipsizeMode="tail" style={styles.chapterSubtitle}>{chapterName || t('subjects.chaptersPage.chapter')}</Text>
           </View>
           <Pressable onPress={allExpanded ? collapseAll : expandAll} style={styles.expandButton} accessibilityLabel={allExpanded ? t('learningModes.collapseAll') : t('learningModes.expandAll')}>
             <Ionicons name={allExpanded ? 'chevron-up-outline' : 'chevron-down-outline'} size={19} color={colors.primary} />
@@ -178,6 +179,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { color: 'rgba(255,255,255,0.78)', marginTop: 2 },
   sectionHeader: { borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10, elevation: 1 },
   sectionTitle: { flex: 1, minWidth: 0, gap: 2 },
+  chapterSubtitle: { flexShrink: 1, lineHeight: 17 },
   sectionIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   expandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 7, paddingHorizontal: 5, flexShrink: 1, maxWidth: 132 },
   expandButtonLabel: { color: '#2559C7', flexShrink: 1, textAlign: 'right', lineHeight: 17, fontSize: 13 },

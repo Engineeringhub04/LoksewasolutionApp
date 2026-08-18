@@ -248,6 +248,9 @@ export default function SubjectUnitsScreen() {
 
   const renderChapterCard = (chapter: DisplayChapter) => {
     const progress = chapter.progress.percentage;
+    const softPrimary = effective === 'dark' ? `${colors.primary}28` : '#E7EEFF';
+    const softSuccess = effective === 'dark' ? `${colors.success}28` : '#E7F7F0';
+    const softWarning = effective === 'dark' ? `${colors.warning}30` : '#FFF0DE';
     return (
       <Pressable
         key={chapter.id}
@@ -259,8 +262,9 @@ export default function SubjectUnitsScreen() {
         ]}
       >
         <View style={styles.chapterCardTop}>
-          <View style={[styles.chapterNumber, { backgroundColor: chapter.pro ? '#FFF0DE' : '#E7EEFF' }]}>
-            <Text variant="bodySmall" weight="bold" style={{ color: chapter.pro ? '#B45309' : '#0C2D91' }}>
+          <View style={[styles.chapterNumber, { backgroundColor: chapter.pro ? softWarning : softPrimary }]}>
+
+            <Text variant="bodySmall" weight="bold" style={{ color: chapter.pro ? colors.warning : colors.primary }}>
               {String(chapter.order).padStart(2, '0')}
             </Text>
           </View>
@@ -271,17 +275,17 @@ export default function SubjectUnitsScreen() {
             </Text>
           </View>
           {chapter.pro ? (
-            <View style={styles.premiumBadge}>
-              <Ionicons name="lock-closed" size={12} color="#B45309" />
-              <Text variant="caption" weight="bold" style={styles.premiumBadgeText}>{t('subjects.unitsPage.premium')}</Text>
+            <View style={[styles.premiumBadge, { backgroundColor: softWarning }]}>
+              <Ionicons name="lock-closed" size={12} color={colors.warning} />
+              <Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: colors.warning }]}>{t('subjects.unitsPage.premium')}</Text>
             </View>
           ) : null}
         </View>
         <View style={styles.modeRow}>
           <View style={styles.modeTags}>
-            <View style={[styles.modeTag, { backgroundColor: '#E7EEFF' }]}><Text variant="caption" weight="bold" style={styles.modeTagText}>P</Text></View>
-            <View style={[styles.modeTag, { backgroundColor: '#E7F7F0' }]}><Text variant="caption" weight="bold" style={[styles.modeTagText, { color: '#047857' }]}>R</Text></View>
-            <View style={[styles.modeTag, { backgroundColor: '#FFF0DE' }]}><Text variant="caption" weight="bold" style={[styles.modeTagText, { color: '#B45309' }]}>T</Text></View>
+            <View style={[styles.modeTag, { backgroundColor: softPrimary }]}><Text variant="caption" weight="bold" style={[styles.modeTagText, { color: colors.primary }]}>P</Text></View>
+            <View style={[styles.modeTag, { backgroundColor: softSuccess }]}><Text variant="caption" weight="bold" style={[styles.modeTagText, { color: colors.success }]}>R</Text></View>
+            <View style={[styles.modeTag, { backgroundColor: softWarning }]}><Text variant="caption" weight="bold" style={[styles.modeTagText, { color: colors.warning }]}>T</Text></View>
           </View>
           <View style={styles.progressTextWrap}>
             <Text variant="caption" secondary>{progress}% {t('subjects.unitsPage.progress')}</Text>
@@ -289,7 +293,7 @@ export default function SubjectUnitsScreen() {
               <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: progress >= 100 ? '#059669' : '#2563EB' }]} />
             </View>
           </View>
-          <Ionicons name={chapter.pro ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={chapter.pro ? '#B45309' : colors.textSecondary} />
+          <Ionicons name={chapter.pro ? 'lock-closed-outline' : 'chevron-forward'} size={18} color={chapter.pro ? colors.warning : colors.textSecondary} />
         </View>
       </Pressable>
     );
@@ -301,20 +305,20 @@ export default function SubjectUnitsScreen() {
       <View key={track.id} style={[styles.unitCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.lg }]}>
         <Pressable
           onPress={() => toggleUnit(track.id)}
-          style={({ pressed }) => [styles.unitCardHeader, { backgroundColor: track.direct ? colors.card : '#F2F6FF' }, pressed && styles.cardPressed]}
+          style={({ pressed }) => [styles.unitCardHeader, { backgroundColor: track.direct ? colors.card : effective === 'dark' ? `${colors.primary}18` : '#F2F6FF' }, pressed && styles.cardPressed]}
         >
-          <View style={styles.unitIcon}><Ionicons name={track.direct ? 'albums-outline' : 'layers-outline'} size={20} color="#0C2D91" /></View>
+          <View style={[styles.unitIcon, { backgroundColor: effective === 'dark' ? `${colors.primary}28` : '#DCE7FF' }]}><Ionicons name={track.direct ? 'albums-outline' : 'layers-outline'} size={20} color={colors.primary} /></View>
           <View style={styles.unitNameBlock}>
             <Text variant="body" weight="bold" numberOfLines={2}>{track.label}</Text>
             <Text variant="caption" secondary>{track.chapters.length} {t('subjects.unitsPage.chapters')}</Text>
           </View>
           {track.unit?.pro ? (
-            <View style={styles.premiumBadge}><Ionicons name="lock-closed" size={12} color="#B45309" /><Text variant="caption" weight="bold" style={styles.premiumBadgeText}>{t('subjects.unitsPage.premium')}</Text></View>
+            <View style={[styles.premiumBadge, { backgroundColor: effective === 'dark' ? `${colors.warning}30` : '#FFF0DE' }]}><Ionicons name="lock-closed" size={12} color={colors.warning} /><Text variant="caption" weight="bold" style={[styles.premiumBadgeText, { color: colors.warning }]}>{t('subjects.unitsPage.premium')}</Text></View>
           ) : null}
           <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
         </Pressable>
         {isExpanded ? (
-          <View style={[styles.expandedChapters, { backgroundColor: colors.background }]}>
+          <View style={[styles.expandedChapters, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
             {track.chapters.map((chapter, index) => (
               <StaggeredReveal key={`${track.id}-${chapter.id}`} index={index} animationKey={`${track.id}-${isExpanded}`}>
                 {renderChapterCard(chapter)}
@@ -331,6 +335,7 @@ export default function SubjectUnitsScreen() {
       <TopAppBar title={t('subjects.unitsPage.units')} onBackPress={() => router.back()} actions={headerActions} />
       {!unitData.loading ? (
         <ScrollView
+          stickyHeaderIndices={unitData.error || allChapters.length === 0 ? undefined : [2]}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
           refreshControl={<AppRefreshControl refreshing={unitData.refreshing} onRefresh={unitData.refresh} />}
         >
@@ -363,10 +368,15 @@ export default function SubjectUnitsScreen() {
                 </Pressable>
               </LinearGradient>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trackRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[styles.trackScroller, { backgroundColor: colors.background }]}
+                contentContainerStyle={styles.trackRow}
+              >
                 <Pressable
                   onPress={() => selectTrack('all')}
-                  style={({ pressed }) => [styles.trackChip, selectedTrack === 'all' && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                  style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === 'all' ? colors.primary : colors.surface, borderColor: selectedTrack === 'all' ? colors.primary : colors.border }, selectedTrack === 'all' && styles.trackChipActive, pressed && styles.trackChipPressed]}
                 >
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackTextActive : { color: colors.textSecondary }}>{t('subjects.unitsPage.all')}</Text>
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackCountActive : { color: colors.textSecondary }}>{allChapters.length}</Text>
@@ -375,7 +385,7 @@ export default function SubjectUnitsScreen() {
                   <Pressable
                     key={track.id}
                     onPress={() => selectTrack(track.id)}
-                    style={({ pressed }) => [styles.trackChip, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                    style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === track.id ? colors.primary : colors.surface, borderColor: selectedTrack === track.id ? colors.primary : colors.border }, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
                   >
                     <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
                     <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
@@ -455,8 +465,9 @@ const styles = StyleSheet.create({
   summaryStatLabel: { color: 'rgba(255,255,255,0.78)', textAlign: 'center', fontSize: 10 },
   analyticsButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9, marginTop: 20 },
   analyticsButtonText: { color: '#0C2D91' },
-  trackRow: { gap: 8, paddingVertical: 2 },
-  trackChip: { minHeight: 40, maxWidth: 180, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 20, borderWidth: 1, borderColor: '#D5DCEC', paddingHorizontal: 13, backgroundColor: '#FFFFFF' },
+  trackScroller: { flexGrow: 0 },
+  trackRow: { gap: 8, paddingVertical: 8 },
+  trackChip: { minHeight: 40, maxWidth: 180, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 20, borderWidth: 1, paddingHorizontal: 13 },
   trackChipActive: { backgroundColor: '#0C2D91', borderColor: '#0C2D91' },
   trackChipPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   trackTextActive: { color: '#FFFFFF' },
@@ -466,15 +477,15 @@ const styles = StyleSheet.create({
   listProgressBlock: { width: 96, alignItems: 'flex-end', paddingTop: 4 },
   unitCard: { borderWidth: 1, overflow: 'hidden', shadowColor: '#0C2D91', shadowOpacity: 0.08, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   unitCardHeader: { minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
-  unitIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#DCE7FF', alignItems: 'center', justifyContent: 'center' },
+  unitIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   unitNameBlock: { flex: 1, minWidth: 0, gap: 4 },
   expandedChapters: { gap: 9, padding: 11, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#D7E2FF' },
   chapterCard: { borderWidth: 1, padding: 14, gap: 14 },
   chapterCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   chapterNumber: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   chapterNameBlock: { flex: 1, gap: 3 },
-  premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0DE', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
-  premiumBadgeText: { color: '#B45309', fontSize: 10 },
+  premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
+  premiumBadgeText: { fontSize: 10 },
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   modeTags: { flexDirection: 'row', gap: 5 },
   modeTag: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
