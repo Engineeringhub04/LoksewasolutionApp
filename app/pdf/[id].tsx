@@ -14,7 +14,7 @@
 // button so a student can go straight from reading the question to submitting
 // their written answer for review.
 import React, { useCallback, useEffect, useState } from 'react';
-import { AppState, View, Pressable, StyleSheet } from 'react-native';
+import { AppState, Platform, View, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -62,7 +62,12 @@ export default function PdfViewerScreen() {
 
     setContentRestricted(false);
     void preventScreenCaptureAsync('theory-pdf');
-    void enableAppSwitcherProtectionAsync(1);
+    // App-switcher protection is currently available only on iOS in the
+    // installed native module. Android uses the privacy overlay below while
+    // backgrounded, plus the supported screen-capture prevention call.
+    if (Platform.OS === 'ios') {
+      void enableAppSwitcherProtectionAsync(1);
+    }
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       setContentRestricted(nextState !== 'active');
@@ -71,7 +76,9 @@ export default function PdfViewerScreen() {
     return () => {
       subscription.remove();
       void allowScreenCaptureAsync('theory-pdf');
-      void disableAppSwitcherProtectionAsync();
+      if (Platform.OS === 'ios') {
+        void disableAppSwitcherProtectionAsync();
+      }
     };
   }, [privacyProtected]);
 
