@@ -266,7 +266,7 @@ export default function SubjectUnitsScreen() {
         ]}
       >
         <View style={styles.chapterCardTop}>
-          <View style={[styles.chapterNumber, { backgroundColor: isLocked ? softWarning : isPurchased ? softSuccess : softPrimary }]>
+          <View style={[styles.chapterNumber, { backgroundColor: isLocked ? softWarning : isPurchased ? softSuccess : softPrimary }]}>
 
             <Text variant="bodySmall" weight="bold" style={{ color: isLocked ? colors.warning : isPurchased ? colors.success : colors.primary }}>
               {String(chapter.order).padStart(2, '0')}
