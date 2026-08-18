@@ -13,8 +13,8 @@
 // Theory Desk sets (contentType 'pdf') also get an "Upload your Answer" footer
 // button so a student can go straight from reading the question to submitting
 // their written answer for review.
-import React, { useCallback, useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, View, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -24,11 +24,17 @@ import { Button } from '@/src/components/buttons/Button';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { PdfViewer } from '@/src/components/media/PdfViewer';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import {
+  allowScreenCaptureAsync,
+  disableAppSwitcherProtectionAsync,
+  enableAppSwitcherProtectionAsync,
+  preventScreenCaptureAsync,
+} from 'expo-screen-capture';
 
 const colors = lightColors;
 
 export default function PdfViewerScreen() {
-  const { id, uri, title, examSetId, sectionName, allowUpload } = useLocalSearchParams<{
+  const { id, uri, title, examSetId, sectionName, allowUpload, privacyProtected: privacyProtectedParam } = useLocalSearchParams<{
     id?: string;
     uri?: string;
     title?: string;
@@ -36,6 +42,7 @@ export default function PdfViewerScreen() {
     examSetId?: string;
     sectionName?: string;
     allowUpload?: string;
+    privacyProtected?: string;
   }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -47,6 +54,26 @@ export default function PdfViewerScreen() {
   // The link arrives either as ?uri=... or as the route id itself.
   const source = uri ?? (id ? decodeURIComponent(id) : undefined);
   const showUploadFooter = allowUpload === '1' && !!examSetId;
+  const privacyProtected = privacyProtectedParam === '1';
+  const [contentRestricted, setContentRestricted] = useState(false);
+
+  useEffect(() => {
+    if (!privacyProtected) return;
+
+    setContentRestricted(false);
+    void preventScreenCaptureAsync('theory-pdf');
+    void enableAppSwitcherProtectionAsync(1);
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      setContentRestricted(nextState !== 'active');
+    });
+
+    return () => {
+      subscription.remove();
+      void allowScreenCaptureAsync('theory-pdf');
+      void disableAppSwitcherProtectionAsync();
+    };
+  }, [privacyProtected]);
 
   const handlePageChange = useCallback((current: number, total: number) => {
     setPage(current);
@@ -123,6 +150,18 @@ export default function PdfViewerScreen() {
           <Ionicons name="close" size={22} color="#FFF" />
         </Pressable>
       ) : null}
+
+      {privacyProtected && contentRestricted ? (
+        <View style={styles.restrictedOverlay} pointerEvents="none">
+          <Ionicons name="shield-checkmark-outline" size={42} color="#FFF" />
+          <Text variant="h2" weight="bold" style={styles.restrictedTitle}>
+            This Content is Restricted
+          </Text>
+          <Text variant="bodySmall" style={styles.restrictedMessage}>
+            Return to the app to continue viewing this theory paper.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -159,5 +198,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  restrictedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  restrictedTitle: {
+    color: '#FFF',
+    textAlign: 'center',
+    marginTop: 14,
+  },
+  restrictedMessage: {
+    color: '#E5E7EB',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

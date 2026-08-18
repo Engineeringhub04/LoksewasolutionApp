@@ -657,6 +657,7 @@
     "noTheoryResource": "यस अध्यायका लागि सैद्धान्तिक सामग्री अहिलेसम्म उपलब्ध छैन। समग्री तयार गरिरहेको छ, छिट्टै थपिनेछ।",
     "theoryOpenFailed": "सैद्धान्तिक PDF खोल्न सकिएन। फेरि प्रयास गर्नुहोस्।",
     "dailyLimit": "दैनिक सीमा पुगेको: {{used}}/{{limit}}",
+    "proAccessActive": "Pro access सक्रिय छ",
     "dailyLimitUnlimited": "दैनिक सीमा पुगेको: {{used}}/{{limit}}",
     "dailyLimitReachedTitle": "तपाईंको दैनिक अभ्यास सीमा पुग्यो",
     "dailyLimitReachedMessage": "यस अध्यायका लागि आजको अभ्यास सीमा पूरा भयो।",

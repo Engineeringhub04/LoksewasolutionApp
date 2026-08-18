@@ -86,7 +86,7 @@ export default function TheoryModeScreen() {
     if (!theory?.pdfUrl) return;
     router.push({
       pathname: '/pdf/[id]',
-      params: { id: theory.id, uri: theory.pdfUrl, title: bilingual(theory.title, theory.titleNe) },
+        params: { id: theory.id, uri: theory.pdfUrl, title: bilingual(theory.title, theory.titleNe), privacyProtected: '1' },
     });
   };
 

@@ -107,6 +107,10 @@ export default function HomeScreen() {
   }, [user?.uid]);
   const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
+  const activePro = Boolean(
+    storeProfile?.isPremium
+      && (!storeProfile.premiumExpiryDate || new Date(storeProfile.premiumExpiryDate).getTime() > Date.now()),
+  );
   const subjectDetails = useAsyncData(
     () => fetchSubjectDetails(enrolledCourseId, enrolledSubcourseId),
     [enrolledCourseId, enrolledSubcourseId],
@@ -236,7 +240,9 @@ export default function HomeScreen() {
                 icon={['globe-outline', 'briefcase-outline', 'construct-outline'][index % 3] as never}
                 backgroundColor={['#2563EB', '#7C3AED', '#059669', '#EA580C'][index % 4]}
                 premium={subject.pro}
+                purchased={subject.pro && activePro}
                 premiumLabel={t('subjects.premium')}
+                purchasedLabel={t('subjects.purchasedActive')}
                 onPress={() => {
                   const subjectKey = `${subject.id} ${subject.name}`.toLowerCase();
                   const hasUnits = subjectKey.includes('technical') || subjectKey.includes('प्राविधिक');

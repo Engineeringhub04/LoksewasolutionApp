@@ -263,8 +263,8 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
       {busy ? (
         <View style={[styles.progressOverlay, { backgroundColor: '#FFFFFF' }]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text variant="bodySmall" weight="semiBold" style={{ marginTop: 12 }}>
-            {phase === 'downloading' ? 'Downloading paper…' : 'Preparing pages…'}
+          <Text variant="bodySmall" weight="semiBold" style={{ marginTop: 12, color: '#0F172A' }}>
+            {phase === 'downloading' ? 'Downloading paper…' : 'Preparing PDF…'}
           </Text>
           <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
             <View
@@ -274,7 +274,7 @@ export function PdfViewer({ uri, onPageChange }: PdfViewerProps) {
               ]}
             />
           </View>
-          <Text variant="caption" secondary>{Math.round(Math.min(1, progress) * 100)}%</Text>
+          <Text variant="caption" style={{ color: '#0F172A' }}>{Math.round(Math.min(1, progress) * 100)}%</Text>
         </View>
       ) : null}
     </View>
