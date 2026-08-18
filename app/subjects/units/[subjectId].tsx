@@ -342,39 +342,39 @@ export default function SubjectUnitsScreen() {
           <View style={styles.subjectSubtitleWrap}>
             <Text variant="bodySmall" secondary style={styles.subjectSubtitle} numberOfLines={1}>{subjectName}</Text>
           </View>
-          {unitData.error ? <ErrorState onRetry={unitData.refetch} /> : allChapters.length === 0 ? (
-            <EmptyState title={t('subjects.unitsPage.noUnits')} />
-          ) : (
-            <>
-              <LinearGradient colors={['#153DB8', '#0C2D91']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summaryCard}>
-                <View style={styles.summaryGlowTop} />
-                <View style={styles.summaryGlowBottom} />
-                <View style={styles.summaryHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text variant="h2" weight="bold" style={styles.summaryTitle}>{subjectName}</Text>
-                    <Text variant="bodySmall" style={styles.summaryHint}>{t('subjects.unitsPage.totalTopics')}</Text>
-                  </View>
-                  <ProgressRing progress={stats.average / 100} size={78} strokeWidth={8} color="#FFD2A6" />
+          {unitData.error ? <ErrorState onRetry={unitData.refetch} /> : null}
+          {!unitData.error && allChapters.length === 0 ? <EmptyState title={t('subjects.unitsPage.noUnits')} /> : null}
+          {!unitData.error && allChapters.length > 0 ? (
+            <LinearGradient colors={['#153DB8', '#0C2D91']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summaryCard}>
+              <View style={styles.summaryGlowTop} />
+              <View style={styles.summaryGlowBottom} />
+              <View style={styles.summaryHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="h2" weight="bold" style={styles.summaryTitle}>{subjectName}</Text>
+                  <Text variant="bodySmall" style={styles.summaryHint}>{t('subjects.unitsPage.totalTopics')}</Text>
                 </View>
-                <View style={styles.summaryStatsRow}>
-                  <UnitStat icon="layers-outline" label={t('subjects.unitsPage.totalTopics')} value={allChapters.length} tint="#C7D9FF" />
-                  <UnitStat icon="checkmark-circle-outline" label={t('subjects.unitsPage.complete')} value={stats.complete} tint="#B8E1FF" />
-                  <UnitStat icon="pulse-outline" label={t('subjects.unitsPage.inProgress')} value={stats.inProgress} tint="#C8F2DC" />
-                  <UnitStat icon="diamond-outline" label={t('subjects.unitsPage.premium')} value={stats.premium} tint="#FFD2A6" />
-                </View>
-                <Pressable onPress={showNextUpdate} style={({ pressed }) => [styles.analyticsButton, pressed && { opacity: 0.8 }]}>
-                  <Ionicons name="analytics-outline" size={17} color="#0C2D91" />
-                  <Text variant="bodySmall" weight="bold" style={styles.analyticsButtonText}>{t('subjects.unitsPage.viewAnalytics')}</Text>
-                </Pressable>
-              </LinearGradient>
-
-              <View style={[styles.trackStickyHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={[styles.trackScroller, { backgroundColor: colors.background }]}
-                  contentContainerStyle={styles.trackRow}
-                >
+                <ProgressRing progress={stats.average / 100} size={78} strokeWidth={8} color="#FFD2A6" />
+              </View>
+              <View style={styles.summaryStatsRow}>
+                <UnitStat icon="layers-outline" label={t('subjects.unitsPage.totalTopics')} value={allChapters.length} tint="#C7D9FF" />
+                <UnitStat icon="checkmark-circle-outline" label={t('subjects.unitsPage.complete')} value={stats.complete} tint="#B8E1FF" />
+                <UnitStat icon="pulse-outline" label={t('subjects.unitsPage.inProgress')} value={stats.inProgress} tint="#C8F2DC" />
+                <UnitStat icon="diamond-outline" label={t('subjects.unitsPage.premium')} value={stats.premium} tint="#FFD2A6" />
+              </View>
+              <Pressable onPress={showNextUpdate} style={({ pressed }) => [styles.analyticsButton, pressed && { opacity: 0.8 }]}>
+                <Ionicons name="analytics-outline" size={17} color="#0C2D91" />
+                <Text variant="bodySmall" weight="bold" style={styles.analyticsButtonText}>{t('subjects.unitsPage.viewAnalytics')}</Text>
+              </Pressable>
+            </LinearGradient>
+          ) : null}
+          {!unitData.error && allChapters.length > 0 ? (
+            <View style={[styles.trackStickyHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[styles.trackScroller, { backgroundColor: colors.background }]}
+                contentContainerStyle={styles.trackRow}
+              >
                 <Pressable
                   onPress={() => selectTrack('all')}
                   style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === 'all' ? colors.primary : colors.surface, borderColor: selectedTrack === 'all' ? colors.primary : colors.border }, selectedTrack === 'all' && styles.trackChipActive, pressed && styles.trackChipPressed]}
@@ -382,38 +382,40 @@ export default function SubjectUnitsScreen() {
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackTextActive : { color: colors.textSecondary }}>{t('subjects.unitsPage.all')}</Text>
                   <Text variant="caption" weight="bold" style={selectedTrack === 'all' ? styles.trackCountActive : { color: colors.textSecondary }}>{allChapters.length}</Text>
                 </Pressable>
-                  {tracks.map((track) => (
-                    <Pressable
-                      key={track.id}
-                      onPress={() => selectTrack(track.id)}
-                      style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === track.id ? colors.primary : colors.surface, borderColor: selectedTrack === track.id ? colors.primary : colors.border }, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
-                    >
-                      <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
-                      <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                {tracks.map((track) => (
+                  <Pressable
+                    key={track.id}
+                    onPress={() => selectTrack(track.id)}
+                    style={({ pressed }) => [styles.trackChip, { backgroundColor: selectedTrack === track.id ? colors.primary : colors.surface, borderColor: selectedTrack === track.id ? colors.primary : colors.border }, selectedTrack === track.id && styles.trackChipActive, pressed && styles.trackChipPressed]}
+                  >
+                    <Text variant="caption" weight="bold" numberOfLines={1} style={selectedTrack === track.id ? styles.trackTextActive : { color: colors.textSecondary }}>{track.label}</Text>
+                    <Text variant="caption" weight="bold" style={selectedTrack === track.id ? styles.trackCountActive : { color: colors.textSecondary }}>{track.chapters.length}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+          {!unitData.error && allChapters.length > 0 ? (
+            <View style={styles.listHeader}>
+              <View style={styles.listHeaderTitleBlock}>
+                <Text variant="h3" weight="bold" numberOfLines={2}>{selectedTrack === 'all' ? t('subjects.unitsPage.units') : selectedTrackData?.label}</Text>
               </View>
-
-              <View style={styles.listHeader}>
-                <View style={styles.listHeaderTitleBlock}>
-                  <Text variant="h3" weight="bold" numberOfLines={2}>{selectedTrack === 'all' ? t('subjects.unitsPage.units') : selectedTrackData?.label}</Text>
-                </View>
-                <View style={styles.listProgressBlock}>
-                  <Text variant="caption" secondary numberOfLines={1}>{stats.average}% {t('subjects.unitsPage.progress')}</Text>
-                </View>
+              <View style={styles.listProgressBlock}>
+                <Text variant="caption" secondary numberOfLines={1}>{stats.average}% {t('subjects.unitsPage.progress')}</Text>
               </View>
-              <View style={{ gap: spacing.sm }}>
-                {selectedTrack === 'all'
-                  ? tracks.map(renderUnitCard)
-                  : selectedTrackData?.chapters.map((chapter, index) => (
-                    <StaggeredReveal key={`${selectedTrack}-${chapter.id}`} index={index} animationKey={selectedTrack}>
-                      {renderChapterCard(chapter)}
-                    </StaggeredReveal>
-                  ))}
-              </View>
-            </>
-          )}
+            </View>
+          ) : null}
+          {!unitData.error && allChapters.length > 0 ? (
+            <View style={{ gap: spacing.sm }}>
+              {selectedTrack === 'all'
+                ? tracks.map(renderUnitCard)
+                : selectedTrackData?.chapters.map((chapter, index) => (
+                  <StaggeredReveal key={`${selectedTrack}-${chapter.id}`} index={index} animationKey={selectedTrack}>
+                    {renderChapterCard(chapter)}
+                  </StaggeredReveal>
+                ))}
+            </View>
+          ) : null}
         </ScrollView>
       ) : null}
 
