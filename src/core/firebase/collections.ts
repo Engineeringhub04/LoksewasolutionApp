@@ -32,6 +32,9 @@ export const Collections = {
   // Phase 5 content collections: one question/resource document per syllabus record.
   subjectCucqDataAllMode: 'app_subject_cucqdata_Allmode',
   subjectTheoryResources: 'app_subject_theory_resources',
+  // Independent Additional Features content; intentionally separate from learning subjects.
+  additionalFeaturePages: 'app_additional_feature_pages',
+  additionalFeatureQuestionBanks: 'app_additional_feature_question_banks',
   topics: (subjectId: string, chapterId: string) => `subjects/${subjectId}/chapters/${chapterId}/topics`,
   questions: 'questions',
   mockTests: 'mockTests',
