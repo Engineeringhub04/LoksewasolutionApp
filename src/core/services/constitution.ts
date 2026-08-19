@@ -5,7 +5,11 @@ const CACHE_PREFIX = '@loksewa/constitution';
 const MANIFEST_KEY = `${CACHE_PREFIX}/manifest`;
 const INDEX_KEY = `${CACHE_PREFIX}/index`;
 const CHECKED_AT_KEY = `${CACHE_PREFIX}/checked-at`;
+const MANUAL_REFRESH_DATE_KEY = `${CACHE_PREFIX}/manual-refresh-date`;
+const PART_CACHE_PREFIX = `${CACHE_PREFIX}/part/`;
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export const CONSTITUTION_MANUAL_REFRESH_LIMIT_CODE = 'CONSTITUTION_MANUAL_REFRESH_LIMIT';
 
 export type ConstitutionLanguage = 'np' | 'en';
 
@@ -72,6 +76,20 @@ export interface ConstitutionPart {
   containen: ConstitutionContentNode[];
 }
 
+export interface ConstitutionManualRefreshState {
+  canRefresh: boolean;
+  lastRefreshDate: string | null;
+}
+
+export class ConstitutionManualRefreshLimitError extends Error {
+  code = CONSTITUTION_MANUAL_REFRESH_LIMIT_CODE;
+
+  constructor() {
+    super('Constitution manual refresh is limited to once per day.');
+    this.name = 'ConstitutionManualRefreshLimitError';
+  }
+}
+
 async function readCache<T>(key: string): Promise<T | null> {
   try {
     const value = await AsyncStorage.getItem(key);
@@ -105,8 +123,25 @@ function normalizePartPath(file: string): string {
   return `parts/${filename}`;
 }
 
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 async function getRemoteManifest(): Promise<ConstitutionManifest> {
   return fetchJson<ConstitutionManifest>('manifest.json');
+}
+
+async function clearCachedParts(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const partKeys = keys.filter((key) => key.startsWith(PART_CACHE_PREFIX));
+    if (partKeys.length) await AsyncStorage.multiRemove(partKeys);
+  } catch {
+    // A cache cleanup failure must not block the remote refresh result.
+  }
 }
 
 async function refreshIndexIfNeeded(cachedIndex: ConstitutionIndex | null): Promise<ConstitutionIndex> {
@@ -142,6 +177,33 @@ async function refreshIndexIfNeeded(cachedIndex: ConstitutionIndex | null): Prom
 export async function fetchConstitutionIndex(): Promise<ConstitutionIndex> {
   const cachedIndex = await readCache<ConstitutionIndex>(INDEX_KEY);
   return refreshIndexIfNeeded(cachedIndex);
+}
+
+export async function getConstitutionManualRefreshState(): Promise<ConstitutionManualRefreshState> {
+  const lastRefreshDate = await AsyncStorage.getItem(MANUAL_REFRESH_DATE_KEY);
+  return {
+    canRefresh: lastRefreshDate !== localDateKey(),
+    lastRefreshDate,
+  };
+}
+
+/**
+ * Forces a remote manifest/index fetch and invalidates downloaded Part files.
+ * This is intentionally separate from the automatic 24-hour version check.
+ */
+export async function refreshConstitutionManually(): Promise<ConstitutionIndex> {
+  const state = await getConstitutionManualRefreshState();
+  if (!state.canRefresh) throw new ConstitutionManualRefreshLimitError();
+
+  const remoteManifest = await getRemoteManifest();
+  const remoteIndex = await fetchJson<ConstitutionIndex>(remoteManifest.indexFile || 'index.json');
+
+  await writeCache(INDEX_KEY, remoteIndex);
+  await writeCache(MANIFEST_KEY, remoteManifest);
+  await AsyncStorage.setItem(CHECKED_AT_KEY, String(Date.now()));
+  await clearCachedParts();
+  await AsyncStorage.setItem(MANUAL_REFRESH_DATE_KEY, localDateKey());
+  return remoteIndex;
 }
 
 export async function fetchConstitutionPart(file: string): Promise<ConstitutionPart> {

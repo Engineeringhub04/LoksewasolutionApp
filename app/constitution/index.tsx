@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated as RNAnimated, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,9 +11,16 @@ import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchConstitutionIndex, type ConstitutionFileEntry, type ConstitutionLanguage } from '@/src/core/services/constitution';
+import {
+  fetchConstitutionIndex,
+  getConstitutionManualRefreshState,
+  refreshConstitutionManually,
+  type ConstitutionFileEntry,
+  type ConstitutionLanguage,
+} from '@/src/core/services/constitution';
 import { constitutionLabels } from '@/src/core/i18n/constitution';
 import { constitutionFontFamily, useConstitutionFonts } from '@/src/core/constitution/fonts';
+import { showToast } from '@/src/core/store/toastStore';
 
 function constitutionIndexTextStyle(language: ConstitutionLanguage, weight: 'regular' | 'medium' | 'semiBold' | 'bold') {
   return language === 'np'
@@ -33,14 +40,30 @@ function sectionLabel(item: ConstitutionFileEntry, language: ConstitutionLanguag
 }
 
 export default function ConstitutionIndexScreen() {
-  const { colors, spacing, radius, effective, setMode } = useTheme();
+  const { colors, spacing, effective, setMode } = useTheme();
   const fontsLoaded = useConstitutionFonts();
   const router = useRouter();
   const [language, setLanguage] = useState<ConstitutionLanguage>('np');
   const [query, setQuery] = useState('');
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [canManualRefresh, setCanManualRefresh] = useState(true);
   const languageOpacity = useRef(new RNAnimated.Value(1)).current;
   const constitution = useAsyncData(fetchConstitutionIndex, []);
   const index = constitution.data;
+
+  useEffect(() => {
+    let mounted = true;
+    getConstitutionManualRefreshState()
+      .then((state) => {
+        if (mounted) setCanManualRefresh(state.canRefresh);
+      })
+      .catch(() => {
+        // If local state cannot be read, keep the safe default and let the button retry.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const filteredFiles = useMemo(() => {
     if (!index) return [];
@@ -71,7 +94,33 @@ export default function ConstitutionIndexScreen() {
 
   const openPart = (item: ConstitutionFileEntry) => {
     const filename = item.file.split('/').pop() ?? item.file;
+    // Manual refresh invalidates Part cache, so opening a card downloads the latest Part once.
     router.push(`/constitution/${encodeURIComponent(filename)}`);
+  };
+
+  const handleManualRefresh = async () => {
+    if (manualRefreshing) return;
+    if (!canManualRefresh) {
+      showToast(labels.refreshLimit, 'warning');
+      return;
+    }
+
+    setManualRefreshing(true);
+    try {
+      await refreshConstitutionManually();
+      setCanManualRefresh(false);
+      constitution.refetch();
+      showToast(labels.refreshSuccess, 'success');
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ConstitutionManualRefreshLimitError') {
+        setCanManualRefresh(false);
+        showToast(labels.refreshLimit, 'warning');
+      } else {
+        showToast(labels.refreshFailed, 'error');
+      }
+    } finally {
+      setManualRefreshing(false);
+    }
   };
 
   const rightSlot = (
@@ -84,6 +133,19 @@ export default function ConstitutionIndexScreen() {
       >
         <Ionicons name="language-outline" size={17} color="#FFF" />
         <Text variant="caption" weight="bold" style={styles.languageText}>{language === 'np' ? 'EN' : 'ने'}</Text>
+      </Pressable>
+      <Pressable
+        onPress={handleManualRefresh}
+        disabled={manualRefreshing}
+        accessibilityRole="button"
+        accessibilityLabel={labels.refresh}
+        style={[styles.refreshButton, !canManualRefresh && styles.refreshButtonDisabled]}
+      >
+        {manualRefreshing ? (
+          <ActivityIndicator size="small" color="#FFF" />
+        ) : (
+          <Ionicons name="refresh-outline" size={19} color="#FFF" />
+        )}
       </Pressable>
       <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={36} />
     </View>
@@ -193,6 +255,8 @@ const styles = StyleSheet.create({
   content: { paddingTop: 16, gap: 12 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   languageButton: { height: 36, minWidth: 42, paddingHorizontal: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  refreshButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  refreshButtonDisabled: { opacity: 0.48 },
   languageText: { color: '#FFF' },
   introCard: { borderRadius: 18, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   searchWrap: { marginBottom: 16 },
