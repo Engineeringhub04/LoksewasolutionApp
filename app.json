@@ -10,10 +10,25 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.loksewasolutionnp.hub"
+      "bundleIdentifier": "com.loksewasolutionnp.hub",
+      "associatedDomains": ["applinks:kbr.com.np"]
     },
     "android": {
       "package": "com.loksewasolutionnp.hub",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "kbr.com.np",
+              "pathPrefix": "/constitution"
+            }
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B1330",
         "foregroundImage": "./assets/images/logo.png"
