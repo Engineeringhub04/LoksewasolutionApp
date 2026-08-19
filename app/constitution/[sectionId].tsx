@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated as RNAnimated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { ActivityIndicator, Animated as RNAnimated, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -11,8 +10,8 @@ import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchConstitutionPart, type ConstitutionContentNode, type ConstitutionLanguage } from '@/src/core/services/constitution';
 import { constitutionLabels } from '@/src/core/i18n/constitution';
-import { showToast } from '@/src/core/store/toastStore';
 import { constitutionFontFamily, useConstitutionFonts, type ConstitutionFontWeight } from '@/src/core/constitution/fonts';
+import { AppConfig } from '@/src/core/config/appConfig';
 
 function childNodes(node: ConstitutionContentNode): ConstitutionContentNode[] {
   const childKeys: Array<keyof ConstitutionContentNode> = ['children', 'items', 'rows', 'cells', 'content'];
@@ -41,13 +40,6 @@ function articleHeading(node: ConstitutionContentNode, language: ConstitutionLan
     ? ''
     : language === 'np' ? `धारा ${articleNo}` : `Article ${articleNo}`;
   return [prefix, title].filter(Boolean).join(': ');
-}
-
-function nodeToCopyText(node: ConstitutionContentNode, language: ConstitutionLanguage): string {
-  const tag = String(node.tag ?? 'paragraph').toLowerCase();
-  const ownText = tag === 'article' ? articleHeading(node, language) : `${numberPrefix(node)}${nodeText(node)}`;
-  const childrenText = childNodes(node).map((child) => nodeToCopyText(child, language)).filter(Boolean);
-  return [ownText, ...childrenText].filter(Boolean).join('\n');
 }
 
 function constitutionTextStyle(language: ConstitutionLanguage, weight: ConstitutionFontWeight) {
@@ -156,7 +148,10 @@ export default function ConstitutionDetailScreen() {
   }, [language, part.data]);
   const title = language === 'np' ? part.data?.titleNp ?? labels.title : part.data?.titleEn ?? labels.title;
   const legalReference = language === 'np' ? part.data?.legalReferenceNp ?? part.data?.sectionType : part.data?.legalReferenceEn ?? part.data?.sectionType;
-  const copyText = [title, legalReference, ...content.map((node) => nodeToCopyText(node, language))].filter(Boolean).join('\n\n');
+  const routeSectionId = sectionId ? decodeURIComponent(sectionId) : '';
+  const shareUrl = routeSectionId
+    ? `${AppConfig.links.website}/constitution/${encodeURIComponent(routeSectionId)}`
+    : AppConfig.links.website;
   const switchLanguage = () => {
     RNAnimated.timing(fadeOpacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
       setLanguage((current) => current === 'np' ? 'en' : 'np');
@@ -164,19 +159,22 @@ export default function ConstitutionDetailScreen() {
     });
   };
 
-  const copyContent = async () => {
+  const shareContent = async () => {
     try {
-      await Clipboard.setStringAsync(copyText);
-      showToast(labels.copySuccess, 'success');
+      await Share.share({
+        title,
+        message: `${title}\n\n${shareUrl}`,
+        url: shareUrl,
+      });
     } catch {
-      showToast(labels.copyFailed, 'error');
+      // The user dismissed the native share sheet; no error message is needed.
     }
   };
 
   const rightSlot = (
     <View style={styles.headerActions}>
-      <Pressable onPress={copyContent} accessibilityRole="button" accessibilityLabel={labels.copy} style={styles.copyButton}>
-        <Ionicons name="copy-outline" size={17} color="#FFF" />
+      <Pressable onPress={shareContent} accessibilityRole="button" accessibilityLabel={labels.share} style={styles.shareButton}>
+        <Ionicons name="share-social-outline" size={17} color="#FFF" />
       </Pressable>
       <Pressable onPress={switchLanguage} accessibilityRole="button" accessibilityLabel={labels.changeLanguage} style={styles.languageButton}>
         <Ionicons name="language-outline" size={17} color="#FFF" />
@@ -236,7 +234,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, paddingBottom: 36 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  copyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  shareButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
   languageButton: { height: 36, minWidth: 42, paddingHorizontal: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
   languageText: { color: '#FFF' },
   readerHeader: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 16 },
