@@ -185,7 +185,58 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Legacy question data remains available to existing non-learning flows. The
+    // Independent Additional Features content. Users can read only published
+    // GK/PM pages and banks; only admins can create, update, or delete seeded data.
+    match /app_additional_feature_pages/{pageId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'pageId', 'featureId', 'pageKey', 'titleEn', 'titleNp', 'courseId',
+          'subcourseId', 'scopeKey', 'topicCount', 'topics', 'seedVersion',
+          'isPublished', 'isSeed', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.pageId is string &&
+        request.resource.data.featureId in ['gk', 'pm'] &&
+        request.resource.data.pageId == pageId &&
+        request.resource.data.pageKey == request.resource.data.featureId &&
+        request.resource.data.titleEn is string &&
+        request.resource.data.titleNp is string &&
+        request.resource.data.courseId is string &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.scopeKey is string &&
+        request.resource.data.topicCount is number &&
+        request.resource.data.topics is list &&
+        request.resource.data.topicCount == request.resource.data.topics.size() &&
+        request.resource.data.isPublished is bool &&
+        request.resource.data.isSeed == true;
+      allow delete: if isAdmin();
+    }
+
+    match /app_additional_feature_question_banks/{bankId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'bankId', 'featureId', 'courseId', 'subcourseId', 'scopeKey', 'topicId',
+          'topicTitleEn', 'topicTitleNp', 'questionCount', 'questions', 'seedVersion',
+          'isPublished', 'isSeed', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.bankId == bankId &&
+        request.resource.data.featureId in ['gk', 'pm'] &&
+        request.resource.data.courseId is string &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.scopeKey is string &&
+        request.resource.data.topicId is string &&
+        request.resource.data.topicTitleEn is string &&
+        request.resource.data.topicTitleNp is string &&
+        request.resource.data.questionCount is number &&
+        request.resource.data.questions is list &&
+        request.resource.data.questionCount == request.resource.data.questions.size() &&
+        request.resource.data.isPublished is bool &&
+        request.resource.data.isSeed == true;
+      allow delete: if isAdmin();
+    }
+
+    // Legacy question data remains available for existing non-learning flows. The
     // Phase 1 Subject catalog deliberately has no access to the old subject tree.
     match /questions/{docId} {
       allow read: if isSignedIn();
