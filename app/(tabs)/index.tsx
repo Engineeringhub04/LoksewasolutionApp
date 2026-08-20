@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
-import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { AppRefreshControl, IOSRefreshIndicator } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -380,11 +380,11 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
+    <IOSRefreshIndicator visible={refreshing} />
     <PageLoaderOverlay
       visible={initialLoading || showRefreshLoader}
       opaque
       label="Loading Home..."
-      topOffset={HOME_HEADER_MAX_HEIGHT + 48}
     />
     </View>
   );
