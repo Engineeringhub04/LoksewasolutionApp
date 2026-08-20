@@ -8,12 +8,28 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 
-export function PageLoaderOverlay({ visible, label, opaque = false }: { visible: boolean; label: string; opaque?: boolean }) {
+export function PageLoaderOverlay({
+  visible,
+  label,
+  opaque = false,
+  topOffset = 0,
+}: {
+  visible: boolean;
+  label: string;
+  opaque?: boolean;
+  /** Keep fixed-header refresh indicators visible above the loader. */
+  topOffset?: number;
+}) {
   const { colors } = useTheme();
   if (!visible) return null;
 
   return (
-    <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(200)} style={[styles.overlay, opaque && { backgroundColor: colors.background }]} pointerEvents="none">
+    <Animated.View
+      entering={FadeIn.duration(150)}
+      exiting={FadeOut.duration(200)}
+      style={[styles.overlay, { top: topOffset }, opaque && { backgroundColor: colors.background }]}
+      pointerEvents="none"
+    >
       <View style={[styles.card, { backgroundColor: colors.surface }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text variant="bodySmall" weight="semiBold" style={{ color: colors.textPrimary, marginTop: 10 }}>
