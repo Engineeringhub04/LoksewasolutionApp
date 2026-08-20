@@ -250,7 +250,12 @@ export default function ProfileScreen() {
         <Button label={t('profile.logout')} variant="danger" onPress={() => setShowLogoutConfirm(true)} />
       </Animated.ScrollView>
 
-      <PageLoaderOverlay visible={loading || showRefreshLoader} opaque label="Loading Profile..." />
+      <PageLoaderOverlay
+        visible={loading || showRefreshLoader}
+        opaque
+        label={t('profile.loading')}
+        topOffset={HEADER_MAX_HEIGHT + 48}
+      />
 
       <ConfirmDialog
         visible={showLogoutConfirm}

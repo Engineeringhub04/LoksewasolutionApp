@@ -380,7 +380,12 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <PageLoaderOverlay visible={initialLoading || showRefreshLoader} opaque label="Loading Home..." />
+    <PageLoaderOverlay
+      visible={initialLoading || showRefreshLoader}
+      opaque
+      label="Loading Home..."
+      topOffset={HOME_HEADER_MAX_HEIGHT + 48}
+    />
     </View>
   );
 }
