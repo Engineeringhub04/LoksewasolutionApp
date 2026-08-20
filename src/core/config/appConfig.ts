@@ -10,6 +10,7 @@ export const AppConfig = {
     tagline: 'Prepare Smarter, Score Higher',
     logoAsset: require('../../../assets/images/logo.png'),
     splashAsset: require('../../../assets/images/logo_nobg.png'),
+    splashArtworkAsset: require('../../../assets/images/splash_reference.png'),
   },
   api: {
     baseUrl: 'https://api.loksewasolution.com.np/v1',
