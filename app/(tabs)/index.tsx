@@ -97,6 +97,7 @@ export default function HomeScreen() {
   // the store instead of triggering a second `fetchUserCourseInfo` read here.
   const storeProfile = useProfileStore((s) => s.profile);
   const storeCourseInfo = useProfileStore((s) => s.courseInfo);
+  const profileLoadedUid = useProfileStore((s) => s.loadedUid);
 
   const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
@@ -113,6 +114,10 @@ export default function HomeScreen() {
   const homeSessionKey = user?.uid
     ? `${user.uid}:${getHomeSessionGeneration()}`
     : null;
+  // On a direct login, Home can mount before the background profile warm-up
+  // finishes. Wait for that session's final course scope before starting any
+  // Home request; otherwise the default scope and final scope fetch twice.
+  const homeDataEnabled = !user?.uid || profileLoadedUid === user.uid;
 
   // Splash populates one shared snapshot. Each field hook reads its slice from
   // that snapshot, so the first Home render does not repeat the Firebase reads.
@@ -121,22 +126,27 @@ export default function HomeScreen() {
   const banners = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.banners),
     homeDataDeps,
+    { enabled: homeDataEnabled },
   );
   const developers = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.developers),
     homeDataDeps,
+    { enabled: homeDataEnabled },
   );
   const notifications = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.notifications),
     homeDataDeps,
+    { enabled: homeDataEnabled },
   );
   const subjectDetails = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.subjectDetails),
     homeDataDeps,
+    { enabled: homeDataEnabled },
   );
   const qotdAnswered = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.qotdAnswered),
     homeDataDeps,
+    { enabled: homeDataEnabled },
   );
 
   // qotdAnswered is included so the overlay stays up until EVERY source has

@@ -62,7 +62,7 @@ export function prefetchHomeData(key: HomeDataKey, force = false): Promise<HomeD
 
   inFlightKey = requestKey;
   const requestGeneration = sessionGeneration;
-  inFlight = fetchSnapshot(key, force)
+  const request = fetchSnapshot(key, force)
     .then((snapshot) => {
       // A logout/account switch may have happened while this request was in
       // flight. Never let the previous session repopulate the new session's
@@ -74,13 +74,16 @@ export function prefetchHomeData(key: HomeDataKey, force = false): Promise<HomeD
       return snapshot;
     })
     .finally(() => {
-      if (inFlightKey === requestKey) {
+      // Compare the promise itself as well as the key. If a new login started
+      // another request with the same uid/key, an old request must not clear it.
+      if (inFlight === request) {
         inFlight = null;
         inFlightKey = null;
       }
     });
+  inFlight = request;
 
-  return inFlight;
+  return request;
 }
 
 export function invalidateHomeData(key?: HomeDataKey): void {

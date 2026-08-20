@@ -1,13 +1,12 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
 // Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
 // Uses expo-image for the bundled transparent logo so it decodes quickly on first mount.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
@@ -159,17 +158,6 @@ export default function SplashScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // Native equivalent of the supplied HTML artwork fade-in. This is visual only;
-  // it does not change Splash routing or the data-ready timing below.
-  const [logoReady, setLogoReady] = useState(false);
-  const scale = useSharedValue(1.008);
-  const opacity = useSharedValue(0);
-  useEffect(() => {
-    if (!logoReady) return;
-    scale.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
-    opacity.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
-  }, [logoReady, opacity, scale]);
-
   // Pre-cache onboarding network images in the background. This must never delay
   // the Splash -> Welcome/authenticated app transition.
   useEffect(() => {
@@ -233,18 +221,13 @@ export default function SplashScreen() {
 
   const logoWidth = Math.min(width * 0.48, 220);
   const logoHeight = logoWidth * 0.74;
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
     <LinearGradient colors={['#061A73', '#062C91', '#03145C']} style={styles.container}>
       <SplashDecorations />
 
       <SplashGlow />
 
-      <Animated.View style={[styles.brandContent, animatedStyle]}>
+      <View style={styles.brandContent}>
         <ExpoImage
           source={AppConfig.identity.splashAsset}
           style={{ width: logoWidth, height: logoHeight }}
@@ -252,13 +235,11 @@ export default function SplashScreen() {
           cachePolicy="memory-disk"
           priority="high"
           transition={0}
-          onLoad={() => setLogoReady(true)}
-          onError={() => setLogoReady(true)}
         />
         <Text variant="h1" weight="bold" style={styles.appName}>Loksewa Solution</Text>
         <Text variant="body" style={styles.tagline}>Prepare Today. Lead Tomorrow.</Text>
         <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
-      </Animated.View>
+      </View>
 
       <View style={[styles.footer, { bottom: insets.bottom + 18 }]}>
         <Text variant="bodySmall" style={styles.developerLabel}>
@@ -282,7 +263,7 @@ const styles = StyleSheet.create({
   waveLines: { position: 'absolute', width: '125%', height: 300, bottom: -16, left: '-7%' },
   dots: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 },
   radialGlow: { position: 'absolute', width: '126%', height: '56%', top: '18%', left: '-13%' },
-  brandContent: { position: 'absolute', top: '24%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
+  brandContent: { position: 'absolute', top: '30%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
   appName: { marginTop: 20, color: '#FFFFFF', letterSpacing: 0.2, textAlign: 'center' },
   tagline: { marginTop: 9, color: '#F0F6FF', fontWeight: '600', textAlign: 'center' },
   spinner: { marginTop: 22 },
