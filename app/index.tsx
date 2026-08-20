@@ -177,7 +177,7 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  const logoWidth = Math.min(width * 0.94, 380);
+  const logoWidth = Math.min(width * 0.72, 300);
   const logoHeight = logoWidth * 0.74;
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
