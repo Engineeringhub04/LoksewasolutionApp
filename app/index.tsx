@@ -8,8 +8,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { fetchRemoteConfig } from '@/src/core/config/remoteConfig';
@@ -24,22 +23,75 @@ import { useProfileStore } from '@/src/core/store/profileStore';
 const MIN_SPLASH_MS = 3000;
 const DECORATION_COLOR = '#76A9FF';
 
+type BackgroundIconKind = 'book' | 'bank' | 'target' | 'chart' | 'bookshelf' | 'graduation';
+
 function BackgroundIcon({
-  name,
+  kind,
   size,
   style,
 }: {
-  name: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  kind: BackgroundIconKind;
   size: number;
   style: object;
 }) {
+  const stroke = DECORATION_COLOR;
+  const common = { fill: 'none', stroke, strokeWidth: 2.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
   return (
-    <MaterialCommunityIcons
-      name={name}
-      size={size}
-      color={DECORATION_COLOR}
-      style={[styles.backgroundIcon, style]}
-    />
+    <Svg width={size} height={size} viewBox="0 0 100 100" pointerEvents="none" style={[styles.backgroundIcon, style]}>
+      {kind === 'book' && (
+        <>
+          <Path d="M8 20 C23 13 38 16 50 27 V81 C37 71 23 68 8 75 Z" {...common} />
+          <Path d="M92 20 C77 13 62 16 50 27 V81 C63 71 77 68 92 75 Z" {...common} />
+          <Path d="M50 27 V81" {...common} />
+          <Path d="M17 31 C27 27 36 29 43 34 M17 42 C27 38 36 40 43 45 M57 34 C64 29 73 27 83 31 M57 45 C64 40 73 38 83 42" {...common} opacity={0.7} />
+        </>
+      )}
+      {kind === 'bank' && (
+        <>
+          <Path d="M8 29 L50 10 L92 29 Z" {...common} />
+          <Line x1="13" y1="34" x2="87" y2="34" {...common} />
+          <Line x1="19" y1="36" x2="19" y2="72" {...common} />
+          <Line x1="37" y1="36" x2="37" y2="72" {...common} />
+          <Line x1="63" y1="36" x2="63" y2="72" {...common} />
+          <Line x1="81" y1="36" x2="81" y2="72" {...common} />
+          <Path d="M12 77 H88 M7 84 H93" {...common} />
+        </>
+      )}
+      {kind === 'target' && (
+        <>
+          <Circle cx="46" cy="54" r="28" {...common} />
+          <Circle cx="46" cy="54" r="17" {...common} />
+          <Circle cx="46" cy="54" r="6" {...common} />
+          <Path d="M20 79 L78 21 M64 21 H78 V35" {...common} />
+        </>
+      )}
+      {kind === 'chart' && (
+        <>
+          <Path d="M12 83 H90 M16 83 V25" {...common} />
+          <Rect x="26" y="59" width="10" height="24" {...common} />
+          <Rect x="44" y="48" width="10" height="35" {...common} />
+          <Rect x="62" y="35" width="10" height="48" {...common} />
+          <Path d="M20 57 C37 58 42 45 54 48 C66 51 71 29 84 25 M75 25 H84 V34" {...common} />
+        </>
+      )}
+      {kind === 'bookshelf' && (
+        <>
+          <Path d="M12 78 H88 M8 86 H92" {...common} />
+          <Rect x="18" y="39" width="12" height="39" {...common} />
+          <Rect x="34" y="30" width="12" height="48" {...common} transform="rotate(-8 40 54)" />
+          <Rect x="51" y="35" width="12" height="43" {...common} transform="rotate(8 57 56)" />
+          <Path d="M68 78 V28 H80 V78" {...common} />
+        </>
+      )}
+      {kind === 'graduation' && (
+        <>
+          <Polygon points="50,13 91,34 50,55 9,34 50,13" {...common} />
+          <Path d="M23 43 V65 C38 77 62 77 77 65 V43 M91 34 V61" {...common} />
+          <Path d="M91 61 C86 61 84 65 86 68 C88 71 94 71 96 68 C98 65 96 61 91 61 Z" {...common} />
+        </>
+      )}
+    </Svg>
   );
 }
 
@@ -62,12 +114,12 @@ function SplashGlow() {
 function SplashDecorations() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <BackgroundIcon name="book-open-page-variant" size={112} style={styles.openBook} />
-      <BackgroundIcon name="bank" size={106} style={styles.governmentBuilding} />
-      <BackgroundIcon name="bullseye-arrow" size={92} style={styles.target} />
-      <BackgroundIcon name="chart-line" size={94} style={styles.chart} />
-      <BackgroundIcon name="bookshelf" size={92} style={styles.bookshelf} />
-      <BackgroundIcon name="school-outline" size={104} style={styles.graduationCap} />
+      <BackgroundIcon kind="book" size={112} style={styles.openBook} />
+      <BackgroundIcon kind="bank" size={106} style={styles.governmentBuilding} />
+      <BackgroundIcon kind="target" size={92} style={styles.target} />
+      <BackgroundIcon kind="chart" size={94} style={styles.chart} />
+      <BackgroundIcon kind="bookshelf" size={92} style={styles.bookshelf} />
+      <BackgroundIcon kind="graduation" size={104} style={styles.graduationCap} />
 
       <Svg pointerEvents="none" style={styles.dottedPath} viewBox="0 0 460 220">
         <Path
@@ -177,7 +229,7 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  const logoWidth = Math.min(width * 0.72, 300);
+  const logoWidth = Math.min(width * 0.58, 250);
   const logoHeight = logoWidth * 0.74;
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
