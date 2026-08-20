@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { Text } from '@/src/components/misc/Text';
-import { getOfflineAccessState, downloadAllAdditionalFeatureQuestionBanks, loadAdditionalFeaturePage, type AdditionalFeatureId, type AdditionalFeaturePage, type AdditionalFeatureTopic } from '@/src/core/services/additionalFeatures';
+import { getAdditionalFeatureTopicProgress, getOfflineAccessState, downloadAllAdditionalFeatureQuestionBanks, loadAdditionalFeaturePage, type AdditionalFeatureId, type AdditionalFeaturePage, type AdditionalFeatureTopic } from '@/src/core/services/additionalFeatures';
 import { showToast } from '@/src/core/store/toastStore';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
@@ -42,14 +42,16 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
   const [refreshing, setRefreshing] = useState(false);
   const [offlineComplete, setOfflineComplete] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [progressByTopic, setProgressByTopic] = useState<Record<string, number>>({});
 
   const labels = language === 'ne' ? {
     loading: 'विषयहरू लोड हुँदैछन्...',
-    offline: 'अफलाइन पहुँच',
+    offline: 'Offline Access',
     downloaded: 'अफलाइनका लागि सुरक्षित भयो',
     downloadFailed: 'अफलाइन डेटा डाउनलोड हुन सकेन। इन्टरनेट जाँच गरेर फेरि प्रयास गर्नुहोस्।',
-    info: 'यो पेज अफलाइनमा हेर्न Offline Access एकपटक थिच्नुहोस्। नयाँ डेटा हरेक राति १२ बजेपछि अपडेट हुन सक्छ; अपडेटेड डेटा अफलाइनमा पाउन इन्टरनेट जोडेर फेरि थिच्नुहोस्।',
+    info: 'नयाँ प्रश्नहरू समय–समयमा थपिँदै जान्छन्। नयाँ प्रश्नहरू उपलब्ध भएमा अफलाइनमा सुरक्षित भएका प्रश्नहरू अद्यावधिक गर्न राति १२:०० बजेपछि इन्टरनेट जोडेर “Offline Access” थिच्नुहोस्।',
     questions: 'प्रश्नहरू',
+    practice: 'अभ्यास',
     noTopics: 'अहिलेसम्म कुनै विषय अपलोड गरिएको छैन।',
     unable: 'फिचरका विषयहरू लोड गर्न सकिएन।',
   } : {
@@ -57,8 +59,9 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
     offline: 'Offline Access',
     downloaded: 'Saved for offline access',
     downloadFailed: 'Offline data could not be downloaded. Check your internet connection and try again.',
-    info: 'To view this page offline, tap Offline Access once. New data may update after 12 AM daily; reconnect to the internet and tap again to get the updated data offline.',
+    info: 'New questions are added from time to time. If new questions are available, please connect to the internet after 12:00 AM and tap “Offline Access” to update your offline questions.',
     questions: 'questions',
+    practice: 'Practice',
     noTopics: 'No topics uploaded yet.',
     unable: 'Unable to load feature topics.',
   };
@@ -80,6 +83,9 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
       ]);
       setPage(result.page);
       setOfflineComplete(offlineState.complete);
+      const visibleTopics = (result.page?.topics ?? []).filter(isTopicSummary).filter((topic) => topic.isPublished !== false);
+      const progressEntries = await Promise.all(visibleTopics.map(async (topic) => [topic.topicId, await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount)] as const));
+      setProgressByTopic(Object.fromEntries(progressEntries));
     } catch {
       showToast(labels.unable, 'error');
     } finally {
@@ -91,6 +97,15 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
   useEffect(() => {
     void loadPage(true);
   }, [loadPage]);
+
+  useFocusEffect(useCallback(() => {
+    if (!page || topics.length === 0) return undefined;
+    let active = true;
+    void Promise.all(topics.map(async (topic) => [topic.topicId, await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount)] as const)).then((entries) => {
+      if (active) setProgressByTopic(Object.fromEntries(entries));
+    });
+    return () => { active = false; };
+  }, [featureId, page, topics]));
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -120,59 +135,65 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-
       <SubpageHeader
         title={featureId === 'gk' ? 'GK' : 'PM'}
         showBack
         rightSlot={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={36} />}
       />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.lg * 2 }} refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg }]}>
-
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={featureId === 'gk' ? 'earth-outline' : 'business-outline'} size={28} color={colors.primary} /></View>
-            <View style={styles.heroText}>
-              <Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>{featureId.toUpperCase()}</Text>
-              <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }}>{language === 'ne' ? titleNp : title}</Text>
-              <Text variant="caption" secondary style={{ marginTop: 3 }}>{language === 'ne' ? title : titleNp}</Text>
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator color={colors.primary} />
+          <Text variant="body" secondary style={{ marginTop: spacing.sm }}>{labels.loading}</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.lg * 2 }} refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />} showsVerticalScrollIndicator={false}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={featureId === 'gk' ? 'earth-outline' : 'business-outline'} size={28} color={colors.primary} /></View>
+              <View style={styles.heroText}>
+                <Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>{featureId.toUpperCase()}</Text>
+                <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }}>{language === 'ne' ? titleNp : title}</Text>
+                <Text variant="caption" secondary style={{ marginTop: 3 }}>{language === 'ne' ? title : titleNp}</Text>
+              </View>
+              <View style={[styles.topicCountBadge, { backgroundColor: `${colors.primary}12` }]}><Text variant="h3" weight="bold" style={{ color: colors.primary }}>{topics.length}</Text><Text variant="caption" secondary>{language === 'ne' ? 'विषय' : 'Topics'}</Text></View>
             </View>
-            <View style={[styles.topicCountBadge, { backgroundColor: `${colors.primary}12` }]}><Text variant="h3" weight="bold" style={{ color: colors.primary }}>{topics.length}</Text><Text variant="caption" secondary>{language === 'ne' ? 'विषय' : 'Topics'}</Text></View>
+            <Pressable onPress={handleOfflineAccess} disabled={downloading || offlineComplete || topics.length === 0} accessibilityRole="button" accessibilityLabel={labels.offline} style={({ pressed }) => [styles.offlineButton, { backgroundColor: offlineComplete ? `${colors.success}15` : colors.primary, borderColor: offlineComplete ? `${colors.success}55` : colors.primary, opacity: pressed && !offlineComplete ? 0.88 : 1 }]}>
+              {downloading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name={offlineComplete ? 'checkmark-circle-outline' : 'download-outline'} size={19} color={offlineComplete ? colors.success : '#FFF'} />}
+              <Text variant="bodySmall" weight="bold" style={{ color: offlineComplete ? colors.success : '#FFF' }}>{offlineComplete ? labels.downloaded : labels.offline}</Text>
+              {!offlineComplete && !downloading ? <Ionicons name="arrow-forward" size={17} color="#FFF" /> : null}
+            </Pressable>
           </View>
-          <Pressable onPress={handleOfflineAccess} disabled={downloading || offlineComplete || topics.length === 0} accessibilityRole="button" accessibilityLabel={labels.offline} style={({ pressed }) => [styles.offlineButton, { backgroundColor: offlineComplete ? `${colors.success}15` : colors.primary, borderColor: offlineComplete ? `${colors.success}55` : colors.primary, opacity: pressed && !offlineComplete ? 0.88 : 1 }]}>
-            {downloading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name={offlineComplete ? 'checkmark-circle-outline' : 'download-outline'} size={19} color={offlineComplete ? colors.success : '#FFF'} />}
-            <Text variant="bodySmall" weight="bold" style={{ color: offlineComplete ? colors.success : '#FFF' }}>{offlineComplete ? labels.downloaded : labels.offline}</Text>
-            {!offlineComplete && !downloading ? <Ionicons name="arrow-forward" size={17} color="#FFF" /> : null}
-          </Pressable>
-        </View>
 
-        <View style={[styles.infoCard, { backgroundColor: `${colors.primary}0C`, borderColor: `${colors.primary}35`, borderRadius: radius.lg, marginTop: spacing.md }]}>
-
-          <View style={[styles.infoIcon, { backgroundColor: `${colors.primary}18` }]}><Ionicons name="information-circle-outline" size={22} color={colors.primary} /></View>
-          <Text variant="caption" style={{ flex: 1, lineHeight: 19, color: colors.textPrimary }}>{labels.info}</Text>
-        </View>
-
-        {loading ? (
-          <View style={styles.centerState}><ActivityIndicator color={colors.primary} /><Text variant="body" secondary style={{ marginTop: spacing.sm }}>{labels.loading}</Text></View>
-        ) : topics.length === 0 ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg, marginTop: spacing.lg }]}><Ionicons name="folder-open-outline" size={36} color={colors.accent} /><Text variant="body" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.sm }}>{labels.noTopics}</Text></View>
-        ) : (
-          <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
-            {topics.map((topic) => (
-              <Pressable key={topic.topicId} onPress={() => openTopic(topic)} accessibilityRole="button" accessibilityLabel={`${topic.titleEn} ${topic.titleNp}`} style={({ pressed }) => [styles.topicCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg, opacity: pressed ? 0.84 : 1 }]}>
-                <View style={[styles.topicGlow, { backgroundColor: `${colors.primary}09` }]} />
-                <View style={[styles.topicIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={topicIcon(topic)} size={23} color={colors.primary} /></View>
-                <View style={styles.topicText}>
-                  <View style={styles.topicHeadingRow}><Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>TOPIC {String(topic.order).padStart(2, '0')}</Text><View style={[styles.questionPill, { backgroundColor: `${colors.primary}10` }]}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{topic.questionCount} {labels.questions}</Text></View></View>
-                  <Text variant="body" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }} numberOfLines={2}>{language === 'ne' ? topic.titleNp : topic.titleEn}</Text>
-                  <Text variant="caption" secondary style={{ marginTop: 3 }} numberOfLines={1}>{language === 'ne' ? topic.titleEn : topic.titleNp}</Text>
-                </View>
-                <View style={[styles.arrowCircle, { backgroundColor: `${colors.primary}12` }]}><Ionicons name="arrow-forward" size={18} color={colors.primary} /></View>
-              </Pressable>
-            ))}
+          <View style={[styles.infoCard, { backgroundColor: `${colors.primary}0C`, borderColor: `${colors.primary}35`, borderRadius: radius.lg, marginTop: spacing.md }]}>
+            <View style={[styles.infoIcon, { backgroundColor: `${colors.primary}18` }]}><Ionicons name="information-circle-outline" size={22} color={colors.primary} /></View>
+            <Text variant="caption" style={{ flex: 1, lineHeight: 19, color: colors.textPrimary }}>{labels.info}</Text>
           </View>
-        )}
-      </ScrollView>
+
+          {topics.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg, marginTop: spacing.lg }]}><Ionicons name="folder-open-outline" size={36} color={colors.accent} /><Text variant="body" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.sm }}>{labels.noTopics}</Text></View>
+          ) : (
+            <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+              {topics.map((topic) => {
+                const progress = progressByTopic[topic.topicId] ?? 0;
+                return (
+                  <Pressable key={topic.topicId} onPress={() => openTopic(topic)} accessibilityRole="button" accessibilityLabel={`${topic.titleEn} ${topic.titleNp}`} style={({ pressed }) => [styles.topicCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg, opacity: pressed ? 0.84 : 1 }]}>
+                    <View style={[styles.topicGlow, { backgroundColor: `${colors.primary}09` }]} />
+                    <View style={[styles.topicIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={topicIcon(topic)} size={23} color={colors.primary} /></View>
+                    <View style={styles.topicText}>
+                      <View style={styles.topicHeadingRow}><Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>TOPIC {String(topic.order).padStart(2, '0')}</Text><View style={[styles.progressPill, { backgroundColor: `${colors.success}12` }]}><Ionicons name="trending-up-outline" size={13} color={colors.success} /><Text variant="caption" weight="bold" style={{ color: colors.success }}>{labels.practice} {progress}%</Text></View></View>
+                      <Text variant="body" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }} numberOfLines={2}>{language === 'ne' ? topic.titleNp : topic.titleEn}</Text>
+                      <Text variant="caption" secondary style={{ marginTop: 3 }} numberOfLines={1}>{language === 'ne' ? topic.titleEn : topic.titleNp}</Text>
+                      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}><View style={[styles.progressFill, { backgroundColor: colors.success, width: `${progress}%` }]} /></View>
+                    </View>
+                    <View style={[styles.arrowCircle, { backgroundColor: `${colors.primary}12` }]}><Ionicons name="arrow-forward" size={18} color={colors.primary} /></View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -187,13 +208,15 @@ const styles = StyleSheet.create({
   offlineButton: { minHeight: 47, marginTop: 17, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   infoCard: { padding: 13, borderWidth: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   infoIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  centerState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyCard: { alignItems: 'center', padding: 28, borderWidth: 1 },
   topicCard: { minHeight: 104, padding: 15, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden', elevation: 2 },
   topicGlow: { position: 'absolute', width: 140, height: 140, borderRadius: 70, right: -55, top: -35 },
   topicIcon: { width: 50, height: 50, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   topicText: { flex: 1, minWidth: 0 },
   topicHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  questionPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexShrink: 1 },
+  progressPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  progressTrack: { height: 4, borderRadius: 3, overflow: 'hidden', marginTop: 8 },
+  progressFill: { height: 4, borderRadius: 3 },
   arrowCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 });
