@@ -3,7 +3,7 @@
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -233,9 +233,7 @@ export default function HomeScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
         paddingTop: HOME_HEADER_MAX_HEIGHT,
-        paddingBottom: Platform.OS === 'android'
-          ? getGlassTabBarContentPadding(insets.bottom)
-          : spacing.xxl,
+        paddingBottom: getGlassTabBarContentPadding(insets.bottom),
       }}
       refreshControl={
         // progressViewOffset is essential here: the header is a FIXED overlay, so
