@@ -2,7 +2,7 @@
 // notifications, search box, course card), auto-sliding banner, Question of
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -12,7 +12,6 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { useTranslation } from '@/src/core/i18n';
 import { fetchNotifications } from '@/src/core/firebase/services/notifications';
 import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
@@ -129,6 +128,18 @@ export default function HomeScreen() {
     notifications.refreshing ||
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
+  const [showRefreshLoader, setShowRefreshLoader] = useState(false);
+
+  // Keep the native pull-to-refresh spinner visible briefly before placing the
+  // same opaque centered loader used by other pages over the refreshed content.
+  useEffect(() => {
+    if (!refreshing) {
+      setShowRefreshLoader(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowRefreshLoader(true), 280);
+    return () => clearTimeout(timer);
+  }, [refreshing]);
   const initialLoading =
     banners.loading ||
     developers.loading ||
@@ -144,10 +155,6 @@ export default function HomeScreen() {
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
-
-  // Coming back to Home (from course setup, QOTD, notifications) must show the
-  // updated state without a manual pull.
-  useRefreshOnFocus(onRefresh);
 
   const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
   const homeSubjects = useMemo(() => (subjectDetails.data ?? []).slice(0, 6), [subjectDetails.data]);
@@ -340,7 +347,7 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <PageLoaderOverlay visible={initialLoading} opaque label="Loading Home..." />
+    <PageLoaderOverlay visible={initialLoading || showRefreshLoader} opaque label="Loading Home..." />
     </View>
   );
 }

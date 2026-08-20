@@ -4,7 +4,7 @@
 // and keeps them in its own memory cache, avoiding the visible delay RN's Image
 // component has on first mount even for local require()'d assets.
 import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -88,27 +88,63 @@ export default function SplashScreen() {
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <LinearGradient colors={gradients.splash} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={[{ alignItems: 'center', gap: spacing.sm }, animatedStyle]}>
-        <View style={{ width: 150, height: 150, borderRadius: 75, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+    <LinearGradient colors={gradients.splash} style={styles.container}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[styles.bubble, styles.bubbleTopRight]} />
+        <View style={[styles.bubble, styles.bubbleMiddleLeft]} />
+        <View style={[styles.bubble, styles.bubbleBottomRight]} />
+        <View style={[styles.glow, styles.glowCenter]} />
+      </View>
+
+      <Animated.View style={[styles.content, animatedStyle]}>
+        <View style={styles.logoFrame}>
           <ExpoImage
-            source={AppConfig.identity.logoAsset}
-            style={{ width: 178, height: 178, borderRadius: 89, transform: [{ scale: 1.06 }] }}
-            contentFit="cover"
+            source={AppConfig.identity.splashAsset}
+            style={styles.logo}
+            contentFit="contain"
             cachePolicy="memory-disk"
             priority="high"
             transition={0}
           />
         </View>
-        <Text variant="h1" weight="bold" style={{ color: '#FFF', marginTop: spacing.md }}>{AppConfig.identity.appName}</Text>
-        <Text variant="body" style={{ color: '#FFF', opacity: 0.8 }}>{AppConfig.identity.tagline}</Text>
-        <ActivityIndicator size="large" color="#FFF" style={{ marginTop: spacing.lg }} />
+        <Text variant="h1" weight="bold" style={styles.appName}>{AppConfig.identity.appName}</Text>
+        <Text variant="body" style={styles.tagline}>Learn Today, Lead Tomorrow</Text>
+        <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
       </Animated.View>
-      <View style={{ position: 'absolute', bottom: insets.bottom + spacing.lg, alignItems: 'center' }}>
-        <Text variant="bodySmall" style={{ color: '#FFF', opacity: 0.75 }}>
-          Made for Nepali Students 🇳🇵 | by <Text variant="bodySmall" weight="semiBold" style={{ color: '#00C8FF' }}>Kishan Raut</Text>
-        </Text>
+
+      <View style={[styles.footer, { bottom: insets.bottom + spacing.lg }]}>
+        <Text variant="bodySmall" style={styles.developerLabel}>Developed with dedication for Loksewa aspirants</Text>
+        <Text variant="bodySmall" weight="semiBold" style={styles.developerName}>Developed by Loksewa Solution Team</Text>
       </View>
     </LinearGradient>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  content: { alignItems: 'center' },
+  logoFrame: {
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  logo: { width: 144, height: 144, transform: [{ scale: 1.04 }] },
+  appName: { color: '#FFF', marginTop: 22, letterSpacing: 0.4 },
+  tagline: { color: '#D8E7FF', opacity: 0.92, marginTop: 6 },
+  spinner: { marginTop: 24 },
+  footer: { position: 'absolute', alignItems: 'center', paddingHorizontal: 24 },
+  developerLabel: { color: '#C9D9F5', opacity: 0.86, textAlign: 'center' },
+  developerName: { color: '#8ED8FF', marginTop: 5 },
+  bubble: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(123,177,255,0.10)' },
+  bubbleTopRight: { width: 320, height: 320, top: -120, right: -100 },
+  bubbleMiddleLeft: { width: 180, height: 180, top: '38%', left: -110 },
+  bubbleBottomRight: { width: 240, height: 240, bottom: -100, right: -90 },
+  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(75,181,255,0.10)' },
+  glowCenter: { width: 220, height: 220, top: '42%', left: '24%' },
+});
