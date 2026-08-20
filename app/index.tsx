@@ -18,8 +18,11 @@ import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
 import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
+import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
+import { prefetchHomeData } from '@/src/core/services/homePrefetch';
+import { useProfileStore } from '@/src/core/store/profileStore';
 
-const MAX_SPLASH_MS = 6000;
+const MIN_SPLASH_MS = 3000;
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -46,43 +49,56 @@ export default function SplashScreen() {
 
   useEffect(() => { hydrate(); }, [hydrate]);
 
-  // Navigate once everything is ready
+  // Keep Splash visible for at least three seconds. For an authenticated user,
+  // Home's complete first snapshot is prefetched here so Home can render it
+  // without issuing the same requests again after navigation.
   useEffect(() => {
     if (routedRef.current || initializing || !hydrated) return;
+
+    const startedAt = Date.now();
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
     const decide = async () => {
       if (routedRef.current) return;
       // Force-update check intentionally removed for now (was causing a false-positive
-      // block on some Android devices unrelated to any real version mismatch — see PR
-      // history #17/#18 for the investigation). Maintenance mode is kept since it's a
-      // simple, rarely-toggled admin switch. Force-update can be reintroduced later,
-      // closer to an actual production release, with a more robust check.
-      const config = await fetchRemoteConfig();
+      // block on some Android devices unrelated to any real version mismatch.
+      const configPromise = fetchRemoteConfig();
+      let homeReady: Promise<unknown> = Promise.resolve();
+
+      if (user) {
+        // Root layout also warms Profile. profileStore shares any in-flight request,
+        // so this does not create duplicate profile/course reads during launch.
+        await useProfileStore.getState().load(user.uid);
+        const profileState = useProfileStore.getState();
+        const courseId = profileState.courseInfo?.courseId
+          ?? profileState.profile?.courseId
+          ?? DEFAULT_LEARNING_COURSE_ID;
+        const subcourseId = profileState.courseInfo?.subcourseId
+          ?? profileState.profile?.subcourseId
+          ?? DEFAULT_LEARNING_SUBCOURSE_ID;
+
+        homeReady = prefetchHomeData({
+          uid: user.uid,
+          courseId,
+          subcourseId,
+        }).catch(() => undefined);
+      }
+
+      const [config] = await Promise.all([configPromise, homeReady]);
+      const remaining = MIN_SPLASH_MS - (Date.now() - startedAt);
+      if (remaining > 0) await sleep(remaining);
       if (routedRef.current) return;
       routedRef.current = true;
 
       if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
-      // Only block for connectivity once NetInfo has actually reported a status
-      // (networkChecked). Without that condition the store's optimistic default could
-      // be misread and a signed-out user could get pushed to the No Internet screen on
-      // a working connection.
+      // Only block for connectivity once NetInfo has actually reported a status.
       if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
       if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
     };
-    decide();
+    void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  // Safety timeout
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!routedRef.current) {
-        routedRef.current = true;
-        router.replace(user ? '/(tabs)' : '/onboarding');
-      }
-    }, MAX_SPLASH_MS);
-    return () => clearTimeout(t);
-  }, [user, router]);
 
   const insets = useSafeAreaInsets();
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -93,11 +109,12 @@ export default function SplashScreen() {
         <View style={[styles.bubble, styles.bubbleTopRight]} />
         <View style={[styles.bubble, styles.bubbleMiddleLeft]} />
         <View style={[styles.bubble, styles.bubbleBottomRight]} />
-        <View style={[styles.glow, styles.glowCenter]} />
+        <View style={[styles.bubble, styles.bubbleBottomLeft]} />
+        <View style={[styles.glow, styles.glowTopLeft]} />
       </View>
 
       <Animated.View style={[styles.content, animatedStyle]}>
-        <View style={styles.logoFrame}>
+        <View style={styles.brandRow}>
           <ExpoImage
             source={AppConfig.identity.splashAsset}
             style={styles.logo}
@@ -106,15 +123,16 @@ export default function SplashScreen() {
             priority="high"
             transition={0}
           />
+          <Text variant="h1" weight="bold" style={styles.appName}>{AppConfig.identity.appName}</Text>
         </View>
-        <Text variant="h1" weight="bold" style={styles.appName}>{AppConfig.identity.appName}</Text>
-        <Text variant="body" style={styles.tagline}>Learn Today, Lead Tomorrow</Text>
+        <Text variant="body" style={styles.tagline}>{AppConfig.identity.tagline}</Text>
         <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
       </Animated.View>
 
       <View style={[styles.footer, { bottom: insets.bottom + spacing.lg }]}>
-        <Text variant="bodySmall" style={styles.developerLabel}>Developed with dedication for Loksewa aspirants</Text>
-        <Text variant="bodySmall" weight="semiBold" style={styles.developerName}>Developed by Loksewa Solution Team</Text>
+        <Text variant="bodySmall" style={styles.developerLabel}>
+          Develop for Nepali student || by <Text variant="bodySmall" weight="semiBold" style={styles.developerName}>Kishan Raut</Text>.
+        </Text>
       </View>
     </LinearGradient>
   );
@@ -122,29 +140,20 @@ export default function SplashScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  content: { alignItems: 'center' },
-  logoFrame: {
-    width: 156,
-    height: 156,
-    borderRadius: 78,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  logo: { width: 144, height: 144, transform: [{ scale: 1.04 }] },
-  appName: { color: '#FFF', marginTop: 22, letterSpacing: 0.4 },
-  tagline: { color: '#D8E7FF', opacity: 0.92, marginTop: 6 },
+  content: { width: '100%', alignItems: 'center', paddingHorizontal: 24 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  logo: { width: 104, height: 104, transform: [{ scale: 1.04 }] },
+  appName: { color: '#FFF', letterSpacing: 0.4, flexShrink: 1 },
+  tagline: { color: '#D8E7FF', opacity: 0.92, marginTop: 24, textAlign: 'center' },
   spinner: { marginTop: 24 },
   footer: { position: 'absolute', alignItems: 'center', paddingHorizontal: 24 },
-  developerLabel: { color: '#C9D9F5', opacity: 0.86, textAlign: 'center' },
-  developerName: { color: '#8ED8FF', marginTop: 5 },
+  developerLabel: { color: '#C9D9F5', opacity: 0.9, textAlign: 'center' },
+  developerName: { color: '#C96B22' },
   bubble: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(123,177,255,0.10)' },
-  bubbleTopRight: { width: 320, height: 320, top: -120, right: -100 },
-  bubbleMiddleLeft: { width: 180, height: 180, top: '38%', left: -110 },
-  bubbleBottomRight: { width: 240, height: 240, bottom: -100, right: -90 },
-  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(75,181,255,0.10)' },
-  glowCenter: { width: 220, height: 220, top: '42%', left: '24%' },
+  bubbleTopRight: { width: 280, height: 280, top: -120, right: -100 },
+  bubbleMiddleLeft: { width: 160, height: 160, top: '31%', left: -105 },
+  bubbleBottomRight: { width: 220, height: 220, bottom: -100, right: -85 },
+  bubbleBottomLeft: { width: 130, height: 130, bottom: -60, left: -60 },
+  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(75,181,255,0.08)' },
+  glowTopLeft: { width: 150, height: 150, top: -70, left: -55 },
 });

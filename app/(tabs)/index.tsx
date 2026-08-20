@@ -13,12 +13,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useTranslation } from '@/src/core/i18n';
-import { fetchNotifications } from '@/src/core/firebase/services/notifications';
-import { fetchHomeBanners } from '@/src/core/firebase/services/banners';
-import { fetchDevelopers } from '@/src/core/firebase/services/developer';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
-import { fetchSubjectDetails } from '@/src/core/firebase/services/subjectDetails';
-import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
@@ -33,6 +28,7 @@ import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 
 interface LinkItem {
   key: string;
@@ -80,6 +76,7 @@ const appGuide: LinkItem[] = [
 
 const FEATURE_ACCENT = '#7C3AED';
 const GUIDE_ACCENT = '#059669';
+let hasShownHomeInitialTransition = false;
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -97,27 +94,43 @@ export default function HomeScreen() {
   const storeProfile = useProfileStore((s) => s.profile);
   const storeCourseInfo = useProfileStore((s) => s.courseInfo);
 
-  const banners = useAsyncData(() => fetchHomeBanners(), []);
-  const developers = useAsyncData(() => fetchDevelopers(), []);
-  const notifications = useAsyncData(async () => {
-    if (!user) return [];
-    return fetchNotifications(user.uid);
-  }, [user?.uid]);
   const enrolledCourseId = storeCourseInfo?.courseId ?? storeProfile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const enrolledSubcourseId = storeCourseInfo?.subcourseId ?? storeProfile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
   const activePro = Boolean(
     storeProfile?.isPremium
       && (!storeProfile.premiumExpiryDate || new Date(storeProfile.premiumExpiryDate).getTime() > Date.now()),
   );
-  const subjectDetails = useAsyncData(
-    () => fetchSubjectDetails(enrolledCourseId, enrolledSubcourseId),
-    [enrolledCourseId, enrolledSubcourseId],
-  );
+  const homeDataKey = {
+    uid: user?.uid ?? null,
+    courseId: enrolledCourseId,
+    subcourseId: enrolledSubcourseId,
+  };
+  const homeDataDeps = [user?.uid, enrolledCourseId, enrolledSubcourseId];
 
-  const qotdAnswered = useAsyncData(async () => {
-    if (!user) return false;
-    return hasAnsweredQotdToday(user.uid, storeCourseInfo?.courseId ?? storeProfile?.courseId ?? null);
-  }, [user?.uid, storeCourseInfo?.courseId, storeProfile?.courseId]);
+  // Splash populates one shared snapshot. Each field hook reads its slice from
+  // that snapshot, so the first Home render does not repeat the Firebase reads.
+  // On manual refresh, the first forced request is shared by every slice and the
+  // refresh state remains true until that real request finishes.
+  const banners = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.banners),
+    homeDataDeps,
+  );
+  const developers = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.developers),
+    homeDataDeps,
+  );
+  const notifications = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.notifications),
+    homeDataDeps,
+  );
+  const subjectDetails = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.subjectDetails),
+    homeDataDeps,
+  );
+  const qotdAnswered = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.qotdAnswered),
+    homeDataDeps,
+  );
 
   // qotdAnswered is included so the overlay stays up until EVERY source has
   // settled — it was refreshed but not tracked, so the loader could disappear
@@ -129,9 +142,28 @@ export default function HomeScreen() {
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
   const [showRefreshLoader, setShowRefreshLoader] = useState(false);
+  const [showInitialTransition, setShowInitialTransition] = useState(false);
+
+  // The first Splash -> Home navigation gets one visual-only 1.5-second
+  // transition. It is deliberately not tied to any Firebase request.
+  useEffect(() => {
+    if (hasShownHomeInitialTransition) return;
+    hasShownHomeInitialTransition = true;
+
+    let active = true;
+    setShowInitialTransition(true);
+    const timer = setTimeout(() => {
+      if (active) setShowInitialTransition(false);
+    }, 1500);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   // Keep the native pull-to-refresh spinner visible briefly before placing the
   // same opaque centered loader used by other pages over the refreshed content.
+  // It stays visible for exactly the real duration of the shared fetch.
   useEffect(() => {
     if (!refreshing) {
       setShowRefreshLoader(false);
@@ -147,11 +179,13 @@ export default function HomeScreen() {
     qotdAnswered.loading ||
     subjectDetails.loading;
   const onRefresh = () => {
-    banners.refresh();
-    developers.refresh();
-    notifications.refresh();
-    qotdAnswered.refresh();
-    subjectDetails.refresh();
+    // Every field hook joins the same forced Home snapshot request. The overlay
+    // therefore covers only the actual fetch duration, not a fixed timeout.
+    void banners.refresh();
+    void developers.refresh();
+    void notifications.refresh();
+    void qotdAnswered.refresh();
+    void subjectDetails.refresh();
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
@@ -347,7 +381,7 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <PageLoaderOverlay visible={initialLoading || showRefreshLoader} opaque label="Loading Home..." />
+    <PageLoaderOverlay visible={initialLoading || showInitialTransition || showRefreshLoader} opaque label="Loading Home..." />
     </View>
   );
 }

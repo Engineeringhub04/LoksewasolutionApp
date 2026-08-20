@@ -17,7 +17,7 @@ interface UseAsyncDataOptions {
 }
 
 export function useAsyncData<T>(
-  fetcher: () => Promise<T>,
+  fetcher: (isRefresh?: boolean) => Promise<T>,
   deps: unknown[] = [],
   options: UseAsyncDataOptions = {},
 ): UseAsyncDataResult<T> {
@@ -35,7 +35,7 @@ export function useAsyncData<T>(
     else setLoading(true);
     setError(false);
     try {
-      const result = await fetcherRef.current();
+      const result = await fetcherRef.current(isRefresh);
       setData(result);
     } catch {
       setError(true);
