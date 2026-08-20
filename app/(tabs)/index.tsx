@@ -381,12 +381,10 @@ export default function HomeScreen() {
         )}
       </View>
     </Animated.ScrollView>
-    {/* Same centered spinner + labelled overlay every other page uses, on BOTH
-        the first load and pull-to-refresh (Home previously had a separate
-        RefreshOverlay with no page label and no initial-load coverage). */}
+    {/* Keep Home loading non-blocking: show only the centred loader card while
+        preserving the normal page background and already-rendered content. */}
     <PageLoaderOverlay
       visible={initialLoading || showRefreshLoader}
-      opaque
       label="Loading Home..."
     />
     </View>
