@@ -1,7 +1,7 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
 // Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
 // Uses expo-image for the bundled transparent logo so it decodes quickly on first mount.
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -161,12 +161,14 @@ export default function SplashScreen() {
 
   // Native equivalent of the supplied HTML artwork fade-in. This is visual only;
   // it does not change Splash routing or the data-ready timing below.
+  const [logoReady, setLogoReady] = useState(false);
   const scale = useSharedValue(1.008);
   const opacity = useSharedValue(0);
   useEffect(() => {
+    if (!logoReady) return;
     scale.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
     opacity.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
-  }, [opacity, scale]);
+  }, [logoReady, opacity, scale]);
 
   // Pre-cache onboarding network images in the background. This must never delay
   // the Splash -> Welcome/authenticated app transition.
@@ -229,7 +231,7 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  const logoWidth = Math.min(width * 0.58, 250);
+  const logoWidth = Math.min(width * 0.48, 220);
   const logoHeight = logoWidth * 0.74;
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -250,6 +252,8 @@ export default function SplashScreen() {
           cachePolicy="memory-disk"
           priority="high"
           transition={0}
+          onLoad={() => setLogoReady(true)}
+          onError={() => setLogoReady(true)}
         />
         <Text variant="h1" weight="bold" style={styles.appName}>Loksewa Solution</Text>
         <Text variant="body" style={styles.tagline}>Prepare Today. Lead Tomorrow.</Text>
@@ -267,7 +271,7 @@ export default function SplashScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden', backgroundColor: '#03145C' },
-  backgroundIcon: { position: 'absolute', opacity: 0.16 },
+  backgroundIcon: { position: 'absolute', opacity: 0.24 },
   openBook: { top: '12%', left: -18 },
   governmentBuilding: { top: '13%', right: 18 },
   target: { top: '30%', left: '13%' },
