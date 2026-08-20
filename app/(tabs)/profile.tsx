@@ -250,7 +250,7 @@ export default function ProfileScreen() {
         <Button label={t('profile.logout')} variant="danger" onPress={() => setShowLogoutConfirm(true)} />
       </Animated.ScrollView>
 
-      <IOSRefreshIndicator visible={refreshing} />
+      <IOSRefreshIndicator pullDistance={scrollY} headerBottom={HEADER_MAX_HEIGHT} />
       <PageLoaderOverlay
         visible={loading || showRefreshLoader}
         opaque

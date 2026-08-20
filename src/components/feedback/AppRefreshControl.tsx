@@ -7,8 +7,8 @@
 // (or barely visible) from screen to screen. Routing every screen through this
 // component guarantees the exact same branded circular spinner everywhere.
 import React from 'react';
-import { ActivityIndicator, Platform, RefreshControl, StyleSheet, View, type RefreshControlProps } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Platform, RefreshControl, StyleSheet, type RefreshControlProps } from 'react-native';
+import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 
 export type AppRefreshControlProps = Omit<RefreshControlProps, 'tintColor' | 'colors' | 'progressBackgroundColor'>;
@@ -42,15 +42,29 @@ export function AppRefreshControl(props: AppRefreshControlProps) {
  * platform refresh indicator while the real RefreshControl still owns the
  * pull gesture and refresh lifecycle.
  */
-export function IOSRefreshIndicator({ visible }: { visible: boolean }) {
+export function IOSRefreshIndicator({
+  pullDistance,
+  headerBottom,
+}: {
+  /** Native ScrollView offset; negative values mean the user is pulling down. */
+  pullDistance: SharedValue<number>;
+  /** The bottom edge of the fixed/collapsing header. */
+  headerBottom: number;
+}) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  if (Platform.OS !== 'ios' || !visible) return null;
+  const indicatorStyle = useAnimatedStyle(() => {
+    const pull = Math.max(0, -pullDistance.value);
+    return {
+      opacity: Math.min(1, pull / 18),
+      transform: [{ translateY: Math.min(pull, 72) }],
+    };
+  });
 
+  if (Platform.OS !== 'ios') return null;
   return (
-    <View pointerEvents="none" style={[styles.iosIndicator, { top: insets.top + 10 }]}>
+    <Animated.View pointerEvents="none" style={[styles.iosIndicator, { top: headerBottom }, indicatorStyle]}>
       <ActivityIndicator size="small" color={colors.primary} />
-    </View>
+    </Animated.View>
   );
 }
 
