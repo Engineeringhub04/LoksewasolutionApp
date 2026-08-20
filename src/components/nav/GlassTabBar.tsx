@@ -8,9 +8,16 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 
-const BAR_HEIGHT = 72;
+// Keep the iOS glass design unchanged; Android needs a shorter pill so it does
+// not consume as much of the bottom content area.
+export const GLASS_TAB_BAR_HEIGHT = Platform.OS === 'android' ? 62 : 72;
 const HORIZONTAL_MARGIN = 14;
 const BOTTOM_GAP = 8;
+
+/** Bottom clearance required by screens whose content scrolls below the glass pill. */
+export function getGlassTabBarContentPadding(bottomInset: number) {
+  return GLASS_TAB_BAR_HEIGHT + BOTTOM_GAP + 16 + bottomInset;
+}
 
 const iconNames = {
   index: { focused: 'home', unfocused: 'home-outline' },
@@ -44,7 +51,10 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   }));
 
   return (
-    <View pointerEvents="box-none" style={[styles.host, { height: BAR_HEIGHT + insets.bottom + 16 }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + insets.bottom + 12 }]}
+    >
       <BlurView
         intensity={effective === 'dark' ? 48 : 62}
         tint={effective === 'dark' ? 'dark' : 'light'}
@@ -56,10 +66,13 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
             bottom: insets.bottom + BOTTOM_GAP,
             backgroundColor: effective === 'dark' ? 'rgba(15,23,42,0.76)' : 'rgba(255,255,255,0.78)',
             borderColor: effective === 'dark' ? 'rgba(148,163,184,0.24)' : 'rgba(255,255,255,0.88)',
+            // Android can draw a separator at the top edge of BlurView. Keep
+            // the iOS border untouched, but explicitly remove that edge on Android.
+            borderTopWidth: Platform.OS === 'android' ? 0 : 1,
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.topReflection} />
+        {Platform.OS === 'ios' ? <View pointerEvents="none" style={styles.topReflection} /> : null}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -111,7 +124,11 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 onLongPress={onLongPress}
                 style={({ pressed }) => [styles.item, { width: itemWidth }, pressed && styles.pressed]}
               >
-                <Ionicons name={icon} size={23} color={focused ? colors.primary : colors.textSecondary} />
+                <Ionicons
+                  name={icon}
+                  size={Platform.OS === 'android' ? 21 : 23}
+                  color={focused ? colors.primary : colors.textSecondary}
+                />
                 <Text
                   numberOfLines={1}
                   style={[
@@ -146,7 +163,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     position: 'absolute',
-    height: BAR_HEIGHT,
+    height: GLASS_TAB_BAR_HEIGHT,
     borderRadius: 28,
     borderWidth: 1,
     overflow: 'hidden',
@@ -166,8 +183,8 @@ const styles = StyleSheet.create({
   },
   activePill: {
     position: 'absolute',
-    top: 5,
-    bottom: 5,
+    top: Platform.OS === 'android' ? 4 : 5,
+    bottom: Platform.OS === 'android' ? 4 : 5,
     left: 0,
     borderRadius: 23,
     borderWidth: 1,
@@ -180,12 +197,12 @@ const styles = StyleSheet.create({
   item: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: Platform.OS === 'android' ? 2 : 3,
     paddingHorizontal: 4,
   },
   label: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: Platform.OS === 'android' ? 10 : 11,
+    lineHeight: Platform.OS === 'android' ? 13 : 14,
     letterSpacing: 0.1,
   },
   pressed: {
