@@ -48,6 +48,16 @@ export type AdditionalFeatureQuestionBank = {
   seedVersion?: string;
 };
 
+export type AdditionalFeaturePracticeProgress = {
+  featureId: AdditionalFeatureId;
+  topicId: string;
+  dailyDate: string;
+  attemptedQuestionIds: string[];
+  correctQuestionIds: string[];
+  selectedAnswerIndexes: Record<string, number>;
+  selectedAnswerIds: Record<string, string>;
+};
+
 const SCOPE_KEY = 'all__all';
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -86,6 +96,10 @@ function offlineDateKey(featureId: AdditionalFeatureId): string {
   return `af_offline_${featureId}_date`;
 }
 
+function practiceProgressKey(featureId: AdditionalFeatureId, topicId: string): string {
+  return `af_practice_${featureId}_${topicId}`;
+}
+
 async function readJson<T>(key: string): Promise<T | null> {
   try {
     const value = await AsyncStorage.getItem(key);
@@ -112,6 +126,50 @@ export async function getCachedQuestionBank(
   topicId: string,
 ): Promise<AdditionalFeatureQuestionBank | null> {
   return readJson<AdditionalFeatureQuestionBank>(questionCacheKey(featureId, topicId));
+}
+
+function emptyPracticeProgress(featureId: AdditionalFeatureId, topicId: string): AdditionalFeaturePracticeProgress {
+  return {
+    featureId,
+    topicId,
+    dailyDate: localDateKey(),
+    attemptedQuestionIds: [],
+    correctQuestionIds: [],
+    selectedAnswerIndexes: {},
+    selectedAnswerIds: {},
+  };
+}
+
+export async function getAdditionalFeaturePracticeProgress(
+  featureId: AdditionalFeatureId,
+  topicId: string,
+): Promise<AdditionalFeaturePracticeProgress> {
+  const cached = await readJson<AdditionalFeaturePracticeProgress>(practiceProgressKey(featureId, topicId));
+  const today = localDateKey();
+  if (!cached || cached.dailyDate !== today) return emptyPracticeProgress(featureId, topicId);
+  return {
+    ...emptyPracticeProgress(featureId, topicId),
+    ...cached,
+    dailyDate: today,
+    attemptedQuestionIds: Array.isArray(cached.attemptedQuestionIds) ? cached.attemptedQuestionIds : [],
+    correctQuestionIds: Array.isArray(cached.correctQuestionIds) ? cached.correctQuestionIds : [],
+    selectedAnswerIndexes: cached.selectedAnswerIndexes ?? {},
+    selectedAnswerIds: cached.selectedAnswerIds ?? {},
+  };
+}
+
+export async function saveAdditionalFeaturePracticeProgress(progress: AdditionalFeaturePracticeProgress): Promise<void> {
+  await writeJson(practiceProgressKey(progress.featureId, progress.topicId), progress);
+}
+
+export async function getAdditionalFeatureTopicProgress(
+  featureId: AdditionalFeatureId,
+  topicId: string,
+  questionCount: number,
+): Promise<number> {
+  if (questionCount <= 0) return 0;
+  const progress = await getAdditionalFeaturePracticeProgress(featureId, topicId);
+  return Math.min(100, Math.round((progress.attemptedQuestionIds.length / questionCount) * 100));
 }
 
 export async function getOfflineAccessState(featureId: AdditionalFeatureId): Promise<{ complete: boolean; date: string | null }> {
