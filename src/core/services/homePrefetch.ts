@@ -22,6 +22,10 @@ let cachedKey: string | null = null;
 let cachedSnapshot: HomeDataSnapshot | null = null;
 let inFlightKey: string | null = null;
 let inFlight: Promise<HomeDataSnapshot> | null = null;
+// Incremented whenever the authenticated session boundary changes. Home uses
+// this to show its visual first-open transition once per session, including
+// logout -> login with the same account.
+let sessionGeneration = 0;
 
 function keyOf(key: HomeDataKey): string {
   return `${key.uid ?? 'guest'}:${key.courseId}:${key.subcourseId}`;
@@ -57,10 +61,16 @@ export function prefetchHomeData(key: HomeDataKey, force = false): Promise<HomeD
   }
 
   inFlightKey = requestKey;
+  const requestGeneration = sessionGeneration;
   inFlight = fetchSnapshot(key, force)
     .then((snapshot) => {
-      cachedKey = requestKey;
-      cachedSnapshot = snapshot;
+      // A logout/account switch may have happened while this request was in
+      // flight. Never let the previous session repopulate the new session's
+      // cache after it has been cleared.
+      if (requestGeneration === sessionGeneration) {
+        cachedKey = requestKey;
+        cachedSnapshot = snapshot;
+      }
       return snapshot;
     })
     .finally(() => {
@@ -80,9 +90,14 @@ export function invalidateHomeData(key?: HomeDataKey): void {
   }
 }
 
+export function getHomeSessionGeneration(): number {
+  return sessionGeneration;
+}
+
 export function clearHomeDataCache(): void {
   cachedKey = null;
   cachedSnapshot = null;
   inFlight = null;
   inFlightKey = null;
+  sessionGeneration += 1;
 }

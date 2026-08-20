@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 import type { AppUser } from '@/src/core/firebase/session';
 import { subscribeToAuthChanges } from '@/src/core/firebase/auth';
+import { clearHomeDataCache } from '@/src/core/services/homePrefetch';
+import { useProfileStore } from '@/src/core/store/profileStore';
 
 interface AuthState {
   user: AppUser | null;
@@ -12,7 +14,17 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   initializing: true,
-  setUser: (user) => set({ user, initializing: false }),
+  setUser: (user) => {
+    const previousUser = useAuthStore.getState().user;
+    if (previousUser?.uid !== user?.uid) {
+      // Clear all session-bound Home data on both logout and account switch.
+      // This prevents the next user from seeing the previous user's snapshot or
+      // a second fetch caused by a stale course/profile dependency.
+      clearHomeDataCache();
+      useProfileStore.getState().clear();
+    }
+    set({ user, initializing: false });
+  },
 }));
 
 let unsubscribe: (() => void) | null = null;

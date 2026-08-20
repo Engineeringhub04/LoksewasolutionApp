@@ -28,7 +28,11 @@ import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { prefetchHomeData } from '@/src/core/services/homePrefetch';
+import {
+  getCachedHomeData,
+  getHomeSessionGeneration,
+  prefetchHomeData,
+} from '@/src/core/services/homePrefetch';
 
 interface LinkItem {
   key: string;
@@ -76,7 +80,7 @@ const appGuide: LinkItem[] = [
 
 const FEATURE_ACCENT = '#7C3AED';
 const GUIDE_ACCENT = '#059669';
-let hasShownHomeInitialTransition = false;
+let homeInitialTransitionSessionKey: string | null = null;
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -106,6 +110,9 @@ export default function HomeScreen() {
     subcourseId: enrolledSubcourseId,
   };
   const homeDataDeps = [user?.uid, enrolledCourseId, enrolledSubcourseId];
+  const homeSessionKey = user?.uid
+    ? `${user.uid}:${getHomeSessionGeneration()}`
+    : null;
 
   // Splash populates one shared snapshot. Each field hook reads its slice from
   // that snapshot, so the first Home render does not repeat the Firebase reads.
@@ -147,8 +154,8 @@ export default function HomeScreen() {
   // The first Splash -> Home navigation gets one visual-only 1.5-second
   // transition. It is deliberately not tied to any Firebase request.
   useEffect(() => {
-    if (hasShownHomeInitialTransition) return;
-    hasShownHomeInitialTransition = true;
+    if (!homeSessionKey || homeInitialTransitionSessionKey === homeSessionKey) return;
+    homeInitialTransitionSessionKey = homeSessionKey;
 
     let active = true;
     setShowInitialTransition(true);
@@ -159,7 +166,12 @@ export default function HomeScreen() {
       active = false;
       clearTimeout(timer);
     };
-  }, []);
+  }, [homeSessionKey]);
+
+  // Profile warm-up can update the course key once after the screen mounts. If
+  // Splash already prefetched that final key, do not flash a second initial
+  // loader while the field hooks settle on the shared snapshot.
+  const hasCachedHomeSnapshot = Boolean(getCachedHomeData(homeDataKey));
 
   // Keep the native pull-to-refresh spinner visible briefly before placing the
   // same opaque centered loader used by other pages over the refreshed content.
@@ -172,12 +184,13 @@ export default function HomeScreen() {
     const timer = setTimeout(() => setShowRefreshLoader(true), 280);
     return () => clearTimeout(timer);
   }, [refreshing]);
-  const initialLoading =
+  const initialLoading = !hasCachedHomeSnapshot && (
     banners.loading ||
     developers.loading ||
     notifications.loading ||
     qotdAnswered.loading ||
-    subjectDetails.loading;
+    subjectDetails.loading
+  );
   const onRefresh = () => {
     // Every field hook joins the same forced Home snapshot request. The overlay
     // therefore covers only the actual fetch duration, not a fixed timeout.

@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   waveLines: { position: 'absolute', width: '125%', height: 300, bottom: -16, left: '-7%' },
   dots: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 },
   radialGlow: { position: 'absolute', width: '126%', height: '56%', top: '18%', left: '-13%' },
-  brandContent: { position: 'absolute', top: '20%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
+  brandContent: { position: 'absolute', top: '24%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
   appName: { marginTop: 20, color: '#FFFFFF', letterSpacing: 0.2, textAlign: 'center' },
   tagline: { marginTop: 9, color: '#F0F6FF', fontWeight: '600', textAlign: 'center' },
   spinner: { marginTop: 22 },
