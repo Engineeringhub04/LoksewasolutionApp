@@ -7,7 +7,7 @@
 // (or barely visible) from screen to screen. Routing every screen through this
 // component guarantees the exact same branded circular spinner everywhere.
 import React from 'react';
-import { ActivityIndicator, Platform, RefreshControl, StyleSheet, type RefreshControlProps } from 'react-native';
+import { Platform, RefreshControl, StyleSheet, View, type RefreshControlProps } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 
@@ -38,9 +38,9 @@ export function AppRefreshControl(props: AppRefreshControlProps) {
 /**
  * Home and Profile have a fixed collapsing header above their native scroll
  * view. On iOS, UIRefreshControl is rendered inside that scroll view and can
- * therefore sit behind the header. This small native spinner mirrors the
- * platform refresh indicator while the real RefreshControl still owns the
- * pull gesture and refresh lifecycle.
+ * therefore sit behind the header. This small progress ring mirrors the
+ * platform pull indicator while the real RefreshControl still owns the pull
+ * gesture, threshold, and refresh lifecycle.
  */
 export function IOSRefreshIndicator({
   pullDistance,
@@ -54,16 +54,21 @@ export function IOSRefreshIndicator({
   const { colors } = useTheme();
   const indicatorStyle = useAnimatedStyle(() => {
     const pull = Math.max(0, -pullDistance.value);
+    const progress = Math.min(1, pull / 72);
     return {
-      opacity: Math.min(1, pull / 18),
-      transform: [{ translateY: Math.min(pull, 72) }],
+      opacity: progress,
+      transform: [
+        { translateY: Math.min(pull, 72) },
+        { scale: 0.55 + progress * 0.45 },
+        { rotate: '-45deg' },
+      ],
     };
   });
 
   if (Platform.OS !== 'ios') return null;
   return (
     <Animated.View pointerEvents="none" style={[styles.iosIndicator, { top: headerBottom }, indicatorStyle]}>
-      <ActivityIndicator size="small" color={colors.primary} />
+      <View style={[styles.progressRing, { borderColor: colors.primary, borderRightColor: 'transparent' }]} />
     </Animated.View>
   );
 }
@@ -75,5 +80,11 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: 70,
+  },
+  progressRing: {
+    width: 22,
+    height: 22,
+    borderWidth: 2.5,
+    borderRadius: 11,
   },
 });
