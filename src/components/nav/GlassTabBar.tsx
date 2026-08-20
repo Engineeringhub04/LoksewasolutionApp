@@ -135,9 +135,14 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
 
 const styles = StyleSheet.create({
   host: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: '100%',
     alignItems: 'center',
     backgroundColor: 'transparent',
+    zIndex: 20,
   },
   bar: {
     position: 'absolute',

@@ -16,6 +16,15 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: false,
+        // The glass bar floats over the screen; the navigator itself must not
+        // paint a white/dark rectangular strip behind it.
+        tabBarStyle: {
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         // Bottom-tab switches can't show a preloader, so they cross-fade
         // instead of hard-cutting between screens.
         animation: 'fade',
