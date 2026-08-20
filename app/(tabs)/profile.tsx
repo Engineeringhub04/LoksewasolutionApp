@@ -254,7 +254,7 @@ export default function ProfileScreen() {
       <PageLoaderOverlay
         visible={loading || showRefreshLoader}
         opaque
-        label={t('profile.loading')}
+        label="Loading Profile..."
       />
 
       <ConfirmDialog
