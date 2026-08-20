@@ -380,7 +380,7 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <IOSRefreshIndicator visible={refreshing} />
+    <IOSRefreshIndicator pullDistance={scrollY} headerBottom={HOME_HEADER_MAX_HEIGHT} />
     <PageLoaderOverlay
       visible={initialLoading || showRefreshLoader}
       opaque
