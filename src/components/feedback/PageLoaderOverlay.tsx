@@ -8,12 +8,12 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 
-export function PageLoaderOverlay({ visible, label }: { visible: boolean; label: string }) {
+export function PageLoaderOverlay({ visible, label, opaque = false }: { visible: boolean; label: string; opaque?: boolean }) {
   const { colors } = useTheme();
   if (!visible) return null;
 
   return (
-    <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(200)} style={styles.overlay} pointerEvents="none">
+    <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(200)} style={[styles.overlay, opaque && { backgroundColor: colors.background }]} pointerEvents="none">
       <View style={[styles.card, { backgroundColor: colors.surface }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text variant="bodySmall" weight="semiBold" style={{ color: colors.textPrimary, marginTop: 10 }}>

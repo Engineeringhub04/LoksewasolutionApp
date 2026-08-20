@@ -23,7 +23,6 @@ import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
 import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeHeader, getHomeHeaderExpandedHeight } from '@/src/components/home/HomeHeader';
 import { BannerCarousel } from '@/src/components/home/BannerCarousel';
@@ -130,7 +129,12 @@ export default function HomeScreen() {
     notifications.refreshing ||
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
-  const initialLoading = banners.loading || developers.loading;
+  const initialLoading =
+    banners.loading ||
+    developers.loading ||
+    notifications.loading ||
+    qotdAnswered.loading ||
+    subjectDetails.loading;
   const onRefresh = () => {
     banners.refresh();
     developers.refresh();
@@ -201,11 +205,7 @@ export default function HomeScreen() {
     >
       {/* Banner Carousel */}
       <View style={{ marginTop: spacing.md }}>
-        {banners.loading ? (
-          <View style={{ marginHorizontal: spacing.screenPadding }}>
-            <Skeleton height={150} radius={18} />
-          </View>
-        ) : banners.error ? null : banners.data && banners.data.length > 0 ? (
+        {banners.error ? null : banners.data && banners.data.length > 0 ? (
           <BannerCarousel banners={banners.data} />
         ) : null}
       </View>
@@ -223,11 +223,7 @@ export default function HomeScreen() {
             <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('subjects.seeAll')}</Text>
           </Pressable>
         </View>
-        {subjectDetails.loading ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
-            {[1, 2, 3].map((item) => <Skeleton key={item} width={150} height={118} radius={18} />)}
-          </ScrollView>
-        ) : homeSubjects.length === 0 ? (
+        {homeSubjects.length === 0 ? (
           <View style={{ paddingHorizontal: spacing.screenPadding }}>
             <EmptyState title={t('learning.noSubjects')} />
           </View>
@@ -334,9 +330,7 @@ export default function HomeScreen() {
       {/* About Developer */}
       <View style={{ paddingHorizontal: spacing.screenPadding }}>
         <Text variant="h3" weight="bold" style={{ marginBottom: spacing.md }}>About Developer</Text>
-        {developers.loading ? (
-          <Skeleton height={120} radius={22} />
-        ) : developers.data && developers.data.length > 0 ? (
+        {developers.data && developers.data.length > 0 ? (
           <DeveloperCard developer={developers.data[0]} />
         ) : (
           <EmptyState icon="person-circle-outline" title="Developer info coming soon" />
@@ -346,7 +340,7 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <PageLoaderOverlay visible={initialLoading || refreshing} label="Loading Home..." />
+    <PageLoaderOverlay visible={initialLoading} opaque label="Loading Home..." />
     </View>
   );
 }

@@ -1,9 +1,9 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
-// Logo shows IMMEDIATELY. Waits for onboarding images to pre-cache before navigating.
+// Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
 // Uses expo-image (not RN's Image) for the logo — it decodes bundled assets faster
 // and keeps them in its own memory cache, avoiding the visible delay RN's Image
 // component has on first mount even for local require()'d assets.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -28,7 +28,6 @@ export default function SplashScreen() {
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
-  const [imagesCached, setImagesCached] = useState(false);
 
   // Logo visible immediately — only subtle scale bounce
   const scale = useSharedValue(0.9);
@@ -36,14 +35,12 @@ export default function SplashScreen() {
     scale.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.back(1.5)) });
   }, [scale]);
 
-  // Pre-cache onboarding network images — splash stays until done
+  // Pre-cache onboarding network images in the background. This must never delay
+  // the Splash -> Welcome/authenticated app transition.
   useEffect(() => {
     const urls = getRemoteImageUrls();
     if (urls.length > 0) {
-      Promise.all(urls.map((u) => ExpoImage.prefetch(u).catch(() => {})))
-        .finally(() => setImagesCached(true));
-    } else {
-      setImagesCached(true);
+      void Promise.all(urls.map((u) => ExpoImage.prefetch(u).catch(() => {})));
     }
   }, []);
 
@@ -51,7 +48,7 @@ export default function SplashScreen() {
 
   // Navigate once everything is ready
   useEffect(() => {
-    if (routedRef.current || initializing || !hydrated || !imagesCached) return;
+    if (routedRef.current || initializing || !hydrated) return;
 
     const decide = async () => {
       if (routedRef.current) return;
@@ -74,7 +71,7 @@ export default function SplashScreen() {
       router.replace('/onboarding');
     };
     decide();
-  }, [initializing, hydrated, imagesCached, isOnline, networkChecked, user, router]);
+  }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
   // Safety timeout
   useEffect(() => {
@@ -93,11 +90,11 @@ export default function SplashScreen() {
   return (
     <LinearGradient colors={gradients.splash} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[{ alignItems: 'center', gap: spacing.sm }, animatedStyle]}>
-        <View style={{ width: 150, height: 150, borderRadius: 34, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>
+        <View style={{ width: 150, height: 150, borderRadius: 75, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
           <ExpoImage
             source={AppConfig.identity.logoAsset}
-            style={{ width: 122, height: 122 }}
-            contentFit="contain"
+            style={{ width: 178, height: 178, borderRadius: 89, transform: [{ scale: 1.06 }] }}
+            contentFit="cover"
             cachePolicy="memory-disk"
             priority="high"
             transition={0}
