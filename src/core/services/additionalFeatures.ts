@@ -12,6 +12,7 @@ export type AdditionalFeatureQuestion = {
   question: string;
   options: { id: string; text: string }[];
   correctOption: number;
+  correctOptionId?: string;
   explanation: string;
 };
 
@@ -35,6 +36,8 @@ export type AdditionalFeaturePage = {
   topics?: AdditionalFeatureTopic[];
   updatedAt?: unknown;
   seedVersion?: string;
+  cacheSchemaVersion?: number;
+  answerMappingVersion?: number;
 };
 
 export type AdditionalFeatureQuestionBank = {
@@ -46,6 +49,8 @@ export type AdditionalFeatureQuestionBank = {
   questions?: AdditionalFeatureQuestion[];
   updatedAt?: unknown;
   seedVersion?: string;
+  cacheSchemaVersion?: number;
+  answerMappingVersion?: number;
 };
 
 export type AdditionalFeaturePracticeProgress = {
@@ -60,6 +65,9 @@ export type AdditionalFeaturePracticeProgress = {
 
 const SCOPE_KEY = 'all__all';
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CACHE_SCHEMA_VERSION = 2;
+const ANSWER_MAPPING_VERSION = 2;
+const CACHE_MIGRATION_KEY = 'af_cache_schema_version';
 
 function pageId(featureId: AdditionalFeatureId): string {
   return `${featureId}__${SCOPE_KEY}`;
@@ -117,6 +125,29 @@ async function writeJson(key: string, value: unknown): Promise<void> {
   }
 }
 
+let cacheMigrationPromise: Promise<void> | null = null;
+
+/**
+ * Clears only GK/PM practice results created by the old answer-index mapping.
+ * Question-bank data is retained because the new runtime maps answers by option id,
+ * so already-downloaded banks remain usable while Offline Access is refreshed.
+ */
+export async function migrateAdditionalFeatureCache(): Promise<void> {
+  if (!cacheMigrationPromise) {
+    cacheMigrationPromise = (async () => {
+      const currentVersion = await AsyncStorage.getItem(CACHE_MIGRATION_KEY);
+      if (currentVersion === String(CACHE_SCHEMA_VERSION)) return;
+
+      const keys = await AsyncStorage.getAllKeys();
+      const legacyPracticeKeys = keys.filter((key) => key.startsWith('af_practice_gk_') || key.startsWith('af_practice_pm_'));
+      const offlineStateKeys = keys.filter((key) => key === offlineCompleteKey('gk') || key === offlineDateKey('gk') || key === offlineCompleteKey('pm') || key === offlineDateKey('pm'));
+      await AsyncStorage.multiRemove([...legacyPracticeKeys, ...offlineStateKeys]);
+      await AsyncStorage.setItem(CACHE_MIGRATION_KEY, String(CACHE_SCHEMA_VERSION));
+    })().catch(() => undefined);
+  }
+  await cacheMigrationPromise;
+}
+
 export async function getCachedAdditionalFeaturePage(featureId: AdditionalFeatureId): Promise<AdditionalFeaturePage | null> {
   return readJson<AdditionalFeaturePage>(pageCacheKey(featureId));
 }
@@ -144,6 +175,7 @@ export async function getAdditionalFeaturePracticeProgress(
   featureId: AdditionalFeatureId,
   topicId: string,
 ): Promise<AdditionalFeaturePracticeProgress> {
+  await migrateAdditionalFeatureCache();
   const cached = await readJson<AdditionalFeaturePracticeProgress>(practiceProgressKey(featureId, topicId));
   const today = localDateKey();
   if (!cached || cached.dailyDate !== today) return emptyPracticeProgress(featureId, topicId);
@@ -200,6 +232,7 @@ export async function loadAdditionalFeaturePage(
   featureId: AdditionalFeatureId,
   options: { forceRemote?: boolean } = {},
 ): Promise<{ page: AdditionalFeaturePage | null; fromCache: boolean; remoteChecked: boolean }> {
+  await migrateAdditionalFeatureCache();
   const cached = await getCachedAdditionalFeaturePage(featureId);
   const cachedDate = await AsyncStorage.getItem(pageCacheDateKey(featureId));
   const today = localDateKey();
@@ -227,14 +260,23 @@ export async function loadAdditionalFeatureQuestionBank(
   bankId?: string,
   options: { forceRemote?: boolean } = {},
 ): Promise<{ bank: AdditionalFeatureQuestionBank | null; fromCache: boolean }> {
+  await migrateAdditionalFeatureCache();
   const cached = await getCachedQuestionBank(featureId, topicId);
-  if (cached && !options.forceRemote) return { bank: cached, fromCache: true };
+  if (cached && !options.forceRemote) {
+    if (cached.answerMappingVersion !== ANSWER_MAPPING_VERSION || cached.cacheSchemaVersion !== CACHE_SCHEMA_VERSION) {
+      const migrated = { ...cached, cacheSchemaVersion: CACHE_SCHEMA_VERSION, answerMappingVersion: ANSWER_MAPPING_VERSION };
+      await writeJson(questionCacheKey(featureId, topicId), migrated);
+      return { bank: migrated, fromCache: true };
+    }
+    return { bank: cached, fromCache: true };
+  }
 
   const id = bankId || questionBankId(featureId, topicId);
   try {
     const remote = await getDocument(`${Collections.additionalFeatureQuestionBanks}/${id}`) as AdditionalFeatureQuestionBank | null;
-    if (remote) await writeJson(questionCacheKey(featureId, topicId), remote);
-    return { bank: remote ?? cached, fromCache: !remote };
+    const versionedRemote = remote ? { ...remote, cacheSchemaVersion: CACHE_SCHEMA_VERSION, answerMappingVersion: ANSWER_MAPPING_VERSION } : null;
+    if (versionedRemote) await writeJson(questionCacheKey(featureId, topicId), versionedRemote);
+    return { bank: versionedRemote ?? cached, fromCache: !versionedRemote };
   } catch (error) {
     if (cached) return { bank: cached, fromCache: true };
     throw error;

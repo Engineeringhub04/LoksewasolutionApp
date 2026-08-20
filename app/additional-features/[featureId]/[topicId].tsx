@@ -57,18 +57,31 @@ function shuffle<T>(items: T[]): T[] {
   return shuffled;
 }
 
+function correctOptionId(question: AdditionalFeatureQuestion): string | undefined {
+  if (question.correctOptionId && question.options.some((option) => option.id === question.correctOptionId)) return question.correctOptionId;
+  const rawIndex = Number(question.correctOption);
+  if (!Number.isFinite(rawIndex)) return undefined;
+  if (rawIndex >= 1 && rawIndex <= question.options.length) return question.options[rawIndex - 1]?.id;
+  return question.options[Math.max(0, Math.min(rawIndex, question.options.length - 1))]?.id;
+}
+
 function correctIndex(question: AdditionalFeatureQuestion): number {
-  if (question.correctOption >= 1 && question.correctOption <= question.options.length) return question.correctOption - 1;
-  return Math.max(0, Math.min(question.correctOption, question.options.length - 1));
+  const optionId = correctOptionId(question);
+  const mappedIndex = optionId ? question.options.findIndex((option) => option.id === optionId) : -1;
+  if (mappedIndex >= 0) return mappedIndex;
+  return Math.max(0, Math.min(Number(question.correctOption) || 0, question.options.length - 1));
 }
 
 function shufflePracticeQuestion(question: AdditionalFeatureQuestion): AdditionalFeatureQuestion {
-  const correctOptionId = question.options[correctIndex(question)]?.id;
+  const answerId = correctOptionId(question);
   const options = shuffle(question.options);
+  const shuffledCorrectIndex = answerId ? options.findIndex((option) => option.id === answerId) : -1;
   return {
     ...question,
     options,
-    correctOption: Math.max(0, options.findIndex((option) => option.id === correctOptionId)),
+    correctOptionId: answerId,
+    // Keep the serialized field 1-based for compatibility with the seeded schema.
+    correctOption: shuffledCorrectIndex >= 0 ? shuffledCorrectIndex + 1 : 1,
   };
 }
 
