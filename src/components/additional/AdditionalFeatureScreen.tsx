@@ -42,7 +42,7 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
   const [refreshing, setRefreshing] = useState(false);
   const [offlineComplete, setOfflineComplete] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [progressByTopic, setProgressByTopic] = useState<Record<string, number>>({});
+  const [overallProgress, setOverallProgress] = useState(0);
 
   const labels = language === 'ne' ? {
     loading: 'विषयहरू लोड हुँदैछन्...',
@@ -84,8 +84,13 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
       setPage(result.page);
       setOfflineComplete(offlineState.complete);
       const visibleTopics = (result.page?.topics ?? []).filter(isTopicSummary).filter((topic) => topic.isPublished !== false);
-      const progressEntries = await Promise.all(visibleTopics.map(async (topic) => [topic.topicId, await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount)] as const));
-      setProgressByTopic(Object.fromEntries(progressEntries));
+      const progressEntries = await Promise.all(visibleTopics.map(async (topic) => {
+        const percentage = await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount);
+        return { percentage, questionCount: topic.questionCount };
+      }));
+      const totalQuestions = progressEntries.reduce((sum, entry) => sum + Math.max(0, entry.questionCount), 0);
+      const weightedProgress = totalQuestions > 0 ? progressEntries.reduce((sum, entry) => sum + (entry.percentage * entry.questionCount), 0) / totalQuestions : 0;
+      setOverallProgress(Math.round(weightedProgress));
     } catch {
       showToast(labels.unable, 'error');
     } finally {
@@ -101,8 +106,13 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
   useFocusEffect(useCallback(() => {
     if (!page || topics.length === 0) return undefined;
     let active = true;
-    void Promise.all(topics.map(async (topic) => [topic.topicId, await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount)] as const)).then((entries) => {
-      if (active) setProgressByTopic(Object.fromEntries(entries));
+    void Promise.all(topics.map(async (topic) => {
+      const percentage = await getAdditionalFeatureTopicProgress(featureId, topic.topicId, topic.questionCount);
+      return { percentage, questionCount: topic.questionCount };
+    })).then((entries) => {
+      const totalQuestions = entries.reduce((sum, entry) => sum + Math.max(0, entry.questionCount), 0);
+      const weightedProgress = totalQuestions > 0 ? entries.reduce((sum, entry) => sum + (entry.percentage * entry.questionCount), 0) / totalQuestions : 0;
+      if (active) setOverallProgress(Math.round(weightedProgress));
     });
     return () => { active = false; };
   }, [featureId, page, topics]));
@@ -136,7 +146,7 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <SubpageHeader
-        title={featureId === 'gk' ? 'GK' : 'PM'}
+        title={language === 'ne' ? titleNp : title}
         showBack
         rightSlot={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={36} />}
       />
@@ -152,11 +162,15 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={featureId === 'gk' ? 'earth-outline' : 'business-outline'} size={28} color={colors.primary} /></View>
               <View style={styles.heroText}>
-                <Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>{featureId.toUpperCase()}</Text>
+                <Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>{language === 'ne' ? titleNp : title}</Text>
                 <Text variant="h2" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }}>{language === 'ne' ? titleNp : title}</Text>
                 <Text variant="caption" secondary style={{ marginTop: 3 }}>{language === 'ne' ? title : titleNp}</Text>
               </View>
               <View style={[styles.topicCountBadge, { backgroundColor: `${colors.primary}12` }]}><Text variant="h3" weight="bold" style={{ color: colors.primary }}>{topics.length}</Text><Text variant="caption" secondary>{language === 'ne' ? 'विषय' : 'Topics'}</Text></View>
+            </View>
+            <View style={styles.overallProgressBlock}>
+              <View style={styles.overallProgressHeader}><Text variant="caption" weight="bold" secondary>{language === 'ne' ? 'समग्र अभ्यास प्रगति' : 'Overall Practice Progress'}</Text><Text variant="caption" weight="bold" style={{ color: colors.success }}>{overallProgress}%</Text></View>
+              <View style={[styles.overallProgressTrack, { backgroundColor: colors.border }]}><View style={[styles.overallProgressFill, { backgroundColor: colors.success, width: `${overallProgress}%` }]} /></View>
             </View>
             <Pressable onPress={handleOfflineAccess} disabled={downloading || offlineComplete || topics.length === 0} accessibilityRole="button" accessibilityLabel={labels.offline} style={({ pressed }) => [styles.offlineButton, { backgroundColor: offlineComplete ? `${colors.success}15` : colors.primary, borderColor: offlineComplete ? `${colors.success}55` : colors.primary, opacity: pressed && !offlineComplete ? 0.88 : 1 }]}>
               {downloading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name={offlineComplete ? 'checkmark-circle-outline' : 'download-outline'} size={19} color={offlineComplete ? colors.success : '#FFF'} />}
@@ -175,16 +189,14 @@ export function AdditionalFeatureScreen({ featureId }: { featureId: AdditionalFe
           ) : (
             <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
               {topics.map((topic) => {
-                const progress = progressByTopic[topic.topicId] ?? 0;
                 return (
                   <Pressable key={topic.topicId} onPress={() => openTopic(topic)} accessibilityRole="button" accessibilityLabel={`${topic.titleEn} ${topic.titleNp}`} style={({ pressed }) => [styles.topicCard, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: radius.lg, opacity: pressed ? 0.84 : 1 }]}>
                     <View style={[styles.topicGlow, { backgroundColor: `${colors.primary}09` }]} />
                     <View style={[styles.topicIcon, { backgroundColor: `${colors.primary}16` }]}><Ionicons name={topicIcon(topic)} size={23} color={colors.primary} /></View>
                     <View style={styles.topicText}>
-                      <View style={styles.topicHeadingRow}><Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>TOPIC {String(topic.order).padStart(2, '0')}</Text><View style={[styles.progressPill, { backgroundColor: `${colors.success}12` }]}><Ionicons name="trending-up-outline" size={13} color={colors.success} /><Text variant="caption" weight="bold" style={{ color: colors.success }}>{labels.practice} {progress}%</Text></View></View>
+                      <View style={styles.topicHeadingRow}><Text variant="caption" weight="bold" style={{ color: colors.primary, letterSpacing: 1 }}>TOPIC {String(topic.order).padStart(2, '0')}</Text></View>
                       <Text variant="body" weight="bold" style={{ color: colors.textPrimary, marginTop: spacing.xs }} numberOfLines={2}>{language === 'ne' ? topic.titleNp : topic.titleEn}</Text>
                       <Text variant="caption" secondary style={{ marginTop: 3 }} numberOfLines={1}>{language === 'ne' ? topic.titleEn : topic.titleNp}</Text>
-                      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}><View style={[styles.progressFill, { backgroundColor: colors.success, width: `${progress}%` }]} /></View>
                     </View>
                     <View style={[styles.arrowCircle, { backgroundColor: `${colors.primary}12` }]}><Ionicons name="arrow-forward" size={18} color={colors.primary} /></View>
                   </Pressable>
@@ -205,6 +217,10 @@ const styles = StyleSheet.create({
   heroIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   heroText: { flex: 1, minWidth: 0 },
   topicCountBadge: { minWidth: 48, paddingVertical: 7, paddingHorizontal: 8, borderRadius: 14, alignItems: 'center' },
+  overallProgressBlock: { marginTop: 16, gap: 7 },
+  overallProgressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  overallProgressTrack: { height: 6, borderRadius: 4, overflow: 'hidden' },
+  overallProgressFill: { height: 6, borderRadius: 4 },
   offlineButton: { minHeight: 47, marginTop: 17, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   infoCard: { padding: 13, borderWidth: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   infoIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -215,8 +231,6 @@ const styles = StyleSheet.create({
   topicIcon: { width: 50, height: 50, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   topicText: { flex: 1, minWidth: 0 },
   topicHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  progressPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
-  progressTrack: { height: 4, borderRadius: 3, overflow: 'hidden', marginTop: 8 },
-  progressFill: { height: 4, borderRadius: 3 },
+
   arrowCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 });
