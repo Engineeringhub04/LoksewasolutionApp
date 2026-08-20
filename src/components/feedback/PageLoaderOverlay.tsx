@@ -23,10 +23,12 @@ export function PageLoaderOverlay({
   const { colors } = useTheme();
   if (!visible) return null;
 
+  // Opaque loaders are used by Home. Removing their fade prevents Android
+  // from capturing the underlying page through a half-faded white frame.
   return (
     <Animated.View
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(200)}
+      entering={opaque ? undefined : FadeIn.duration(150)}
+      exiting={opaque ? undefined : FadeOut.duration(200)}
       style={[styles.overlay, { top: topOffset }, opaque && { backgroundColor: colors.background }]}
       pointerEvents="none"
     >
