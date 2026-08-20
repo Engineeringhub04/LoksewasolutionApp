@@ -4,7 +4,7 @@
 // services/profile.ts), not just the cached auth session, so the values survive
 // reinstalls and match across devices.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Share, Linking } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -21,6 +21,7 @@ import { SectionHeading, SectionCard, InfoRow, MenuRow, StatsStrip } from '@/src
 import { Button } from '@/src/components/buttons/Button';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function ProfileScreen() {
@@ -142,7 +143,9 @@ export default function ProfileScreen() {
         contentContainerStyle={{
           paddingTop: HEADER_MAX_HEIGHT + spacing.md,
           paddingHorizontal: spacing.screenPadding,
-          paddingBottom: spacing.xxl,
+          paddingBottom: Platform.OS === 'android'
+            ? getGlassTabBarContentPadding(insets.bottom)
+            : spacing.xxl,
           gap: spacing.lg,
         }}
         refreshControl={

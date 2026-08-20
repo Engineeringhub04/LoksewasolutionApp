@@ -3,7 +3,7 @@
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { Platform, ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -28,6 +28,7 @@ import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 import {
   getCachedHomeData,
   prefetchHomeData,
@@ -230,7 +231,12 @@ export default function HomeScreen() {
 
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: HOME_HEADER_MAX_HEIGHT, paddingBottom: spacing.xxl }}
+      contentContainerStyle={{
+        paddingTop: HOME_HEADER_MAX_HEIGHT,
+        paddingBottom: Platform.OS === 'android'
+          ? getGlassTabBarContentPadding(insets.bottom)
+          : spacing.xxl,
+      }}
       refreshControl={
         // progressViewOffset is essential here: the header is a FIXED overlay, so
         // without it the spinner renders behind the header and is invisible.

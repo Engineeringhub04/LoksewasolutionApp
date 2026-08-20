@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, FlatList, Pressable, Modal, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Platform, View, FlatList, Pressable, Modal, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +25,7 @@ import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { DiscussionActionMenu, type DiscussionActionMenuItem } from '@/src/components/discussion/DiscussionActionMenu';
 import { DiscussionReportModal, type DiscussionReportTarget } from '@/src/components/discussion/DiscussionReportModal';
+import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 
 export default function DiscussionFeedScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -249,7 +250,14 @@ export default function DiscussionFeedScreen() {
         <FlatList
           data={filteredPosts}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.screenPadding, paddingTop: spacing.md, paddingBottom: 112, gap: spacing.md }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.screenPadding,
+            paddingTop: spacing.md,
+            paddingBottom: Platform.OS === 'android'
+              ? getGlassTabBarContentPadding(insets.bottom)
+              : 112,
+            gap: spacing.md,
+          }}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={renderPost}
           showsVerticalScrollIndicator={false}

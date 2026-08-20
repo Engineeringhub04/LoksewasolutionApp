@@ -7,7 +7,7 @@
 // Everything shown comes from Firestore via services/examHub.ts, filtered by the
 // user's enrolled course/subcourse.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Platform, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,6 +42,7 @@ import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 
 /** Cards re-evaluate their state on this cadence so countdowns tick. */
 const TICK_MS = 1000;
@@ -286,7 +287,13 @@ export default function ExamScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl, gap: spacing.md }}
+          contentContainerStyle={{
+            padding: spacing.screenPadding,
+            paddingBottom: Platform.OS === 'android'
+              ? getGlassTabBarContentPadding(insets.bottom)
+              : spacing.xxl,
+            gap: spacing.md,
+          }}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {/* Section description banner */}
