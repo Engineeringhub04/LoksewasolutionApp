@@ -4,14 +4,12 @@
 // and keeps them in its own memory cache, avoiding the visible delay RN's Image
 // component has on first mount even for local require()'d assets.
 import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
-import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { fetchRemoteConfig } from '@/src/core/config/remoteConfig';
 import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
@@ -26,17 +24,19 @@ const MIN_SPLASH_MS = 3000;
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { gradients, spacing } = useTheme();
+  const { gradients } = useTheme();
   const { isOnline, isChecked: networkChecked } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
   const routedRef = useRef(false);
 
-  // Logo visible immediately — only subtle scale bounce
-  const scale = useSharedValue(0.9);
+  // Match the supplied HTML artwork fade-in without changing navigation timing.
+  const scale = useSharedValue(1.008);
+  const opacity = useSharedValue(0);
   useEffect(() => {
-    scale.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.back(1.5)) });
-  }, [scale]);
+    scale.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
+    opacity.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [opacity, scale]);
 
   // Pre-cache onboarding network images in the background. This must never delay
   // the Splash -> Welcome/authenticated app transition.
@@ -100,60 +100,29 @@ export default function SplashScreen() {
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
 
-  const insets = useSafeAreaInsets();
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
     <LinearGradient colors={gradients.splash} style={styles.container}>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[styles.bubble, styles.bubbleTopRight]} />
-        <View style={[styles.bubble, styles.bubbleMiddleLeft]} />
-        <View style={[styles.bubble, styles.bubbleBottomRight]} />
-        <View style={[styles.bubble, styles.bubbleBottomLeft]} />
-        <View style={[styles.glow, styles.glowTopLeft]} />
-      </View>
-
-      <Animated.View style={[styles.content, animatedStyle]}>
-        <View style={styles.brandRow}>
-          <ExpoImage
-            source={AppConfig.identity.splashAsset}
-            style={styles.logo}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            priority="high"
-            transition={0}
-          />
-          <Text variant="h1" weight="bold" style={styles.appName}>{AppConfig.identity.appName}</Text>
-        </View>
-        <Text variant="body" style={styles.tagline}>{AppConfig.identity.tagline}</Text>
-        <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.artworkLayer, animatedStyle]}>
+        <ExpoImage
+          source={AppConfig.identity.splashArtworkAsset}
+          style={styles.artwork}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          priority="high"
+          transition={0}
+        />
       </Animated.View>
-
-      <View style={[styles.footer, { bottom: insets.bottom + spacing.lg }]}>
-        <Text variant="bodySmall" style={styles.developerLabel}>
-          Develop for Nepali student || by <Text variant="bodySmall" weight="semiBold" style={styles.developerName}>Kishan Raut</Text>.
-        </Text>
-      </View>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  content: { width: '100%', alignItems: 'center', paddingHorizontal: 24 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
-  logo: { width: 104, height: 104, transform: [{ scale: 1.04 }] },
-  appName: { color: '#FFF', letterSpacing: 0.4, flexShrink: 1 },
-  tagline: { color: '#D8E7FF', opacity: 0.92, marginTop: 24, textAlign: 'center' },
-  spinner: { marginTop: 24 },
-  footer: { position: 'absolute', alignItems: 'center', paddingHorizontal: 24 },
-  developerLabel: { color: '#C9D9F5', opacity: 0.9, textAlign: 'center' },
-  developerName: { color: '#C96B22' },
-  bubble: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(123,177,255,0.10)' },
-  bubbleTopRight: { width: 280, height: 280, top: -120, right: -100 },
-  bubbleMiddleLeft: { width: 160, height: 160, top: '31%', left: -105 },
-  bubbleBottomRight: { width: 220, height: 220, bottom: -100, right: -85 },
-  bubbleBottomLeft: { width: 130, height: 130, bottom: -60, left: -60 },
-  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(75,181,255,0.08)' },
-  glowTopLeft: { width: 150, height: 150, top: -70, left: -55 },
+  container: { flex: 1, overflow: 'hidden', backgroundColor: '#03145C' },
+  artworkLayer: { alignItems: 'center', justifyContent: 'center' },
+  artwork: { width: '100%', height: '100%' },
 });
