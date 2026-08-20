@@ -16,6 +16,9 @@ import { create } from 'zustand';
 import { fetchUserProfile, type UserProfile } from '@/src/core/firebase/services/profile';
 import { fetchUserCourseInfo, type UserCourseInfo } from '@/src/core/firebase/services/courses';
 
+let profileInFlightUid: string | null = null;
+let profileInFlight: Promise<void> | null = null;
+
 interface ProfileState {
   profile: UserProfile | null;
   courseInfo: UserCourseInfo | null;
@@ -45,23 +48,44 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     const alreadyLoaded = state.loadedUid === uid && state.profile !== null;
     if (alreadyLoaded && !opts?.force && !opts?.refresh) return;
 
-    set(
-      opts?.refresh
-        ? { refreshing: true, error: false }
-        : { loading: !alreadyLoaded, error: false }
-    );
+    // Root layout and Splash can request the same warm-up at nearly the same
+    // time. Share the in-flight request so the app does not issue duplicate
+    // profile/course reads during launch.
+    if (profileInFlightUid === uid && profileInFlight) {
+      await profileInFlight;
+      return;
+    }
 
+    const request = (async () => {
+      set(
+        opts?.refresh
+          ? { refreshing: true, error: false }
+          : { loading: !alreadyLoaded, error: false }
+      );
+
+      try {
+        // One user-document read only: `fetchUserProfile` performs the backfill
+        // itself (see profile.ts), so a separate `ensureUserStats` read here
+        // would double the cost of every app open.
+        const [profile, courseInfo] = await Promise.all([
+          fetchUserProfile(uid),
+          fetchUserCourseInfo(uid).catch(() => null),
+        ]);
+        set({ profile, courseInfo, loadedUid: uid, loading: false, refreshing: false, error: false });
+      } catch {
+        set({ loading: false, refreshing: false, error: true });
+      }
+    })();
+
+    profileInFlightUid = uid;
+    profileInFlight = request;
     try {
-      // One user-document read only: `fetchUserProfile` performs the backfill
-      // itself (see profile.ts), so a separate `ensureUserStats` read here
-      // would double the cost of every app open.
-      const [profile, courseInfo] = await Promise.all([
-        fetchUserProfile(uid),
-        fetchUserCourseInfo(uid).catch(() => null),
-      ]);
-      set({ profile, courseInfo, loadedUid: uid, loading: false, refreshing: false, error: false });
-    } catch {
-      set({ loading: false, refreshing: false, error: true });
+      await request;
+    } finally {
+      if (profileInFlight === request) {
+        profileInFlight = null;
+        profileInFlightUid = null;
+      }
     }
   },
 
