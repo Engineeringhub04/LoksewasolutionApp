@@ -30,7 +30,6 @@ import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import {
   getCachedHomeData,
-  getHomeSessionGeneration,
   prefetchHomeData,
 } from '@/src/core/services/homePrefetch';
 
@@ -80,7 +79,6 @@ const appGuide: LinkItem[] = [
 
 const FEATURE_ACCENT = '#7C3AED';
 const GUIDE_ACCENT = '#059669';
-let homeInitialTransitionSessionKey: string | null = null;
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -111,9 +109,6 @@ export default function HomeScreen() {
     subcourseId: enrolledSubcourseId,
   };
   const homeDataDeps = [user?.uid, enrolledCourseId, enrolledSubcourseId];
-  const homeSessionKey = user?.uid
-    ? `${user.uid}:${getHomeSessionGeneration()}`
-    : null;
   // On a direct login, Home can mount before the background profile warm-up
   // finishes. Wait for that session's final course scope before starting any
   // Home request; otherwise the default scope and final scope fetch twice.
@@ -159,25 +154,6 @@ export default function HomeScreen() {
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
   const [showRefreshLoader, setShowRefreshLoader] = useState(false);
-  const [showInitialTransition, setShowInitialTransition] = useState(false);
-
-  // The first Splash -> Home navigation gets one visual-only 1.5-second
-  // transition. It is deliberately not tied to any Firebase request.
-  useEffect(() => {
-    if (!homeSessionKey || homeInitialTransitionSessionKey === homeSessionKey) return;
-    homeInitialTransitionSessionKey = homeSessionKey;
-
-    let active = true;
-    setShowInitialTransition(true);
-    const timer = setTimeout(() => {
-      if (active) setShowInitialTransition(false);
-    }, 1500);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [homeSessionKey]);
-
   // Profile warm-up can update the course key once after the screen mounts. If
   // Splash already prefetched that final key, do not flash a second initial
   // loader while the field hooks settle on the shared snapshot.
@@ -404,7 +380,7 @@ export default function HomeScreen() {
     {/* Same centered spinner + labelled overlay every other page uses, on BOTH
         the first load and pull-to-refresh (Home previously had a separate
         RefreshOverlay with no page label and no initial-load coverage). */}
-    <PageLoaderOverlay visible={initialLoading || showInitialTransition || showRefreshLoader} opaque label="Loading Home..." />
+    <PageLoaderOverlay visible={initialLoading || showRefreshLoader} opaque label="Loading Home..." />
     </View>
   );
 }
