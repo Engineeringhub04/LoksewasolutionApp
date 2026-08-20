@@ -2,14 +2,14 @@
 // Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
 // Uses expo-image for the bundled transparent logo so it decodes quickly on first mount.
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { fetchRemoteConfig } from '@/src/core/config/remoteConfig';
@@ -40,6 +40,22 @@ function BackgroundIcon({
       color={DECORATION_COLOR}
       style={[styles.backgroundIcon, style]}
     />
+  );
+}
+
+function SplashGlow() {
+  return (
+    <Svg pointerEvents="none" style={styles.radialGlow} viewBox="0 0 100 100">
+      <Defs>
+        <RadialGradient id="splashGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+          <Stop offset="0" stopColor="#A7DCFF" stopOpacity="0.58" />
+          <Stop offset="0.34" stopColor="#59AFFF" stopOpacity="0.28" />
+          <Stop offset="0.72" stopColor="#2D83FF" stopOpacity="0.08" />
+          <Stop offset="1" stopColor="#2D83FF" stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Circle cx="50" cy="50" r="50" fill="url(#splashGlow)" />
+    </Svg>
   );
 }
 
@@ -161,10 +177,8 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  const logoWidth = Math.min(width * 0.84, 340);
+  const logoWidth = Math.min(width * 0.94, 380);
   const logoHeight = logoWidth * 0.74;
-  const glowSize = Math.min(width * 0.88, 380);
-  const innerGlowSize = Math.min(width * 0.66, 285);
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ scale: scale.value }],
@@ -174,8 +188,7 @@ export default function SplashScreen() {
     <LinearGradient colors={['#061A73', '#062C91', '#03145C']} style={styles.container}>
       <SplashDecorations />
 
-      <View pointerEvents="none" style={[styles.glow, styles.outerGlow, { width: glowSize, height: glowSize, marginLeft: -glowSize / 2 }]} />
-      <View pointerEvents="none" style={[styles.glow, styles.innerGlow, { width: innerGlowSize, height: innerGlowSize, marginLeft: -innerGlowSize / 2 }]} />
+      <SplashGlow />
 
       <Animated.View style={[styles.brandContent, animatedStyle]}>
         <ExpoImage
@@ -188,6 +201,7 @@ export default function SplashScreen() {
         />
         <Text variant="h1" weight="bold" style={styles.appName}>Loksewa Solution</Text>
         <Text variant="body" style={styles.tagline}>Prepare Today. Lead Tomorrow.</Text>
+        <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
       </Animated.View>
 
       <View style={[styles.footer, { bottom: insets.bottom + 18 }]}>
@@ -211,12 +225,11 @@ const styles = StyleSheet.create({
   dottedPath: { position: 'absolute', width: '118%', height: 220, top: '13%', right: '-20%' },
   waveLines: { position: 'absolute', width: '125%', height: 300, bottom: -16, left: '-7%' },
   dots: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 },
-  glow: { position: 'absolute', borderRadius: 999 },
-  outerGlow: { top: '25%', left: '50%', backgroundColor: 'rgba(70, 155, 255, 0.09)', shadowColor: '#72B3FF', shadowOpacity: 0.28, shadowRadius: 42, elevation: 8 },
-  innerGlow: { top: '29%', left: '50%', backgroundColor: 'rgba(104, 190, 255, 0.14)', shadowColor: '#D8EEFF', shadowOpacity: 0.38, shadowRadius: 28, elevation: 10 },
-  brandContent: { position: 'absolute', top: '17%', width: '100%', alignItems: 'center', paddingHorizontal: 22 },
-  appName: { marginTop: 18, color: '#FFFFFF', letterSpacing: 0.2, textAlign: 'center' },
-  tagline: { marginTop: 8, color: '#F0F6FF', fontWeight: '600', textAlign: 'center' },
+  radialGlow: { position: 'absolute', width: '126%', height: '56%', top: '18%', left: '-13%' },
+  brandContent: { position: 'absolute', top: '20%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
+  appName: { marginTop: 20, color: '#FFFFFF', letterSpacing: 0.2, textAlign: 'center' },
+  tagline: { marginTop: 9, color: '#F0F6FF', fontWeight: '600', textAlign: 'center' },
+  spinner: { marginTop: 22 },
   footer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 18 },
   developerLabel: { color: '#D7E3FF', opacity: 0.94, textAlign: 'center' },
   flag: { fontSize: 14 },
