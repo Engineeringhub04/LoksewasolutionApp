@@ -7,7 +7,7 @@
 // Everything shown comes from Firestore via services/examHub.ts, filtered by the
 // user's enrolled course/subcourse.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -289,9 +289,7 @@ export default function ExamScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{
             padding: spacing.screenPadding,
-            paddingBottom: Platform.OS === 'android'
-              ? getGlassTabBarContentPadding(insets.bottom)
-              : spacing.xxl,
+            paddingBottom: getGlassTabBarContentPadding(insets.bottom),
             gap: spacing.md,
           }}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

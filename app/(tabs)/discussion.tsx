@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, View, FlatList, Pressable, Modal, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { View, FlatList, Pressable, Modal, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -253,9 +253,7 @@ export default function DiscussionFeedScreen() {
           contentContainerStyle={{
             paddingHorizontal: spacing.screenPadding,
             paddingTop: spacing.md,
-            paddingBottom: Platform.OS === 'android'
-              ? getGlassTabBarContentPadding(insets.bottom)
-              : 112,
+            paddingBottom: getGlassTabBarContentPadding(insets.bottom),
             gap: spacing.md,
           }}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}

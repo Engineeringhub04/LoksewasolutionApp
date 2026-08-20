@@ -8,9 +8,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 
-// Keep the iOS glass design unchanged; Android needs a shorter pill so it does
-// not consume as much of the bottom content area.
-export const GLASS_TAB_BAR_HEIGHT = Platform.OS === 'android' ? 62 : 72;
+// Keep the floating glass bar compact on both platforms so it leaves the
+// final content row visible above the overlay.
+export const GLASS_TAB_BAR_HEIGHT = 62;
 const HORIZONTAL_MARGIN = 14;
 const BOTTOM_GAP = 8;
 
@@ -66,13 +66,12 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
             bottom: insets.bottom + BOTTOM_GAP,
             backgroundColor: effective === 'dark' ? 'rgba(15,23,42,0.76)' : 'rgba(255,255,255,0.78)',
             borderColor: effective === 'dark' ? 'rgba(148,163,184,0.24)' : 'rgba(255,255,255,0.88)',
-            // Android can draw a separator at the top edge of BlurView. Keep
-            // the iOS border untouched, but explicitly remove that edge on Android.
-            borderTopWidth: Platform.OS === 'android' ? 0 : 1,
+            // Explicitly remove the top edge on both platforms. BlurView may otherwise
+            // render a light separator above the floating pill.
+            borderTopWidth: 0,
           },
         ]}
       >
-        {Platform.OS === 'ios' ? <View pointerEvents="none" style={styles.topReflection} /> : null}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -126,7 +125,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
               >
                 <Ionicons
                   name={icon}
-                  size={Platform.OS === 'android' ? 21 : 23}
+                  size={21}
                   color={focused ? colors.primary : colors.textSecondary}
                 />
                 <Text
@@ -183,8 +182,8 @@ const styles = StyleSheet.create({
   },
   activePill: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 4 : 5,
-    bottom: Platform.OS === 'android' ? 4 : 5,
+    top: 4,
+    bottom: 4,
     left: 0,
     borderRadius: 23,
     borderWidth: 1,
@@ -197,12 +196,12 @@ const styles = StyleSheet.create({
   item: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Platform.OS === 'android' ? 2 : 3,
+    gap: 2,
     paddingHorizontal: 4,
   },
   label: {
-    fontSize: Platform.OS === 'android' ? 10 : 11,
-    lineHeight: Platform.OS === 'android' ? 13 : 14,
+    fontSize: 10,
+    lineHeight: 13,
     letterSpacing: 0.1,
   },
   pressed: {
