@@ -7,7 +7,8 @@
 // (or barely visible) from screen to screen. Routing every screen through this
 // component guarantees the exact same branded circular spinner everywhere.
 import React from 'react';
-import { RefreshControl, type RefreshControlProps } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, StyleSheet, View, type RefreshControlProps } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 
 export type AppRefreshControlProps = Omit<RefreshControlProps, 'tintColor' | 'colors' | 'progressBackgroundColor'>;
@@ -33,3 +34,32 @@ export function AppRefreshControl(props: AppRefreshControlProps) {
     />
   );
 }
+
+/**
+ * Home and Profile have a fixed collapsing header above their native scroll
+ * view. On iOS, UIRefreshControl is rendered inside that scroll view and can
+ * therefore sit behind the header. This small native spinner mirrors the
+ * platform refresh indicator while the real RefreshControl still owns the
+ * pull gesture and refresh lifecycle.
+ */
+export function IOSRefreshIndicator({ visible }: { visible: boolean }) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  if (Platform.OS !== 'ios' || !visible) return null;
+
+  return (
+    <View pointerEvents="none" style={[styles.iosIndicator, { top: insets.top + 10 }]}>
+      <ActivityIndicator size="small" color={colors.primary} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  iosIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 70,
+  },
+});

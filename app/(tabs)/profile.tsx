@@ -21,7 +21,7 @@ import { SectionHeading, SectionCard, InfoRow, MenuRow, StatsStrip } from '@/src
 import { Button } from '@/src/components/buttons/Button';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { AppRefreshControl, IOSRefreshIndicator } from '@/src/components/feedback/AppRefreshControl';
 
 export default function ProfileScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
@@ -250,11 +250,11 @@ export default function ProfileScreen() {
         <Button label={t('profile.logout')} variant="danger" onPress={() => setShowLogoutConfirm(true)} />
       </Animated.ScrollView>
 
+      <IOSRefreshIndicator visible={refreshing} />
       <PageLoaderOverlay
         visible={loading || showRefreshLoader}
         opaque
         label={t('profile.loading')}
-        topOffset={HEADER_MAX_HEIGHT + 48}
       />
 
       <ConfirmDialog
