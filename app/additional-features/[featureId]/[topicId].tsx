@@ -244,6 +244,7 @@ export default function AdditionalFeatureTopicScreen() {
 
   const selected = currentQuestion ? selectedAnswers[currentQuestion.questionId] : undefined;
   const hasAnswered = selected !== undefined;
+  const dailyLimit = Math.min(activeQuestions.length, DAILY_LIMIT);
   const dailyUsed = progress?.attemptedQuestionIds.length ?? 0;
   const currentAttempted = currentQuestion ? progress?.attemptedQuestionIds.includes(currentQuestion.questionId) === true : false;
   const currentCorrect = currentQuestion ? progress?.correctQuestionIds.includes(currentQuestion.questionId) === true : false;
@@ -275,7 +276,7 @@ export default function AdditionalFeatureTopicScreen() {
 
   const selectPracticeOption = (optionIndex: number) => {
     if (!currentQuestion || hasAnswered || currentAttempted) return;
-    if (dailyUsed >= DAILY_LIMIT) {
+    if (dailyUsed >= dailyLimit) {
       setShowLimit(true);
       return;
     }
@@ -296,12 +297,12 @@ export default function AdditionalFeatureTopicScreen() {
     setSelectedAnswers((previous) => ({ ...previous, [currentQuestion.questionId]: optionIndex }));
     persist(next);
     setTimeout(() => smoothScrollTo(Math.max(0, explanationY.current - spacing.md)), 180);
-    if (attemptedQuestionIds.length >= DAILY_LIMIT) setShowLimit(true);
+    if (attemptedQuestionIds.length >= dailyLimit) setShowLimit(true);
   };
 
   const handlePracticeNext = () => {
     if (isLast) {
-      if (dailyUsed >= DAILY_LIMIT) setShowLimit(true);
+      if (dailyUsed >= dailyLimit) setShowLimit(true);
       else showToast(labels.finish, 'success');
       return;
     }
@@ -357,11 +358,11 @@ export default function AdditionalFeatureTopicScreen() {
       ) : (
         <ScrollView ref={scrollRef} onScroll={(event) => { scrollYRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
           <View style={[styles.limitRow, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}>
-            <View style={{ flex: 1 }}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{labels.todayPractice}: {dailyUsed}/{DAILY_LIMIT}</Text><Text variant="caption" secondary>{labels.dailyReset}</Text></View>
+            <View style={{ flex: 1 }}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{labels.todayPractice}: {dailyUsed}/{dailyLimit}</Text><Text variant="caption" secondary>{labels.dailyReset}</Text></View>
             <Ionicons name="speedometer-outline" size={22} color={colors.primary} />
           </View>
           <View style={styles.questionMetaRow}><View style={[styles.questionBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{labels.question} {current + 1}</Text></View><View style={styles.metaActions}><Pressable onPress={() => showToast('Bookmark will be available soon.', 'info')} style={styles.actionIcon} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={22} color={colors.primary} /></Pressable><Pressable onPress={() => showToast('Report will be available soon.', 'info')} style={styles.actionIcon} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={22} color={colors.error} /></Pressable></View></View>
-          <PracticeQuestion question={currentQuestion} index={current} total={activeQuestions.length} selected={selected} attempted={currentAttempted} correct={currentCorrect} labels={labels} colors={colors} spacing={spacing} radius={radius} explanationY={explanationY} onSelect={selectPracticeOption} onPrevious={() => setCurrent((value) => Math.max(0, value - 1))} onNext={handlePracticeNext} nextDisabled={!currentAttempted && dailyUsed >= DAILY_LIMIT} />
+          <PracticeQuestion question={currentQuestion} index={current} total={activeQuestions.length} selected={selected} attempted={currentAttempted} correct={currentCorrect} labels={labels} colors={colors} spacing={spacing} radius={radius} explanationY={explanationY} onSelect={selectPracticeOption} onPrevious={() => setCurrent((value) => Math.max(0, value - 1))} onNext={handlePracticeNext} nextDisabled={!currentAttempted && dailyUsed >= dailyLimit} />
         </ScrollView>
       )}
 

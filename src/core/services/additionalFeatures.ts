@@ -65,7 +65,7 @@ export type AdditionalFeaturePracticeProgress = {
 
 const SCOPE_KEY = 'all__all';
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = 2;
+const CACHE_SCHEMA_VERSION = 3;
 const ANSWER_MAPPING_VERSION = 2;
 const CACHE_MIGRATION_KEY = 'af_cache_schema_version';
 
@@ -129,8 +129,8 @@ let cacheMigrationPromise: Promise<void> | null = null;
 
 /**
  * Clears only GK/PM practice results created by the old answer-index mapping.
- * Question-bank data is retained because the new runtime maps answers by option id,
- * so already-downloaded banks remain usable while Offline Access is refreshed.
+ * Question-bank caches are invalidated once so every device receives the canonical
+ * seeded options before the corrected answer mapping is used.
  */
 export async function migrateAdditionalFeatureCache(): Promise<void> {
   if (!cacheMigrationPromise) {
@@ -140,8 +140,9 @@ export async function migrateAdditionalFeatureCache(): Promise<void> {
 
       const keys = await AsyncStorage.getAllKeys();
       const legacyPracticeKeys = keys.filter((key) => key.startsWith('af_practice_gk_') || key.startsWith('af_practice_pm_'));
+      const questionBankKeys = keys.filter((key) => key.startsWith('af_qbank_gk_') || key.startsWith('af_qbank_pm_'));
       const offlineStateKeys = keys.filter((key) => key === offlineCompleteKey('gk') || key === offlineDateKey('gk') || key === offlineCompleteKey('pm') || key === offlineDateKey('pm'));
-      await AsyncStorage.multiRemove([...legacyPracticeKeys, ...offlineStateKeys]);
+      await AsyncStorage.multiRemove([...legacyPracticeKeys, ...questionBankKeys, ...offlineStateKeys]);
       await AsyncStorage.setItem(CACHE_MIGRATION_KEY, String(CACHE_SCHEMA_VERSION));
     })().catch(() => undefined);
   }
