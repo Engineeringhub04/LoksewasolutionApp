@@ -9,7 +9,7 @@ export const AppConfig = {
     buildNumber: 1,
     tagline: 'Prepare Smarter, Score Higher',
     logoAsset: require('../../../assets/images/logo.png'),
-    splashAsset: require('../../../assets/images/logo.png'),
+    splashAsset: require('../../../assets/images/logo_nobg.png'),
   },
   api: {
     baseUrl: 'https://api.loksewasolution.com.np/v1',

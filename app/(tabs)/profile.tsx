@@ -13,7 +13,6 @@ import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { logout } from '@/src/core/firebase/auth';
 import { useProfileStore } from '@/src/core/store/profileStore';
-import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import { formatDob, EMPTY_STATS } from '@/src/core/firebase/services/profile';
 import { AppConfig } from '@/src/core/config/appConfig';
 import { showToast } from '@/src/core/store/toastStore';
@@ -31,6 +30,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showRefreshLoader, setShowRefreshLoader] = useState(false);
 
   const HEADER_MAX_HEIGHT = getProfileHeaderExpandedHeight(insets.top);
 
@@ -47,8 +47,16 @@ export default function ProfileScreen() {
     if (user?.uid) void load(user.uid, { refresh: true });
   };
 
-  // Returning from Edit Profile / Course Setup must show the saved values.
-  useRefreshOnFocus(onRefresh);
+  // Keep the native pull-to-refresh spinner visible briefly before placing the
+  // same opaque centered loader used by other pages over the refreshed content.
+  useEffect(() => {
+    if (!refreshing) {
+      setShowRefreshLoader(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowRefreshLoader(true), 280);
+    return () => clearTimeout(timer);
+  }, [refreshing]);
 
   // Prefer the Firestore document, fall back to the auth session (which is
   // where a Google sign-in's Gmail name/photo lands first).
@@ -242,7 +250,7 @@ export default function ProfileScreen() {
         <Button label={t('profile.logout')} variant="danger" onPress={() => setShowLogoutConfirm(true)} />
       </Animated.ScrollView>
 
-      <PageLoaderOverlay visible={loading} opaque label="Loading Profile..." />
+      <PageLoaderOverlay visible={loading || showRefreshLoader} opaque label="Loading Profile..." />
 
       <ConfirmDialog
         visible={showLogoutConfirm}
