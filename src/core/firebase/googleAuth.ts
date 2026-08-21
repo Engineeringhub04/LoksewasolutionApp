@@ -2,9 +2,11 @@
 // Expo Go uses the legacy Expo AuthSession proxy as a compatibility fallback.
 // Development/standalone builds use the app's own deep-link scheme and native
 // Google client IDs. The same hook is used by Login and Sign Up.
+import { useEffect, useRef } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { getRedirectUrl, makeRedirectUri } from 'expo-auth-session';
+import type { AuthSessionResult } from 'expo-auth-session';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { firebaseEnv } from './env';
 
@@ -12,6 +14,16 @@ WebBrowser.maybeCompleteAuthSession();
 
 const APP_SCHEME = 'loksewasolutionapp';
 const EXPO_PROJECT_FULL_NAME = '@mrchettry/LoksewasolutionApp';
+const TOKEN_WAIT_TIMEOUT_MS = 10000;
+const TOKEN_WAIT_INTERVAL_MS = 100;
+type GoogleSuccessResponse = {
+  type: 'success';
+  params: Record<string, string>;
+  errorCode: string | null;
+  error?: unknown;
+  authentication: unknown;
+  url: string;
+};
 
 function isExpoGo(): boolean {
   return Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -28,11 +40,16 @@ function getExpoProxyRedirectUri(): string {
   }
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 /**
- * Returns [request, response, promptAsync]. The response contains an id_token
- * which feeds signInWithGoogleIdToken(). Expo Go uses the Web OAuth client and
- * the legacy Expo proxy; native builds use the platform-specific client IDs and
- * the app's custom scheme. No environment-specific source change is required.
+ * Returns [request, response, promptAsync]. Google.useIdTokenAuthRequest returns
+ * the raw browser result immediately, then asynchronously exchanges an OAuth
+ * authorization code and updates its second response value with `id_token`.
+ * This wrapper waits for that processed response before returning to the auth
+ * screens, which prevents a successful browser redirect from stopping at Login.
  */
 export function useGoogleAuthRequest() {
   const runningInExpoGo = isExpoGo();
@@ -40,6 +57,7 @@ export function useGoogleAuthRequest() {
   const redirectUri = runningInExpoGo
     ? expoProxyRedirectUri!
     : makeRedirectUri({ scheme: APP_SCHEME, path: 'oauthredirect' });
+  const responseRef = useRef<unknown>(null);
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     runningInExpoGo
@@ -61,25 +79,53 @@ export function useGoogleAuthRequest() {
         }
   );
 
+  useEffect(() => {
+    if (response?.type === 'success') {
+      responseRef.current = response;
+    }
+  }, [response]);
+
   const promptGoogleAuth = async () => {
+    responseRef.current = null;
+
+    let promptResult: AuthSessionResult;
     if (!runningInExpoGo) {
-      return promptAsync();
+      promptResult = await promptAsync();
+    } else {
+      if (!request) {
+        throw new Error('Google authentication request is still loading.');
+      }
+
+      // The proxy /start endpoint remembers the Expo Go return URL, forwards the
+      // user to Google, and then sends the OAuth result back to the running app.
+      const authUrl = request.url ?? (await request.makeAuthUrlAsync(Google.discovery));
+      const returnUrl = makeRedirectUri({ scheme: APP_SCHEME });
+      const proxyStartUrl = `${expoProxyRedirectUri}/start?${new URLSearchParams({
+        authUrl,
+        returnUrl,
+      }).toString()}`;
+      promptResult = await promptAsync({ url: proxyStartUrl });
     }
 
-    if (!request) {
-      throw new Error('Google authentication request is still loading.');
+    // If Google returned an id_token directly, no wait is needed. On Android/iOS
+    // and Expo Go proxy flows, AuthSession normally returns a code first and then
+    // updates the hook response after its automatic code exchange.
+    if (promptResult.type !== 'success' || promptResult.params?.id_token) {
+      return promptResult;
     }
 
-    // The proxy /start endpoint remembers the Expo Go return URL, forwards the
-    // user to Google, and then sends the OAuth result back to the running app.
-    const authUrl = request.url ?? (await request.makeAuthUrlAsync(Google.discovery));
-    const returnUrl = makeRedirectUri({ scheme: APP_SCHEME });
-    const proxyStartUrl = `${expoProxyRedirectUri}/start?${new URLSearchParams({
-      authUrl,
-      returnUrl,
-    }).toString()}`;
+    const deadline = Date.now() + TOKEN_WAIT_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const processedResponse = responseRef.current as GoogleSuccessResponse | null;
+      if (processedResponse && processedResponse.params.id_token) {
+        return processedResponse;
+      }
+      await wait(TOKEN_WAIT_INTERVAL_MS);
+    }
 
-    return promptAsync({ url: proxyStartUrl });
+    // Return the latest result so the auth screen can show its normal error
+    // message instead of silently remaining on the login page.
+    return (responseRef.current as GoogleSuccessResponse | null) ?? promptResult;
   };
 
   return [request, response, promptGoogleAuth] as const;

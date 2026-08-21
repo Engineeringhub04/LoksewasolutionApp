@@ -14,6 +14,7 @@ import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { GoogleIcon } from '@/src/components/misc/GoogleIcon';
 import { AuthScreenLayout } from '@/src/components/misc/AuthScreenLayout';
+import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -61,15 +62,22 @@ export default function LoginScreen() {
       if (result?.type === 'success' && result.params?.id_token) {
         const user = await signInWithGoogleIdToken(result.params.id_token);
         const hasCourse = await hasUserCourseSetup(user.uid).catch(() => false);
-        setGoogleLoading(false);
         router.replace(hasCourse ? '/(tabs)' : '/course-setup');
         showToast('Login successful', 'success');
         return;
       }
-    } catch {
-      showToast('Google Sign-In failed. Please try again.', 'error');
+      if (result?.type === 'cancel' || result?.type === 'dismiss') return;
+      showToast('Google Sign-In could not be completed. Please try again.', 'error');
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'auth/email-already-in-use' || code === 'auth/account-exists-with-different-credential') {
+        showToast('This email already has an email/password account. Please use email and password to log in.', 'error');
+      } else {
+        showToast('Google Sign-In failed. Please try again.', 'error');
+      }
+    } finally {
+      setGoogleLoading(false);
     }
-    setGoogleLoading(false);
   };
 
   return (
@@ -150,6 +158,7 @@ export default function LoginScreen() {
           )}
         </Animated.View>
       </AuthScreenLayout>
+      <PageLoaderOverlay visible={googleLoading} label="Signing in with Google..." />
     </KeyboardAvoidingView>
   );
 }
