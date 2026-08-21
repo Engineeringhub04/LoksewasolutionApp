@@ -61,8 +61,23 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + systemBottomInset }]}
+      style={[
+        styles.host,
+        {
+          height: GLASS_TAB_BAR_HEIGHT + systemBottomInset,
+          // The host is an opaque dock behind the glass pill on Android. This
+          // masks the scroll view underneath the reserved bottom area while
+          // preserving the existing translucent glass-bar design itself.
+          backgroundColor: Platform.OS === 'android' ? colors.background : 'transparent',
+        },
+      ]}
     >
+      {Platform.OS === 'android' && systemBottomInset > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[styles.systemInsetFill, { height: systemBottomInset }]}
+        />
+      ) : null}
       <BlurView
         intensity={effective === 'dark' ? 48 : 62}
         tint={effective === 'dark' ? 'dark' : 'light'}
@@ -167,6 +182,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent',
     zIndex: 20,
+  },
+  systemInsetFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
   },
   bar: {
     position: 'absolute',
