@@ -12,11 +12,15 @@ import { useTheme } from '@/src/core/theme';
 // final content row visible above the overlay.
 export const GLASS_TAB_BAR_HEIGHT = 56;
 const HORIZONTAL_MARGIN = 14;
-const BOTTOM_GAP = 6;
+// The system navigation inset is reserved below the custom bar. Keeping this
+// gap at zero makes the bar sit directly above Android's three-button area and
+// flush with the gesture-navigation edge when that inset is zero.
+const BOTTOM_GAP = 0;
 
 /** Bottom clearance required by screens whose content scrolls below the glass pill. */
 export function getGlassTabBarContentPadding(bottomInset: number) {
-  return GLASS_TAB_BAR_HEIGHT + BOTTOM_GAP + 12 + bottomInset;
+  const systemBottomInset = Math.max(0, bottomInset);
+  return GLASS_TAB_BAR_HEIGHT + BOTTOM_GAP + 12 + systemBottomInset;
 }
 
 const iconNames = {
@@ -38,6 +42,10 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   const { colors, effective, motion } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  // Safe-area bottom is dynamic: Android reports the three-button navigation
+  // area, while gesture navigation normally reports zero. Do not add a fixed
+  // padding value on top of it or the bar floats too high on older devices.
+  const systemBottomInset = Math.max(0, insets.bottom);
   const barWidth = Math.max(280, width - HORIZONTAL_MARGIN * 2);
   const itemWidth = barWidth / state.routes.length;
   const activeX = useSharedValue(state.index * itemWidth + 4);
@@ -53,7 +61,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + insets.bottom + 8 }]}
+      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + systemBottomInset }]}
     >
       <BlurView
         intensity={effective === 'dark' ? 48 : 62}
@@ -63,7 +71,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
           styles.bar,
           {
             width: barWidth,
-            bottom: insets.bottom + BOTTOM_GAP,
+            bottom: systemBottomInset + BOTTOM_GAP,
             backgroundColor: effective === 'dark' ? 'rgba(15,23,42,0.76)' : 'rgba(255,255,255,0.78)',
             borderColor: effective === 'dark' ? 'rgba(148,163,184,0.24)' : 'rgba(255,255,255,0.88)',
             // Explicitly remove the top edge on both platforms. BlurView may otherwise
