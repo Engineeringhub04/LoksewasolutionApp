@@ -144,8 +144,15 @@ export async function deleteCurrentAccount(): Promise<void> {
   await clearSession();
 }
 
-/** Exchanges a Google ID token (from expo-auth-session) for a Firebase session. */
-export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser> {
+/** Result of exchanging a Google ID token for a Firebase session. */
+export interface GoogleSignInResult {
+  user: AppUser;
+  /** True only when Firebase created this account during the current sign-in. */
+  isNewUser: boolean;
+}
+
+/** Exchanges a Google ID token and returns account-creation metadata for routing. */
+export async function signInWithGoogleIdTokenResult(idToken: string): Promise<GoogleSignInResult> {
   const res = await identityRequest<IdentityAuthResponse>('signInWithIdp', {
     // Keep Google OAuth tokens URL-safe when sending the REST postBody.
     postBody: `id_token=${encodeURIComponent(idToken)}&providerId=google.com`,
@@ -190,6 +197,12 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser>
   if (res.isNewUser) {
     await ensureUserDoc(user, { photoURLSource: user.photoURL ? 'google' : 'none' });
   }
+  return { user, isNewUser: res.isNewUser === true };
+}
+
+/** Backward-compatible Google sign-in helper for callers that only need the user. */
+export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser> {
+  const { user } = await signInWithGoogleIdTokenResult(idToken);
   return user;
 }
 

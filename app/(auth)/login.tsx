@@ -1,11 +1,11 @@
 // §13 Login — Fixed curved header (logo + title + description), scrollable body
 // slides underneath it. Continue with Email fades fields in/out.
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, withTiming, withSequence, useAnimatedStyle, FadeIn, FadeOut } from 'react-native-reanimated';
-import { loginWithEmail, signInWithGoogleIdToken } from '@/src/core/firebase/auth';
+import { loginWithEmail, signInWithGoogleIdTokenResult } from '@/src/core/firebase/auth';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
 import { useGoogleAuthRequest } from '@/src/core/firebase/googleAuth';
 import { hasUserCourseSetup } from '@/src/core/firebase/services/courses';
@@ -23,6 +23,7 @@ export default function LoginScreen() {
   const [showEmailFields, setShowEmailFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const redirectingAfterGoogleRef = useRef(false);
   const shake = useSharedValue(0);
   const [, , promptGoogleAuth] = useGoogleAuthRequest();
 
@@ -57,12 +58,16 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     if (!isFirebaseConfigured) { showToast('Firebase is not configured', 'warning'); return; }
     setGoogleLoading(true);
+    redirectingAfterGoogleRef.current = false;
     try {
       const result = await promptGoogleAuth();
       if (result?.type === 'success' && result.params?.id_token) {
-        const user = await signInWithGoogleIdToken(result.params.id_token);
-        const hasCourse = await hasUserCourseSetup(user.uid).catch(() => false);
-        router.replace(hasCourse ? '/(tabs)' : '/course-setup');
+        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token);
+        // Firebase's isNewUser is the source of truth here: an existing account
+        // selected from the signup screen must return to Home, while only a
+        // genuinely newly-created Google account needs course setup.
+        redirectingAfterGoogleRef.current = true;
+        router.replace(isNewUser ? '/course-setup' : '/(tabs)');
         showToast('Login successful', 'success');
         return;
       }
@@ -76,7 +81,10 @@ export default function LoginScreen() {
         showToast('Google Sign-In failed. Please try again.', 'error');
       }
     } finally {
-      setGoogleLoading(false);
+      // Keep the full-screen loader mounted while Expo Router replaces this
+      // screen; clearing it here caused a brief flash of the login page after
+      // native Google returned to the app.
+      if (!redirectingAfterGoogleRef.current) setGoogleLoading(false);
     }
   };
 

@@ -1,11 +1,11 @@
 // §14 Signup — Fixed curved header, scrollable body slides underneath it.
 // Continue with Email fades fields in/out.
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { registerWithEmail, signInWithGoogleIdToken } from '@/src/core/firebase/auth';
+import { registerWithEmail, signInWithGoogleIdTokenResult } from '@/src/core/firebase/auth';
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
 import { useGoogleAuthRequest } from '@/src/core/firebase/googleAuth';
 import { showToast } from '@/src/core/store/toastStore';
@@ -23,6 +23,7 @@ export default function SignupScreen() {
   const [showFields, setShowFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const redirectingAfterGoogleRef = useRef(false);
   const [, , promptGoogleAuth] = useGoogleAuthRequest();
 
   const handleSignup = async () => {
@@ -46,11 +47,15 @@ export default function SignupScreen() {
   const handleGoogleSignIn = async () => {
     if (!isFirebaseConfigured) { showToast('Firebase is not configured', 'warning'); return; }
     setGoogleLoading(true);
+    redirectingAfterGoogleRef.current = false;
     try {
       const result = await promptGoogleAuth();
       if (result?.type === 'success' && result.params?.id_token) {
-        await signInWithGoogleIdToken(result.params.id_token);
-        router.replace('/course-setup');
+        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token);
+        // An existing Google account is a login even when the button was
+        // pressed from Signup; only a newly-created account needs setup.
+        redirectingAfterGoogleRef.current = true;
+        router.replace(isNewUser ? '/course-setup' : '/(tabs)');
         showToast('Google account signed in successfully', 'success');
         return;
       }
@@ -64,7 +69,9 @@ export default function SignupScreen() {
         showToast('Google Sign-In failed. Please try again.', 'error');
       }
     } finally {
-      setGoogleLoading(false);
+      // Do not reveal the signup screen between successful authentication and
+      // the destination screen while Expo Router completes the replacement.
+      if (!redirectingAfterGoogleRef.current) setGoogleLoading(false);
     }
   };
 
