@@ -3,7 +3,7 @@
 // SDK-based auth.ts exactly, so no call site outside this file needs to change.
 import { firebaseEnv } from './env';
 import { setSession, clearSession, updateSessionUser, getValidIdToken, subscribeToAuthChanges as subscribeToSessionChanges, type AppUser } from './session';
-import { setDocument, serverTimestamp } from './firestoreRest';
+import { getDocument, setDocument, serverTimestamp } from './firestoreRest';
 import { Collections } from './collections';
 
 const IDENTITY_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
@@ -65,8 +65,8 @@ function toAppUser(res: IdentityAuthResponse): AppUser {
   };
 }
 
-async function storeSession(res: IdentityAuthResponse): Promise<AppUser> {
-  const user = toAppUser(res);
+async function storeSession(res: IdentityAuthResponse, override?: Partial<AppUser>): Promise<AppUser> {
+  const user = { ...toAppUser(res), ...override };
   await setSession({ idToken: res.idToken, refreshToken: res.refreshToken, expiresInSeconds: Number(res.expiresIn), user });
   return user;
 }
@@ -79,6 +79,7 @@ async function ensureUserDoc(user: AppUser, extra?: Record<string, unknown>) {
       name: user.displayName ?? extra?.name ?? '',
       email: user.email,
       photoURL: user.photoURL ?? null,
+      photoURLSource: extra?.photoURLSource ?? (user.photoURL ? 'google' : 'none'),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       ...extra,
@@ -169,13 +170,23 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser>
     throw new Error('auth/google-token-exchange-failed');
   }
 
-  const user = await storeSession(res);
+  // Preserve a manually uploaded photo from the profile document. Older user
+  // documents without photoURLSource are treated as manual when they already
+  // contain a non-empty photoURL, so this remains backward compatible.
+  const existingProfile = await getDocument(`${Collections.users}/${res.localId}`).catch(() => null);
+  const existingPhoto = typeof existingProfile?.photoURL === 'string' ? existingProfile.photoURL : null;
+  const existingPhotoSource = existingProfile?.photoURLSource;
+  const hasManualPhoto = Boolean(
+    existingPhoto && existingPhotoSource !== 'google' && existingPhotoSource !== 'none'
+  );
+
+  const user = await storeSession(res, hasManualPhoto ? { photoURL: existingPhoto } : undefined);
   // Firebase already returns the existing session for a repeated Google IdP
   // sign-in. Only create the Firestore profile document for a genuinely new
   // Google account; rewriting `createdAt` on every re-login can be rejected by
   // Firestore rules and incorrectly surface as a Google sign-in failure.
   if (res.isNewUser) {
-    await ensureUserDoc(user);
+    await ensureUserDoc(user, { photoURLSource: user.photoURL ? 'google' : 'none' });
   }
   return user;
 }
