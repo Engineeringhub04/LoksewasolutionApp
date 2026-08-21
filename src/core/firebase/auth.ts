@@ -53,6 +53,7 @@ interface IdentityAuthResponse {
   photoUrl?: string;
   errorMessage?: string;
   pendingToken?: string;
+  isNewUser?: boolean;
 }
 
 function toAppUser(res: IdentityAuthResponse): AppUser {
@@ -169,7 +170,13 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser>
   }
 
   const user = await storeSession(res);
-  await ensureUserDoc(user);
+  // Firebase already returns the existing session for a repeated Google IdP
+  // sign-in. Only create the Firestore profile document for a genuinely new
+  // Google account; rewriting `createdAt` on every re-login can be rejected by
+  // Firestore rules and incorrectly surface as a Google sign-in failure.
+  if (res.isNewUser) {
+    await ensureUserDoc(user);
+  }
   return user;
 }
 
