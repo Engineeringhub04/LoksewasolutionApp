@@ -242,6 +242,7 @@ export default function EditProfileScreen() {
     try {
       // Only a freshly picked local file needs uploading; an existing https URL
       // (Cloudinary or a Google avatar) is already hosted.
+      const photoWasChanged = photoURL !== initial.photoURL;
       let resolvedPhotoURL = photoURL;
       if (photoURL && !/^https?:\/\//i.test(photoURL)) {
         setUploadState('uploading');
@@ -251,12 +252,20 @@ export default function EditProfileScreen() {
         showToast(t('editProfile.photoUploaded'), 'success');
       }
 
+      // A photo selected/removed in Edit Profile is always a manual choice.
+      // If the photo was not touched, leave its existing source unchanged so a
+      // Google re-login cannot replace a manually uploaded Cloudinary photo.
+      const photoURLSource: 'manual' | 'none' | undefined = photoWasChanged
+        ? (resolvedPhotoURL ? 'manual' : 'none')
+        : undefined;
+
       await updateUserProfile(user.uid, {
         firstName,
         lastName,
         dob: dob ? dob : null,
         gender,
         photoURL: resolvedPhotoURL,
+        photoURLSource,
       });
 
       // Keep the cached auth session in sync so the Home/Profile headers update

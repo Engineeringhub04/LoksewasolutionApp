@@ -20,6 +20,7 @@ import { getDocument, setDocument, deleteDocument, serverTimestamp } from '@/src
 import { Collections } from '@/src/core/firebase/collections';
 
 export type Gender = 'male' | 'female' | 'other';
+export type PhotoURLSource = 'manual' | 'google' | 'none';
 
 export interface UserStats {
   testsTaken: number;
@@ -37,6 +38,7 @@ export interface UserProfile {
   dob: string | null; // ISO calendar date, 'YYYY-MM-DD'
   gender: Gender | null;
   photoURL: string | null;
+  photoURLSource: PhotoURLSource;
   courseId: string | null;
   subcourseId: string | null;
   stats: UserStats;
@@ -131,6 +133,10 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
     dob: (doc.dob as string | undefined) ?? null,
     gender: toGender(doc.gender),
     photoURL: (doc.photoURL as string | undefined) ?? null,
+    photoURLSource:
+      doc.photoURLSource === 'manual' || doc.photoURLSource === 'google' || doc.photoURLSource === 'none'
+        ? doc.photoURLSource
+        : ((doc.photoURL as string | undefined) ? 'manual' : 'none'),
     courseId: (doc.courseId as string | undefined) ?? null,
     subcourseId: (doc.subcourseId as string | undefined) ?? null,
     stats: toStats(doc.stats),
@@ -148,6 +154,7 @@ export interface UpdateUserProfileInput {
   dob: string | null;
   gender: Gender | null;
   photoURL: string | null;
+  photoURLSource?: PhotoURLSource;
 }
 
 /**
@@ -165,6 +172,7 @@ export async function updateUserProfile(uid: string, input: UpdateUserProfileInp
       dob: input.dob,
       gender: input.gender,
       photoURL: input.photoURL,
+      ...(input.photoURLSource !== undefined ? { photoURLSource: input.photoURLSource } : {}),
       updatedAt: serverTimestamp(),
     },
     { merge: true }
