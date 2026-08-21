@@ -53,3 +53,11 @@ Firebase Identity Toolkit `accounts.signInWithIdp` can create a new IdP account 
 ## 2026-08-21 client_secret error
 
 Expo Go successfully completed consent/account selection and returned to the app, but `useIdTokenAuthRequest` then attempted an authorization-code exchange at Google's token endpoint. The Web OAuth client cannot perform that exchange from the mobile client without a client secret, and a client secret must not be bundled into Expo Go or a native app. The Google hook now uses `useAuthRequest` with `responseType: ResponseType.IdToken`, so Google returns the ID token directly and the app sends that public token to Firebase Identity Toolkit. Native builds use Android/iOS client IDs with the same public response type; no client-secret value is added to `.env`.
+
+## Repeated Google sign-in and account-linking reference
+
+Firebase Identity Platform `accounts.signInWithIdp` creates a user on the first IdP sign-in and returns an existing Identity Platform session when the same IdP account signs in again. A manually supplied Google `id_token` is sent with `providerId=google.com` and `requestUri: http://localhost`. `returnIdpCredential` is intended for returning credentials on `EMAIL_EXISTS` or `FEDERATED_USER_ID_ALREADY_LINKED` errors; ordinary sign-in keeps it false so an already linked Google credential is not treated as a linking attempt.
+
+References:
+- https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/signInWithIdp
+- https://docs.cloud.google.com/identity-platform/docs/link-accounts
