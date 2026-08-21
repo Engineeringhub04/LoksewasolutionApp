@@ -50,6 +50,8 @@ interface IdentityAuthResponse {
   email?: string;
   displayName?: string;
   photoUrl?: string;
+  errorMessage?: string;
+  pendingToken?: string;
 }
 
 function toAppUser(res: IdentityAuthResponse): AppUser {
@@ -140,11 +142,27 @@ export async function deleteCurrentAccount(): Promise<void> {
 /** Exchanges a Google ID token (from expo-auth-session) for a Firebase session. */
 export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser> {
   const res = await identityRequest<IdentityAuthResponse>('signInWithIdp', {
-    postBody: `id_token=${idToken}&providerId=google.com`,
+    // Keep Google OAuth tokens URL-safe when sending the REST postBody.
+    postBody: `id_token=${encodeURIComponent(idToken)}&providerId=google.com`,
     requestUri: 'http://localhost',
     returnSecureToken: true,
     returnIdpCredential: true,
   });
+
+  // With one-account-per-email enabled, Firebase can return a successful HTTP
+  // response containing EMAIL_EXISTS instead of issuing a second account. A
+  // Google credential cannot silently authenticate an email/password account;
+  // the user must use that account's password to log in and link providers.
+  if (res.errorMessage === 'EMAIL_EXISTS' || res.errorMessage === 'FEDERATED_USER_ID_ALREADY_LINKED') {
+    const error = new Error('auth/account-exists-with-different-credential') as Error & { code: string };
+    error.code = 'auth/account-exists-with-different-credential';
+    throw error;
+  }
+
+  if (!res.idToken || !res.refreshToken || !res.localId) {
+    throw new Error('auth/google-token-exchange-failed');
+  }
+
   const user = await storeSession(res);
   await ensureUserDoc(user);
   return user;
