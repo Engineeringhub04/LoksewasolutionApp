@@ -2,6 +2,7 @@
 // hand-rolled fetch() requests. Exported function signatures match the original
 // SDK-based auth.ts exactly, so no call site outside this file needs to change.
 import { firebaseEnv } from './env';
+import { signOutNativeGoogleIfAvailable } from './googleAuth';
 import { setSession, clearSession, updateSessionUser, getValidIdToken, subscribeToAuthChanges as subscribeToSessionChanges, type AppUser } from './session';
 import { getDocument, setDocument, serverTimestamp } from './firestoreRest';
 import { Collections } from './collections';
@@ -106,6 +107,7 @@ export async function loginWithEmail(email: string, password: string): Promise<A
 }
 
 export async function logout(): Promise<void> {
+  await signOutNativeGoogleIfAvailable();
   await clearSession();
 }
 
