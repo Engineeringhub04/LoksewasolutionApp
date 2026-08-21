@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { getRedirectUrl, makeRedirectUri } from 'expo-auth-session';
+import { getRedirectUrl, makeRedirectUri, ResponseType } from 'expo-auth-session';
 import type { AuthSessionResult } from 'expo-auth-session';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { firebaseEnv } from './env';
@@ -45,11 +45,11 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 /**
- * Returns [request, response, promptAsync]. Google.useIdTokenAuthRequest returns
- * the raw browser result immediately, then asynchronously exchanges an OAuth
- * authorization code and updates its second response value with `id_token`.
- * This wrapper waits for that processed response before returning to the auth
- * screens, which prevents a successful browser redirect from stopping at Login.
+ * Returns [request, response, promptAsync]. The request explicitly uses the
+ * OAuth implicit ID-token response so Expo Go never calls Google's token
+ * endpoint and never needs a client_secret. The native build uses its native
+ * client ID but the same public response flow, so no environment code switch
+ * is required.
  */
 export function useGoogleAuthRequest() {
   const runningInExpoGo = isExpoGo();
@@ -59,13 +59,14 @@ export function useGoogleAuthRequest() {
     : makeRedirectUri({ scheme: APP_SCHEME, path: 'oauthredirect' });
   const responseRef = useRef<unknown>(null);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
+  const [request, response, promptAsync] = Google.useAuthRequest(
     runningInExpoGo
       ? {
           // Expo Go must use the Web client because its temporary exp:// URI is
           // not a native Android/iOS redirect.
           clientId: firebaseEnv.googleWebClientId,
           redirectUri,
+          responseType: ResponseType.IdToken,
           selectAccount: true,
         }
       : {
@@ -75,6 +76,7 @@ export function useGoogleAuthRequest() {
           iosClientId: firebaseEnv.googleIosClientId || undefined,
           androidClientId: firebaseEnv.googleAndroidClientId || undefined,
           redirectUri,
+          responseType: ResponseType.IdToken,
           selectAccount: true,
         }
   );
@@ -107,9 +109,9 @@ export function useGoogleAuthRequest() {
       promptResult = await promptAsync({ url: proxyStartUrl });
     }
 
-    // If Google returned an id_token directly, no wait is needed. On Android/iOS
-    // and Expo Go proxy flows, AuthSession normally returns a code first and then
-    // updates the hook response after its automatic code exchange.
+    // The implicit response should contain the ID token directly. Keep a short
+    // response-state wait for browsers/proxies that complete the redirect one
+    // render after promptAsync resolves.
     if (promptResult.type !== 'success' || promptResult.params?.id_token) {
       return promptResult;
     }

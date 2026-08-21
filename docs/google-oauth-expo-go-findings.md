@@ -34,7 +34,7 @@ Key points from the official docs: use `AuthSession.makeRedirectUri()` for platf
 5. Verify Firebase Authentication Google provider and authorized domains after Google authorization succeeds.
 6. Test with the user’s Gmail account after configuration; native in-app account picker is a separate native Google Sign-In implementation and is not required for the current browser-flow goal.
 
-No code changes were made for this investigation.
+The initial investigation above made no code changes; later implementation work is documented below.
 
 ## Current SDK 54 verification
 
@@ -49,3 +49,7 @@ For this PR, the requested best-effort Expo Go fallback will use the legacy prox
 The installed Expo Google provider returns the immediate AuthSession result from `promptAsync`, while its `useIdTokenAuthRequest` hook asynchronously auto-exchanges a successful authorization code and exposes the processed result through the hook's second `response` value. The login screens must therefore wait for/read the processed response instead of checking only the immediate prompt result for `params.id_token`.
 
 Firebase Identity Toolkit `accounts.signInWithIdp` can create a new IdP account when the Google identity is new. With one-account-per-email enabled, an existing email/password account with the same email is not silently authenticated by a Google credential; account linking requires the user to authenticate to the existing account first. The safe app behavior is to surface an existing-email message and avoid creating a second account. Sources: https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/signInWithIdp ; https://firebase.google.com/docs/auth/web/google-signin ; https://firebase.google.com/docs/reference/rest/auth#section-sign-in-with-oauth-credential
+
+## 2026-08-21 client_secret error
+
+Expo Go successfully completed consent/account selection and returned to the app, but `useIdTokenAuthRequest` then attempted an authorization-code exchange at Google's token endpoint. The Web OAuth client cannot perform that exchange from the mobile client without a client secret, and a client secret must not be bundled into Expo Go or a native app. The Google hook now uses `useAuthRequest` with `responseType: ResponseType.IdToken`, so Google returns the ID token directly and the app sends that public token to Firebase Identity Toolkit. Native builds use Android/iOS client IDs with the same public response type; no client-secret value is added to `.env`.
