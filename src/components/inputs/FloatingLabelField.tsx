@@ -21,6 +21,8 @@ export interface FloatingLabelFieldProps extends TextInputProps {
   secureToggle?: boolean;
   leftIcon?: keyof typeof Ionicons.glyphMap;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Auth screens stay light even when the app theme is dark. */
+  lightTheme?: boolean;
 }
 
 const EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
@@ -37,9 +39,27 @@ export function FloatingLabelField({
   onFocus,
   onBlur,
   multiline,
+  lightTheme = false,
   ...rest
 }: FloatingLabelFieldProps) {
   const { colors, spacing, radius, typography } = useTheme();
+  const inputColors = lightTheme
+    ? {
+        surface: '#FFFFFF',
+        border: '#E5E7EB',
+        textPrimary: '#1F2937',
+        textSecondary: '#6B7280',
+        textDisabled: '#9CA3AF',
+        primary: '#7C3AED',
+      }
+    : {
+        surface: colors.surface,
+        border: colors.border,
+        textPrimary: colors.textPrimary,
+        textSecondary: colors.textSecondary,
+        textDisabled: colors.textDisabled,
+        primary: colors.primary,
+      };
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(!!secureTextEntry);
   const hasError = !!errorText;
@@ -66,11 +86,11 @@ export function FloatingLabelField({
   }));
 
   const labelColorStyle = useAnimatedStyle(() => ({
-    color: hasError ? colors.error : interpolateColor(colorAnim.value, [0, 1], [colors.textSecondary, colors.primary]),
+    color: hasError ? colors.error : interpolateColor(colorAnim.value, [0, 1], [inputColors.textSecondary, inputColors.primary]),
   }));
 
   const borderColorStyle = useAnimatedStyle(() => ({
-    borderColor: hasError ? colors.error : interpolateColor(colorAnim.value, [0, 1], [colors.border, colors.primary]),
+    borderColor: hasError ? colors.error : interpolateColor(colorAnim.value, [0, 1], [inputColors.border, inputColors.primary]),
   }));
 
   return (
@@ -82,7 +102,7 @@ export function FloatingLabelField({
             alignItems: multiline ? 'flex-start' : 'center',
             borderWidth: 1.5,
             borderRadius: radius.md,
-            backgroundColor: colors.surface,
+            backgroundColor: inputColors.surface,
             paddingHorizontal: spacing.md,
             minHeight: 58,
             // Multiline fields grow with content, so the label needs its own
@@ -96,7 +116,7 @@ export function FloatingLabelField({
         ]}
       >
         {leftIcon ? (
-          <Ionicons name={leftIcon} size={20} color={focused ? colors.primary : colors.textSecondary} style={{ marginRight: spacing.sm, marginTop: multiline ? 2 : 0 }} />
+          <Ionicons name={leftIcon} size={20} color={focused ? inputColors.primary : inputColors.textSecondary} style={{ marginRight: spacing.sm, marginTop: multiline ? 2 : 0 }} />
         ) : null}
 
         <View style={{ flex: 1, justifyContent: multiline ? 'flex-start' : 'center' }}>
@@ -115,7 +135,7 @@ export function FloatingLabelField({
                 { fontSize: typography.bodyLarge.fontSize, fontWeight: typography.bodyLarge.fontWeight },
                 labelColorStyle,
                 {
-                  backgroundColor: focused || hasValue ? colors.surface : 'transparent',
+                  backgroundColor: focused || hasValue ? inputColors.surface : 'transparent',
                   paddingHorizontal: focused || hasValue ? 2 : 0,
                 },
               ]}
@@ -132,13 +152,13 @@ export function FloatingLabelField({
             onFocus={(e) => { setFocused(true); onFocus?.(e); }}
             onBlur={(e) => { setFocused(false); onBlur?.(e); }}
             placeholder=""
-            placeholderTextColor={colors.textDisabled}
+            placeholderTextColor={inputColors.textDisabled}
             style={[
               {
                 paddingTop: multiline ? 0 : 14,
                 paddingBottom: multiline ? 0 : 2,
                 fontSize: typography.bodyLarge.fontSize,
-                color: colors.textPrimary,
+                color: inputColors.textPrimary,
               },
               style,
             ]}
@@ -147,7 +167,7 @@ export function FloatingLabelField({
 
         {secureToggle ? (
           <Pressable onPress={() => setHidden((h) => !h)} accessibilityLabel={hidden ? 'Show password' : 'Hide password'}>
-            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.textSecondary} />
+            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={inputColors.textSecondary} />
           </Pressable>
         ) : null}
       </Animated.View>
