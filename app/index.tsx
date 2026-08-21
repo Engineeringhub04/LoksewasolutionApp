@@ -1,8 +1,8 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
 // Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
-// Uses expo-image for the bundled transparent logo so it decodes quickly on first mount.
+// Uses the native bundled image renderer for the local logo so it has no remote-style transition.
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image as NativeImage, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -228,13 +228,12 @@ export default function SplashScreen() {
       <SplashGlow />
 
       <View style={styles.brandContent}>
-        <ExpoImage
+        <NativeImage
           source={AppConfig.identity.splashAsset}
           style={{ width: logoWidth, height: logoHeight }}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-          priority="high"
-          transition={0}
+          resizeMode="contain"
+          resizeMethod="resize"
+          fadeDuration={0}
         />
         <Text variant="h1" weight="bold" style={styles.appName}>Loksewa Solution</Text>
         <Text variant="body" style={styles.tagline}>Prepare Today. Lead Tomorrow.</Text>

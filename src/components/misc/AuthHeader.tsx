@@ -2,9 +2,8 @@
 // Bigger purple gradient card with logo, page title, and short description —
 // all inside the header itself (no separate title block in the white body).
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { Image, View, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/src/components/misc/Text';
@@ -34,9 +33,9 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
           <Image
             source={AppConfig.identity.logoAsset}
             style={styles.logoImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={0}
+            resizeMode="cover"
+            resizeMethod="resize"
+            fadeDuration={0}
           />
         </View>
         <Text variant="h1" weight="bold" style={styles.title}>{title}</Text>

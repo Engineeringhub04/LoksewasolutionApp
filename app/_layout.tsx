@@ -61,14 +61,15 @@ function RootStack() {
       <Stack
         screenOptions={{
           headerShown: false,
-          // Android can capture a transitional white/dim frame while the
-          // custom Splash route is replaced by the tab navigator. Disable the
-          // native stack animation there and keep the transition background
-          // aligned with the active theme. iOS keeps its existing transition.
-          animation: Platform.OS === 'android' ? 'none' : undefined,
+          // Use the native Android slide for regular pages. Splash and the tab
+          // shell override this below so the existing white-flash fix remains
+          // intact when the launch route is replaced by the app shell.
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           contentStyle: { backgroundColor: colors.background },
         }}
       >
+        <Stack.Screen name="index" options={{ animation: 'none' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>
