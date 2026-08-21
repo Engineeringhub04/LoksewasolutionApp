@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -18,7 +19,7 @@ export const unstable_settings = {
 };
 
 function RootStack() {
-  const { effective } = useTheme();
+  const { colors, effective } = useTheme();
   const userUid = useAuthStore((s) => s.user?.uid ?? null);
 
   useEffect(() => {
@@ -57,7 +58,17 @@ function RootStack() {
         default screenOptions fixes this for every current AND future route
         in one place, instead of needing to remember to list each one.
       */}
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Android can capture a transitional white/dim frame while the
+          // custom Splash route is replaced by the tab navigator. Disable the
+          // native stack animation there and keep the transition background
+          // aligned with the active theme. iOS keeps its existing transition.
+          animation: Platform.OS === 'android' ? 'none' : undefined,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>
