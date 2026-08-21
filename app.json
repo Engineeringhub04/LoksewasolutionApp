@@ -65,7 +65,8 @@
           "photosPermission": "Allow Loksewa Solution to access your photos to set a profile picture or attach images to posts.",
           "cameraPermission": "Allow Loksewa Solution to access your camera to take a profile picture or attach photos to posts."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

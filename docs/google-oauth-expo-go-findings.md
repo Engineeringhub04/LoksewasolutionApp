@@ -61,3 +61,13 @@ Firebase Identity Platform `accounts.signInWithIdp` creates a user on the first 
 References:
 - https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/signInWithIdp
 - https://docs.cloud.google.com/identity-platform/docs/link-accounts
+
+## Native Android Google Sign-In research (Aug 21, 2026)
+
+Expo's official Google authentication guide says native Google Sign-In libraries require custom native code and therefore cannot run in Expo Go; a development build is required. It documents `react-native-nitro-google-signin` and `@react-native-google-signin/google-signin`. Source: https://docs.expo.dev/guides/google-authentication/
+
+The `@react-native-google-signin/google-signin` Expo setup guide says to install the package, add its config plugin, and for Firebase provide `android.googleServicesFile` and `ios.googleServicesFile` in app config. It recommends `npx expo prebuild --clean` followed by a native build. Source: https://react-native-google-signin.github.io/docs/setting-up/expo
+
+The installed package version is 16.1.4. Its public API includes `GoogleSignin.configure({ webClientId })`, `GoogleSignin.hasPlayServices()`, `GoogleSignin.signIn()`, and `GoogleSignin.signOut()`. Source/package metadata: https://www.npmjs.com/package/@react-native-google-signin/google-signin
+
+Implementation implication: Android native Google Sign-In will be used in Development/Production builds, while Expo Go must retain the existing browser fallback. The package is not expected to work inside Expo Go because it contains custom native code.
