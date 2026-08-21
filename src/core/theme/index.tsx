@@ -41,22 +41,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const effective: ColorMode = mode === 'system' ? (systemScheme ?? 'light') : mode;
 
-  // Keep Android's three-button/gesture navigation area visually continuous with
-  // the app instead of allowing a device-default grey strip to appear below the
-  // floating tab bar. The calls are guarded and best-effort because Expo Go and
-  // older Android versions expose different subsets of the navigation-bar API.
+  // Keep Android's system navigation area pure black in both three-button and
+  // gesture modes. The custom glass tab bar is positioned immediately above
+  // this native area, so no device-default grey strip can appear below it.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    // With edge-to-edge enabled, Android draws the system navigation area over
-    // the app. setStyle is the supported API for three-button navigation; the
-    // native config disables forced contrast so the app background is not
-    // replaced by a device-generated grey scrim.
     try {
-      NavigationBar.setStyle(effective === 'dark' ? 'light' : 'dark');
+      NavigationBar.setBackgroundColorAsync('#000000').catch(() => {});
+      NavigationBar.setBorderColorAsync('#000000').catch(() => {});
+      NavigationBar.setButtonStyleAsync('light').catch(() => {});
     } catch {
-      // Expo Go and older Android versions may not expose edge-to-edge styling.
+      // Expo Go and older Android versions may not expose all navigation APIs.
     }
-  }, [effective]);
+  }, []);
 
   const value = useMemo<ThemeCtx>(() => {
     return {
