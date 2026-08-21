@@ -16,6 +16,7 @@ const ERROR_CODE_MAP: Record<string, string> = {
   EMAIL_NOT_FOUND: 'auth/invalid-credential',
   INVALID_PASSWORD: 'auth/invalid-credential',
   INVALID_LOGIN_CREDENTIALS: 'auth/invalid-credential',
+  FEDERATED_USER_ID_ALREADY_LINKED: 'auth/account-exists-with-different-credential',
   USER_DISABLED: 'auth/user-disabled',
   WEAK_PASSWORD: 'auth/weak-password',
   TOO_MANY_ATTEMPTS_TRY_LATER: 'auth/too-many-requests',
@@ -146,7 +147,11 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser>
     postBody: `id_token=${encodeURIComponent(idToken)}&providerId=google.com`,
     requestUri: 'http://localhost',
     returnSecureToken: true,
-    returnIdpCredential: true,
+    // This is a direct ID-token sign-in, not an account-linking attempt. If
+    // the same Google account signs in again, Firebase should issue its
+    // existing session instead of returning FEDERATED_USER_ID_ALREADY_LINKED.
+    returnIdpCredential: false,
+    autoCreate: true,
   });
 
   // With one-account-per-email enabled, Firebase can return a successful HTTP

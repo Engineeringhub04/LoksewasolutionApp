@@ -29,10 +29,7 @@ import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
-import {
-  getCachedHomeData,
-  prefetchHomeData,
-} from '@/src/core/services/homePrefetch';
+import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 
 interface LinkItem {
   key: string;
@@ -155,11 +152,6 @@ export default function HomeScreen() {
     qotdAnswered.refreshing ||
     subjectDetails.refreshing;
   const [showRefreshLoader, setShowRefreshLoader] = useState(false);
-  // Profile warm-up can update the course key once after the screen mounts. If
-  // Splash already prefetched that final key, do not flash a second initial
-  // loader while the field hooks settle on the shared snapshot.
-  const hasCachedHomeSnapshot = Boolean(getCachedHomeData(homeDataKey));
-
   // Keep the native pull-to-refresh spinner visible briefly before placing the
   // same opaque centered loader used by other pages over the refreshed content.
   // It stays visible for exactly the real duration of the shared fetch.
@@ -171,7 +163,12 @@ export default function HomeScreen() {
     const timer = setTimeout(() => setShowRefreshLoader(true), 280);
     return () => clearTimeout(timer);
   }, [refreshing]);
-  const initialLoading = !hasCachedHomeSnapshot && (
+  // Always keep Home content blank until the current authenticated session's
+  // shared request has settled. A cached snapshot may exist, but showing it
+  // underneath a loader makes stale content appear before the new render is
+  // ready. The tab bar remains mounted while the centered loader is visible.
+  const initialLoading = Boolean(user?.uid) && (
+    !homeDataEnabled ||
     banners.loading ||
     developers.loading ||
     notifications.loading ||
@@ -381,11 +378,12 @@ export default function HomeScreen() {
         )}
       </View>
     </Animated.ScrollView>
-    {/* Keep Home loading non-blocking: show only the centred loader card while
-        preserving the normal page background and already-rendered content. */}
+    {/* Keep Home blank until the current request has settled; the tab bar
+        remains mounted while this theme-aware loader covers stale content. */}
     <PageLoaderOverlay
       visible={initialLoading || showRefreshLoader}
       label="Loading Home..."
+      opaque
     />
     </View>
   );
