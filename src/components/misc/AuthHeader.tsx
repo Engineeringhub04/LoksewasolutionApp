@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
 
@@ -30,19 +29,19 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
       ) : null}
       {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
 
-      <Animated.View entering={FadeIn.duration(400)} style={styles.content}>
+      <View style={styles.content}>
         <View style={styles.logoCircle}>
           <Image
             source={AppConfig.identity.logoAsset}
             style={styles.logoImage}
-            contentFit="contain"
+            contentFit="cover"
             cachePolicy="memory-disk"
             transition={0}
           />
         </View>
         <Text variant="h1" weight="bold" style={styles.title}>{title}</Text>
         <Text variant="body" style={styles.subtitle}>{subtitle}</Text>
-      </Animated.View>
+      </View>
     </LinearGradient>
   );
 }
@@ -61,16 +60,20 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 41,
+    overflow: 'hidden',
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.78)',
+    shadowColor: '#E9D5FF',
+    shadowOpacity: 0.72,
+    shadowRadius: 13,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
-  logoImage: { width: 58, height: 58 },
+  logoImage: { width: 76, height: 76 },
   title: { color: '#FFF', fontSize: 26, textAlign: 'center' },
   subtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

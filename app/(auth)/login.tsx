@@ -99,7 +99,7 @@ export default function LoginScreen() {
               </Pressable>
 
               <View style={styles.bottomLink}>
-                <Text variant="body" style={{ color: '#6B7280' }}>Don't have an account? </Text>
+                <Text variant="body" style={{ color: '#6B7280' }}>Don&apos;t have an account? </Text>
                 <Link href="/(auth)/signup">
                   <Text variant="body" weight="bold" style={styles.signUpLink}>Sign Up</Text>
                 </Link>
@@ -114,8 +114,8 @@ export default function LoginScreen() {
 
               <Text variant="h2" weight="bold" style={styles.expandedTitle}>Login with Email</Text>
 
-              <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" containerStyle={styles.fieldGap} />
-              <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry autoComplete="password" containerStyle={styles.fieldGap} />
+              <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" lightTheme containerStyle={styles.fieldGap} />
+              <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry autoComplete="password" lightTheme containerStyle={styles.fieldGap} />
 
               <Link href="/(auth)/forgot-password" style={{ alignSelf: 'flex-end', marginBottom: 8 }}>
                 <Text variant="bodySmall" weight="semiBold" style={styles.forgotText}>Forgot Password?</Text>
@@ -141,7 +141,7 @@ export default function LoginScreen() {
               </Pressable>
 
               <View style={styles.bottomLink}>
-                <Text variant="body" style={{ color: '#6B7280' }}>Don't have an account? </Text>
+                <Text variant="body" style={{ color: '#6B7280' }}>Don&apos;t have an account? </Text>
                 <Link href="/(auth)/signup">
                   <Text variant="body" weight="bold" style={styles.signUpLink}>Sign Up</Text>
                 </Link>

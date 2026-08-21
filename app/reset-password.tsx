@@ -46,8 +46,8 @@ export default function ResetPasswordScreen() {
     <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <AuthScreenLayout title="Set New Password" subtitle="Choose a strong new password for your account">
         <Animated.View entering={FadeInDown.duration(400)} style={styles.body}>
-          <FloatingLabelField label="New Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry containerStyle={styles.fieldGap} />
-          <FloatingLabelField label="Confirm Password" leftIcon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} secureToggle secureTextEntry containerStyle={styles.fieldGap} />
+          <FloatingLabelField label="New Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry lightTheme containerStyle={styles.fieldGap} />
+          <FloatingLabelField label="Confirm Password" leftIcon="lock-closed-outline" value={confirmPassword} onChangeText={setConfirmPassword} secureToggle secureTextEntry lightTheme containerStyle={styles.fieldGap} />
 
           <Pressable onPress={handleReset} disabled={loading} style={({ pressed }) => [styles.submitButton, { opacity: pressed || loading ? 0.85 : 1 }]}>
             {loading ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.submitButtonText}>Change Password</Text>}

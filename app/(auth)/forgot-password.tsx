@@ -43,7 +43,7 @@ export default function ForgotPasswordScreen() {
             </View>
             <Text variant="h2" weight="bold" style={styles.sentTitle}>Check Your Email</Text>
             <Text variant="body" style={styles.sentDesc}>
-              We've sent a password reset link to {email}. Open the link on this device to reset your password in the app.
+              We&apos;ve sent a password reset link to {email}. Open the link on this device to reset the password in the app.
             </Text>
             <Pressable onPress={() => router.replace('/(auth)/login')} style={({ pressed }) => [styles.backToLoginBtn, { opacity: pressed ? 0.85 : 1 }]}>
               <Text variant="body" weight="bold" style={styles.backToLoginText}>Back to Login</Text>
@@ -59,6 +59,7 @@ export default function ForgotPasswordScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              lightTheme
               containerStyle={styles.fieldGap}
             />
 

@@ -105,9 +105,9 @@ export default function SignupScreen() {
 
             <Text variant="h2" weight="bold" style={styles.expandedTitle}>Sign Up with Email</Text>
 
-            <FloatingLabelField label="Full Name" leftIcon="person-outline" value={name} onChangeText={setName} autoComplete="name" containerStyle={styles.fieldGap} />
-            <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" containerStyle={styles.fieldGap} />
-            <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry containerStyle={styles.fieldGap} />
+            <FloatingLabelField label="Full Name" leftIcon="person-outline" value={name} onChangeText={setName} autoComplete="name" lightTheme containerStyle={styles.fieldGap} />
+            <FloatingLabelField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" lightTheme containerStyle={styles.fieldGap} />
+            <FloatingLabelField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureToggle secureTextEntry lightTheme containerStyle={styles.fieldGap} />
 
             <Pressable onPress={handleSignup} disabled={loading} style={({ pressed }) => [styles.signupButton, { opacity: pressed || loading ? 0.85 : 1 }]}>
               {loading ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.signupButtonText}>Create Account</Text>}
