@@ -10,13 +10,13 @@ import { useTheme } from '@/src/core/theme';
 
 // Keep the floating glass bar compact on both platforms so it leaves the
 // final content row visible above the overlay.
-export const GLASS_TAB_BAR_HEIGHT = 62;
+export const GLASS_TAB_BAR_HEIGHT = 56;
 const HORIZONTAL_MARGIN = 14;
-const BOTTOM_GAP = 8;
+const BOTTOM_GAP = 6;
 
 /** Bottom clearance required by screens whose content scrolls below the glass pill. */
 export function getGlassTabBarContentPadding(bottomInset: number) {
-  return GLASS_TAB_BAR_HEIGHT + BOTTOM_GAP + 16 + bottomInset;
+  return GLASS_TAB_BAR_HEIGHT + BOTTOM_GAP + 12 + bottomInset;
 }
 
 const iconNames = {
@@ -53,7 +53,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + insets.bottom + 12 }]}
+      style={[styles.host, { height: GLASS_TAB_BAR_HEIGHT + insets.bottom + 8 }]}
     >
       <BlurView
         intensity={effective === 'dark' ? 48 : 62}
@@ -125,7 +125,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
               >
                 <Ionicons
                   name={icon}
-                  size={21}
+                  size={19}
                   color={focused ? colors.primary : colors.textSecondary}
                 />
                 <Text
@@ -182,10 +182,10 @@ const styles = StyleSheet.create({
   },
   activePill: {
     position: 'absolute',
-    top: 4,
-    bottom: 4,
+    top: 3,
+    bottom: 3,
     left: 0,
-    borderRadius: 23,
+    borderRadius: 21,
     borderWidth: 1,
   },
   items: {
@@ -196,12 +196,12 @@ const styles = StyleSheet.create({
   item: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 1,
     paddingHorizontal: 4,
   },
   label: {
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 9,
+    lineHeight: 12,
     letterSpacing: 0.1,
   },
   pressed: {
