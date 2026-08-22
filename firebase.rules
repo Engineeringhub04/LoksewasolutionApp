@@ -82,6 +82,24 @@ service cloud.firestore {
       match /qotd/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
+      match /current_affairs_progress/{dateKey} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) &&
+          request.resource.data.keys().hasOnly([
+            'dateKey', 'readArticleIds', 'completedPackIds', 'attemptedQuestionIds',
+            'correctQuestionIds', 'wrongQuestionIds', 'selectedAnswerIds',
+            'lastScore', 'quizCompleted', 'updatedAt'
+          ]) &&
+          request.resource.data.dateKey == dateKey &&
+          request.resource.data.readArticleIds is list &&
+          request.resource.data.completedPackIds is list &&
+          request.resource.data.attemptedQuestionIds is list &&
+          request.resource.data.correctQuestionIds is list &&
+          request.resource.data.wrongQuestionIds is list &&
+          request.resource.data.selectedAnswerIds is map &&
+          (request.resource.data.lastScore is number || request.resource.data.lastScore == null);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
     }
 
     // Phase 1 Subject catalog. Subject metadata is readable by signed-in users,
@@ -237,6 +255,74 @@ service cloud.firestore {
         request.resource.data.questionCount is number &&
         request.resource.data.questions is list &&
         request.resource.data.questionCount == request.resource.data.questions.size() &&
+        request.resource.data.isPublished is bool &&
+        request.resource.data.isSeed == true;
+      allow delete: if isAdmin();
+    }
+
+    // Current Affairs is global and admin-maintained. Users can only read
+    // published, verified records; the client cannot publish or alter answers.
+    match /app_current_affairs_articles/{articleId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.status == 'published' && resource.data.verified == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'titleNp', 'summaryNp', 'contentNp', 'examRelevanceNp', 'keyFactsNp',
+          'category', 'tags', 'sourceName', 'sourceUrl', 'imageUrl', 'publishedAt',
+          'updatedAt', 'applicableCourses', 'applicableSubcourses', 'examTags',
+          'status', 'verified', 'isSeed', 'seedVersion', 'createdAt', 'packIds'
+        ]) &&
+        request.resource.data.id == articleId &&
+        request.resource.data.titleNp is string &&
+        request.resource.data.summaryNp is string &&
+        request.resource.data.contentNp is string &&
+        request.resource.data.category is string &&
+        request.resource.data.sourceName is string &&
+        request.resource.data.sourceUrl is string &&
+        request.resource.data.applicableCourses is list &&
+        request.resource.data.applicableSubcourses is list &&
+        request.resource.data.status in ['draft', 'published'] &&
+        request.resource.data.verified is bool &&
+        request.resource.data.isSeed == true;
+      allow delete: if isAdmin();
+    }
+
+    match /app_current_affairs_questions/{questionId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.status == 'published' && resource.data.verified == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'articleId', 'questionNp', 'optionsNp', 'correctOptionId', 'explanationNp',
+          'difficulty', 'category', 'applicableCourses', 'applicableSubcourses',
+          'publishedAt', 'status', 'verified', 'isSeed', 'seedVersion', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.id == questionId &&
+        request.resource.data.articleId is string &&
+        request.resource.data.questionNp is string &&
+        request.resource.data.optionsNp is list &&
+        request.resource.data.correctOptionId is string &&
+        request.resource.data.explanationNp is string &&
+        request.resource.data.status in ['draft', 'published'] &&
+        request.resource.data.verified is bool &&
+        request.resource.data.isSeed == true;
+      allow delete: if isAdmin();
+    }
+
+    match /app_current_affairs_packs/{packId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'id', 'packType', 'packDate', 'monthKey', 'titleNp', 'articleIds', 'questionIds',
+          'articleCount', 'questionCount', 'isPublished', 'isSeed', 'seedVersion',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.id == packId &&
+        request.resource.data.packType in ['daily', 'weekly', 'monthly'] &&
+        request.resource.data.packDate is string &&
+        request.resource.data.monthKey is string &&
+        request.resource.data.titleNp is string &&
+        request.resource.data.articleIds is list &&
+        request.resource.data.questionIds is list &&
+        request.resource.data.articleCount == request.resource.data.articleIds.size() &&
+        request.resource.data.questionCount == request.resource.data.questionIds.size() &&
         request.resource.data.isPublished is bool &&
         request.resource.data.isSeed == true;
       allow delete: if isAdmin();

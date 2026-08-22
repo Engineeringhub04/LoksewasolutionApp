@@ -40,7 +40,12 @@ export const Collections = {
   mockTests: 'mockTests',
   liveExams: 'liveExams',
   attempts: 'attempts',
+  // Current Affairs: global verified articles/questions, grouped packs, and per-user state.
   currentAffairs: 'currentAffairs',
+  currentAffairsArticles: 'app_current_affairs_articles',
+  currentAffairsQuestions: 'app_current_affairs_questions',
+  currentAffairsPacks: 'app_current_affairs_packs',
+  currentAffairsProgress: (uid: string) => `users/${uid}/current_affairs_progress`,
   gorkhapatra: 'gorkhapatra',
   notices: 'notices',
   discussions: 'discussions',
