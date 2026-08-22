@@ -51,7 +51,7 @@ export default function SignupScreen() {
     try {
       const result = await promptGoogleAuth();
       if (result?.type === 'success' && result.params?.id_token) {
-        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token);
+        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token, { allowCreate: true });
         // An existing Google account is a login even when the button was
         // pressed from Signup; only a newly-created account needs setup.
         redirectingAfterGoogleRef.current = true;
@@ -64,7 +64,7 @@ export default function SignupScreen() {
     } catch (error: unknown) {
       const code = (error as { code?: string })?.code;
       if (code === 'auth/email-already-in-use' || code === 'auth/account-exists-with-different-credential') {
-        showToast('This email already has an email/password account. Please use email and password to log in.', 'error');
+        showToast('This email already has an account. Please use its existing login method.', 'error');
       } else {
         showToast('Google Sign-In failed. Please try again.', 'error');
       }

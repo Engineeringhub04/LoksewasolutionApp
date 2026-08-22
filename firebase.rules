@@ -18,6 +18,11 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    function validPhotoURLSource(data) {
+      return !data.keys().hasAny(['photoURLSource']) ||
+        data.photoURLSource in ['manual', 'google', 'none'];
+    }
+
     // Public read-only configuration used before login. No client can write it.
     match /app_onboarding-settings/{docId} {
       allow read: if true;
@@ -36,13 +41,14 @@ service cloud.firestore {
         !request.resource.data.keys().hasAny([
           'role', 'isAdmin', 'isPremium', 'premiumPlanName',
           'premiumBillingCycle', 'premiumExpiryDate'
-        ]);
+        ]) &&
+        validPhotoURLSource(request.resource.data);
       allow update: if isAdmin() ||
         (isOwner(userId) && changedOnly([
-          'firstName', 'lastName', 'name', 'dob', 'gender', 'photoURL',
+          'firstName', 'lastName', 'name', 'dob', 'gender', 'photoURL', 'photoURLSource',
           'courseId', 'subcourseId', 'courseSetupComplete', 'stats', 'updatedAt',
           'unlockedAchievements'
-        ]));
+        ]) && validPhotoURLSource(request.resource.data));
       allow delete: if isOwner(userId) || isAdmin();
 
       // Legacy mock/live-exam attempts and the newer Exam Hub attempts.

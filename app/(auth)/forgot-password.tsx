@@ -1,5 +1,5 @@
 // §15 Forgot Password — Fixed curved header, scrollable body slides underneath.
-// Sends reset link that opens the app's reset-password screen (deep link).
+// Sends a reset link prepared for the in-app reset route once App Links are configured.
 import React, { useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -43,7 +43,7 @@ export default function ForgotPasswordScreen() {
             </View>
             <Text variant="h2" weight="bold" style={styles.sentTitle}>Check Your Email</Text>
             <Text variant="body" style={styles.sentDesc}>
-              We&apos;ve sent a password reset link to {email}. Open the link on this device to reset the password in the app.
+              We&apos;ve sent a password reset link to {email}. Until app-link setup is completed, Firebase may open its secure web page; afterward, the link can open this app&apos;s reset screen on the device.
             </Text>
             <Pressable onPress={() => router.replace('/(auth)/login')} style={({ pressed }) => [styles.backToLoginBtn, { opacity: pressed ? 0.85 : 1 }]}>
               <Text variant="body" weight="bold" style={styles.backToLoginText}>Back to Login</Text>
