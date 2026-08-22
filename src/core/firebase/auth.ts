@@ -22,6 +22,10 @@ const ERROR_CODE_MAP: Record<string, string> = {
   WEAK_PASSWORD: 'auth/weak-password',
   TOO_MANY_ATTEMPTS_TRY_LATER: 'auth/too-many-requests',
   INVALID_EMAIL: 'auth/invalid-email',
+  INVALID_OOB_CODE: 'auth/invalid-action-code',
+  EXPIRED_OOB_CODE: 'auth/invalid-action-code',
+  MISSING_OOB_CODE: 'auth/invalid-action-code',
+  INVALID_CODE: 'auth/invalid-action-code',
 };
 
 class AuthError extends Error {
@@ -54,6 +58,7 @@ interface IdentityAuthResponse {
   photoUrl?: string;
   errorMessage?: string;
   pendingToken?: string;
+  needConfirmation?: boolean;
   isNewUser?: boolean;
 }
 
@@ -112,12 +117,9 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Sends the password reset email. `canHandleCodeInApp` + the continue params make the
- * link open directly in this app (deep link to /reset-password) instead of a browser
- * page, PROVIDED that Firebase Console → Authentication → Templates → Password reset →
- * "Customize action URL" is NOT set, and "Handle these actions in my app" toggle in the
- * same template's Action mode is switched on with a valid Dynamic Link / App Link config.
- * Without that console configuration, the email link falls back to Firebase's hosted page.
+ * Sends a password reset email with the parameters needed for a future in-app flow.
+ * Firebase/domain App Link configuration is still required before the email URL can
+ * open this route automatically; until then Firebase may open its hosted web page.
  */
 export async function sendResetPasswordEmail(email: string): Promise<void> {
   await identityRequest('sendOobCode', {
@@ -130,6 +132,15 @@ export async function sendResetPasswordEmail(email: string): Promise<void> {
     androidMinimumVersion: '1',
     iOSBundleId: 'com.loksewasolutionnp.hub',
   });
+}
+
+/**
+ * Verifies a reset code without consuming it or changing the account password.
+ * The Identity Toolkit endpoint returns the action type and associated email.
+ */
+export async function verifyPasswordResetCode(oobCode: string): Promise<{ email: string | null; requestType: string | null }> {
+  const res = await identityRequest<{ email?: string; requestType?: string }>('resetPassword', { oobCode });
+  return { email: res.email ?? null, requestType: res.requestType ?? null };
 }
 
 /** Completes a password reset using the oobCode from the email link. */
@@ -151,28 +162,56 @@ export interface GoogleSignInResult {
   isNewUser: boolean;
 }
 
-/** Exchanges a Google ID token and returns account-creation metadata for routing. */
-export async function signInWithGoogleIdTokenResult(idToken: string): Promise<GoogleSignInResult> {
+export interface GoogleSignInOptions {
+  /**
+   * Signup may create a new Google account. Login must set this to false so a
+   * Google credential can never create a second app user by accident.
+   */
+  allowCreate?: boolean;
+}
+
+function authError(code: string): Error & { code: string } {
+  const error = new Error(code) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
+/**
+ * Exchanges a Google ID token and returns account-creation metadata for routing.
+ * This provider exchange never sends a password and never calls the Auth
+ * update endpoint. A matching email/password account is not silently merged;
+ * Firebase reports a provider conflict and the user keeps using that account's
+ * password unless a deliberate, re-authenticated linking flow is added later.
+ */
+export async function signInWithGoogleIdTokenResult(
+  idToken: string,
+  options: GoogleSignInOptions = {}
+): Promise<GoogleSignInResult> {
+  const allowCreate = options.allowCreate !== false;
   const res = await identityRequest<IdentityAuthResponse>('signInWithIdp', {
     // Keep Google OAuth tokens URL-safe when sending the REST postBody.
     postBody: `id_token=${encodeURIComponent(idToken)}&providerId=google.com`,
     requestUri: 'http://localhost',
     returnSecureToken: true,
-    // This is a direct ID-token sign-in, not an account-linking attempt. If
-    // the same Google account signs in again, Firebase should issue its
-    // existing session instead of returning FEDERATED_USER_ID_ALREADY_LINKED.
-    returnIdpCredential: false,
-    autoCreate: true,
+    // Ask Firebase to return the provider-conflict marker. This does not link
+    // accounts or alter a password by itself.
+    returnIdpCredential: true,
+    // Login is lookup-only; signup is the only UI path allowed to create.
+    autoCreate: allowCreate,
   });
 
   // With one-account-per-email enabled, Firebase can return a successful HTTP
   // response containing EMAIL_EXISTS instead of issuing a second account. A
   // Google credential cannot silently authenticate an email/password account;
   // the user must use that account's password to log in and link providers.
-  if (res.errorMessage === 'EMAIL_EXISTS' || res.errorMessage === 'FEDERATED_USER_ID_ALREADY_LINKED') {
-    const error = new Error('auth/account-exists-with-different-credential') as Error & { code: string };
-    error.code = 'auth/account-exists-with-different-credential';
-    throw error;
+  if (res.needConfirmation || res.errorMessage === 'EMAIL_EXISTS' || res.errorMessage === 'FEDERATED_USER_ID_ALREADY_LINKED') {
+    throw authError('auth/account-exists-with-different-credential');
+  }
+
+  if (!allowCreate && res.isNewUser) {
+    // Defensive guard in case the backend ignores the deprecated autoCreate
+    // flag. Never persist a session for an unexpected new account on login.
+    throw authError('auth/google-account-creation-blocked');
   }
 
   if (!res.idToken || !res.refreshToken || !res.localId) {
@@ -201,8 +240,11 @@ export async function signInWithGoogleIdTokenResult(idToken: string): Promise<Go
 }
 
 /** Backward-compatible Google sign-in helper for callers that only need the user. */
-export async function signInWithGoogleIdToken(idToken: string): Promise<AppUser> {
-  const { user } = await signInWithGoogleIdTokenResult(idToken);
+export async function signInWithGoogleIdToken(
+  idToken: string,
+  options: GoogleSignInOptions = {}
+): Promise<AppUser> {
+  const { user } = await signInWithGoogleIdTokenResult(idToken, options);
   return user;
 }
 
