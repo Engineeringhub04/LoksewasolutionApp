@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { Stack, useSegments } from 'expo-router';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +19,24 @@ export const unstable_settings = {
   anchor: 'index',
 };
 
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getResetLinkParams(url: string) {
+  const outer = Linking.parse(url);
+  const nestedLink = firstParam(outer.queryParams?.link);
+  const actionUrl = nestedLink || url;
+  const parsed = Linking.parse(actionUrl);
+  const mode = firstParam(parsed.queryParams?.mode);
+  const oobCode = firstParam(parsed.queryParams?.oobCode);
+
+  if (mode !== 'resetPassword' || !oobCode) return null;
+  return { mode, oobCode };
+}
+
 function RootStack() {
+  const router = useRouter();
   const { colors, effective } = useTheme();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
@@ -28,6 +46,32 @@ function RootStack() {
   const showNonTabSystemBackdrop =
     Platform.OS === 'android' && !isTabRoute && !isSplashRoute && systemBottomInset > 0;
   const userUid = useAuthStore((s) => s.user?.uid ?? null);
+  const handledResetUrl = useRef<string | null>(null);
+
+  const openResetLink = useCallback((url: string | null) => {
+    if (!url || handledResetUrl.current === url) return;
+
+    const resetParams = getResetLinkParams(url);
+    if (!resetParams) return;
+
+    handledResetUrl.current = url;
+    router.replace({ pathname: '/reset-password', params: resetParams });
+  }, [router]);
+
+  useEffect(() => {
+    let mounted = true;
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (mounted) openResetLink(url);
+      })
+      .catch(() => undefined);
+
+    const subscription = Linking.addEventListener('url', ({ url }) => openResetLink(url));
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, [openResetLink]);
 
   useEffect(() => {
     const unsubNetwork = initNetworkListener();
