@@ -24,7 +24,7 @@ function RootStack() {
   const segments = useSegments();
   const systemBottomInset = Platform.OS === 'android' ? Math.max(0, insets.bottom) : 0;
   const isTabRoute = segments.some((segment) => segment === '(tabs)');
-  const isSplashRoute = segments[0] === 'index';
+  const isSplashRoute = (segments as readonly string[])[0] === 'index';
   const showNonTabSystemBackdrop =
     Platform.OS === 'android' && !isTabRoute && !isSplashRoute && systemBottomInset > 0;
   const userUid = useAuthStore((s) => s.user?.uid ?? null);
@@ -68,10 +68,11 @@ function RootStack() {
       <Stack
         screenOptions={{
           headerShown: false,
-          // Use the native Android slide for regular pages. Splash and the tab
-          // shell override this below so the existing white-flash fix remains
-          // intact when the launch route is replaced by the app shell.
-          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          // Use the native push/pop slide for every stack route. The tab shell
+          // overrides only its inner tab switching animation; entering or leaving
+          // the shell itself should still use the native page transition.
+          animation: 'slide_from_right',
+          animationTypeForReplace: 'push',
           // Reserve the Android system-navigation area for every regular route,
           // so scroll content cannot render underneath the system buttons/gesture
           // handle. Splash and the tab shell override this below because they
@@ -84,11 +85,15 @@ function RootStack() {
       >
         <Stack.Screen
           name="index"
-          options={{ animation: 'none', contentStyle: { backgroundColor: colors.background } }}
+          options={{ contentStyle: { backgroundColor: colors.background } }}
         />
         <Stack.Screen
           name="(tabs)"
-          options={{ animation: 'none', contentStyle: { backgroundColor: colors.background } }}
+          options={{
+            animation: 'slide_from_right',
+            animationTypeForReplace: 'push',
+            contentStyle: { backgroundColor: colors.background },
+          }}
         />
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
