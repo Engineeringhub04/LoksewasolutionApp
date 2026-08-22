@@ -50,7 +50,7 @@ function RootStack() {
   }, [userUid]);
 
   return (
-    <>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       {/*
         Global default: EVERY screen manages its own header (TopAppBar,
@@ -106,11 +106,14 @@ function RootStack() {
       ) : null}
       <ToastHost />
       <StatusBar style={effective === 'dark' ? 'light' : 'dark'} />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   nonTabSystemNavigationBackdrop: {
     position: 'absolute',
     bottom: 0,
