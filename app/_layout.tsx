@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { Platform } from 'react-native';
+import { Stack, useSegments } from 'expo-router';
+import { Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +21,12 @@ export const unstable_settings = {
 function RootStack() {
   const { colors, effective } = useTheme();
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
   const systemBottomInset = Platform.OS === 'android' ? Math.max(0, insets.bottom) : 0;
+  const isTabRoute = segments.some((segment) => segment === '(tabs)');
+  const isSplashRoute = segments[0] === 'index';
+  const showNonTabSystemBackdrop =
+    Platform.OS === 'android' && !isTabRoute && !isSplashRoute && systemBottomInset > 0;
   const userUid = useAuthStore((s) => s.user?.uid ?? null);
 
   useEffect(() => {
@@ -88,11 +93,27 @@ function RootStack() {
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>
+      {showNonTabSystemBackdrop ? (
+        <View
+          pointerEvents="none"
+          style={[styles.nonTabSystemNavigationBackdrop, { height: systemBottomInset }]}
+        />
+      ) : null}
       <ToastHost />
       <StatusBar style={effective === 'dark' ? 'light' : 'dark'} />
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  nonTabSystemNavigationBackdrop: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#000000',
+  },
+});
 
 export default function RootLayout() {
   return (
