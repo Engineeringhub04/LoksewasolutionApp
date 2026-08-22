@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.loksewasolutionnp.hub",
-      "associatedDomains": ["applinks:kbr.com.np"]
+      "associatedDomains": ["applinks:kbr.com.np", "applinks:loksewa-solution-app.firebaseapp.com"]
     },
     "androidNavigationBar": {
       "backgroundColor": "#000000",
@@ -33,6 +33,11 @@
               "scheme": "https",
               "host": "kbr.com.np",
               "pathPrefix": "/constitution"
+            },
+            {
+              "scheme": "https",
+              "host": "loksewa-solution-app.firebaseapp.com",
+              "pathPrefix": "/__/auth"
             }
           ]
         }
