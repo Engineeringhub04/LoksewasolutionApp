@@ -65,7 +65,7 @@ export default function CurrentAffairsArchiveScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <TopAppBar title="Archive" actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} />} />
-      <PageLoaderOverlay visible={articles.loading || questions.loading || packs.loading || downloadLoading} label={downloadLoading ? 'Saving Offline...' : 'Loading Archive...'} />
+      <PageLoaderOverlay visible={articles.loading || questions.loading || packs.loading || downloadLoading} opaque label={downloadLoading ? 'Saving Offline...' : 'Loading Archive...'} />
       {packs.error ? <DataNotFound onRetry={packs.refetch} /> : (
         <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2 }}>
           <Text variant="bodyLarge" weight="bold">समयअनुसार revision</Text>

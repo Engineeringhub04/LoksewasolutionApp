@@ -108,6 +108,11 @@ function dateValue(value: unknown): Date | null {
   return null;
 }
 
+function timestampValue(value: Date | FirestoreTimestamp | null | undefined): number {
+  if (!value) return 0;
+  return value instanceof Date ? value.getTime() : value.toMillis();
+}
+
 function normaliseArticle(raw: Record<string, unknown>): CurrentAffairsArticle {
   return {
     ...(raw as unknown as CurrentAffairsArticle),
@@ -161,12 +166,13 @@ export async function fetchCurrentAffairs(options: {
 } = {}): Promise<CurrentAffairsArticle[]> {
   try {
     const docs = await runQuery(Collections.currentAffairsArticles, {
+      // Equality-only query avoids requiring a composite Firestore index. Sort locally.
       where: publishedFilter(),
-      orderBy: [{ field: 'publishedAt', direction: 'desc' }],
       limit: options.limit ?? 100,
     });
     return docs
       .map(normaliseArticle)
+      .sort((a, b) => timestampValue(b.publishedAt) - timestampValue(a.publishedAt))
       .filter((article) => !options.category || options.category === 'सबै' || article.category === options.category)
       .filter((article) => !options.courseId || article.applicableCourses.includes('all') || article.applicableCourses.includes(options.courseId))
       .filter((article) => !options.subcourseId || article.applicableSubcourses.includes('all') || article.applicableSubcourses.includes(options.subcourseId));
@@ -189,12 +195,13 @@ export async function fetchCurrentAffair(articleId: string): Promise<CurrentAffa
 
 export async function fetchCurrentAffairsQuestions(options: { category?: string; limit?: number } = {}): Promise<CurrentAffairsQuestion[]> {
   const docs = await runQuery(Collections.currentAffairsQuestions, {
+    // Equality-only query avoids requiring a composite Firestore index. Sort locally.
     where: publishedFilter(),
-    orderBy: [{ field: 'publishedAt', direction: 'desc' }],
     limit: options.limit ?? 100,
   });
   return docs
     .map(normaliseQuestion)
+    .sort((a, b) => timestampValue(b.publishedAt) - timestampValue(a.publishedAt))
     .filter((question) => !options.category || options.category === 'सबै' || question.category === options.category);
 }
 
@@ -211,11 +218,11 @@ export function dailyQuestionLimit(total: number): number {
 
 export async function fetchCurrentAffairsPacks(): Promise<CurrentAffairsPack[]> {
   const docs = await runQuery(Collections.currentAffairsPacks, {
+    // Equality-only query avoids requiring a composite Firestore index. Sort locally.
     where: [{ field: 'isPublished', op: '==' as const, value: true }],
-    orderBy: [{ field: 'packDate', direction: 'desc' }],
     limit: 100,
   });
-  return docs as unknown as CurrentAffairsPack[];
+  return (docs as unknown as CurrentAffairsPack[]).sort((a, b) => b.packDate.localeCompare(a.packDate));
 }
 
 function emptyProgress(dateKey = localDateKey()): CurrentAffairsProgress {
@@ -349,6 +356,14 @@ export async function seedCurrentAffairs(): Promise<{ articleCount: number; ques
   }));
 
   await commitWrites(writes);
+  const verification = await Promise.all([
+    getDocument(`${Collections.currentAffairsArticles}/${articleIds[0]}`),
+    getDocument(`${Collections.currentAffairsQuestions}/${questionIds[0]}`),
+    getDocument(`${Collections.currentAffairsPacks}/${packs[0].id}`),
+  ]);
+  if (verification.some((document) => !document)) {
+    throw new Error('Seed write पूरा भयो तर verification मा data भेटिएन। Firestore rules वा project जाँच्नुहोस्।');
+  }
   return { articleCount: articleIds.length, questionCount: questionIds.length, packCount: packs.length };
 }
 
