@@ -95,7 +95,7 @@ export default function CurrentAffairsQuizScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <TopAppBar title="Daily Quiz" actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} />} />
-      <PageLoaderOverlay visible={questionsData.loading || saving} label={saving ? 'Saving Result...' : 'Loading Quiz...'} />
+      <PageLoaderOverlay visible={questionsData.loading || saving} opaque label={saving ? 'Saving Result...' : 'Loading Quiz...'} />
       {questionsData.error ? <DataNotFound onRetry={questionsData.refetch} /> : result !== null ? <ResultView questions={questions} answers={answers} score={result} onBack={() => router.back()} /> : questions.length === 0 ? <EmptyState title="अहिले quiz का लागि प्रश्न उपलब्ध छैन" /> : (
         <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2 }}>
           <View style={styles.progressRow}><Text variant="bodySmall" weight="semiBold">प्रश्न {index + 1} / {questions.length}</Text><Text variant="caption" secondary>दैनिक अधिकतम १५</Text></View>

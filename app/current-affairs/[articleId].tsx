@@ -67,7 +67,7 @@ export default function CurrentAffairDetailScreen() {
         title="Current Affairs"
         actions={<View style={styles.headerActions}><Pressable onPress={() => void toggleBookmark()} style={styles.headerIcon}><Ionicons name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={20} color="#FFF" /></Pressable><ThemeToggleButton isDark={effective === 'dark'} onToggle={toggleTheme} size={36} /></View>}
       />
-      <PageLoaderOverlay visible={article.loading || related.loading} label="Loading Current Affairs..." />
+      <PageLoaderOverlay visible={article.loading || related.loading} opaque label="Loading Current Affairs..." />
       {article.error ? <DataNotFound onRetry={article.refetch} /> : !item ? <EmptyState title="Current Affairs भेटिएन" /> : (
         <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2 }}>
           <Image source={{ uri: item.imageUrl }} style={styles.heroImage} />

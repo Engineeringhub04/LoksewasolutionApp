@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -18,6 +18,7 @@ import {
   seedCurrentAffairs,
   type CurrentAffairsArticle,
 } from '@/src/core/firebase/services/currentAffairs';
+import { CURRENT_AFFAIRS_SEED_ARTICLES, CURRENT_AFFAIRS_SEED_QUESTIONS } from '@/src/core/firebase/currentAffairsSeedData';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { Text } from '@/src/components/misc/Text';
@@ -120,20 +121,37 @@ export default function CurrentAffairsScreen() {
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
-  const handleSeed = async () => {
+  const performSeed = async () => {
     if (!isAdmin || seedLoading) return;
     setSeedLoading(true);
     setSeedMessage(null);
     try {
       const result = await seedCurrentAffairs();
-      setSeedMessage(`${result.articleCount} article र ${result.questionCount} question seed भयो`);
-      await data.refetch();
-      await packs.refetch();
-    } catch {
-      setSeedMessage('Seed गर्न सकिएन। Firebase rules र admin role जाँच्नुहोस्।');
+      await Promise.all([data.refresh(), packs.refresh()]);
+      const successMessage = `${result.articleCount} articles, ${result.questionCount} questions र ${result.packCount} packs सफलतापूर्वक seed भयो।`;
+      setSeedMessage(successMessage);
+      Alert.alert('Seed सफल भयो', `${successMessage}\n\nअब Current Affairs का सबै data देखिनुपर्छ।`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = `Seed असफल भयो।\n\n${detail}\n\nFirebase rules deploy भएको छ र तपाईंको account को users profile मा role = admin छ कि जाँच्नुहोस्।`;
+      setSeedMessage(errorMessage);
+      Alert.alert('Seed हुन सकेन', errorMessage);
     } finally {
       setSeedLoading(false);
     }
+  };
+
+  const handleSeed = () => {
+    if (!isAdmin || seedLoading) return;
+    const categories = Array.from(new Set(CURRENT_AFFAIRS_SEED_ARTICLES.map((article) => article.category))).join(', ');
+    Alert.alert(
+      'Current Affairs Seed All',
+      `यसले database मा यी सबै data राख्नेछ:\n\n• ${CURRENT_AFFAIRS_SEED_ARTICLES.length} verified Nepali articles\n• ${CURRENT_AFFAIRS_SEED_QUESTIONS.length} MCQ questions\n• 3 daily/weekly/monthly packs\n• Categories: ${categories}\n• सबै article मा shared image\n• Daily quiz limit: maximum 15\n• Course mapping: all\n\nExisting seed IDs update हुन्छन्; duplicate data बन्ने छैन। अगाडि बढ्ने?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Seed All', onPress: () => { void performSeed(); } },
+      ],
+    );
   };
 
   const handleDownload = async () => {
@@ -185,7 +203,7 @@ export default function CurrentAffairsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <TopAppBar title="समसामयिक" actions={headerActions} />
-      <PageLoaderOverlay visible={data.loading || packs.loading} label="Loading Current Affairs..." />
+      <PageLoaderOverlay visible={data.loading || packs.loading} opaque label="Loading Current Affairs..." />
       {data.error && !data.data ? <DataNotFound onRetry={data.refetch} /> : (
         <ScrollView
           style={styles.container}
