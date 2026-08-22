@@ -47,6 +47,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     try {
+      NavigationBar.setPositionAsync('relative').catch(() => {});
+      NavigationBar.setVisibilityAsync('visible').catch(() => {});
       NavigationBar.setBackgroundColorAsync('#000000').catch(() => {});
       NavigationBar.setBorderColorAsync('#000000').catch(() => {});
       NavigationBar.setButtonStyleAsync('light').catch(() => {});

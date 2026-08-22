@@ -18,6 +18,7 @@
       "backgroundColor": "#000000",
       "borderColor": "#000000",
       "barStyle": "light",
+      "position": "relative",
       "enforceContrast": false
     },
     "android": {
@@ -70,7 +71,8 @@
         {
           "backgroundColor": "#000000",
           "borderColor": "#000000",
-          "barStyle": "light"
+          "barStyle": "light",
+          "position": "relative"
         }
       ],
       [
