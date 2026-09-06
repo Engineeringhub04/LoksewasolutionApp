@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // Onboarding — read only (admin can write)
+    match /app_onboarding-settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Courses & Subcourses — readable by anyone signed in, writable by admin only.
+    // Subcourses live as a SUB-COLLECTION under each course document. A rule on the
+    // parent path does NOT cascade to subcollections in Firestore — this explicit
+    // nested match is required, otherwise subcourse reads/writes get "insufficient
+    // permission" even though the parent course path is open.
+    match /app_courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /subcourses/{subcourseId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+    // Legacy flat collection (kept read-only for backward compatibility with data
+    // seeded before the sub-collection restructure).
+    match /app_subcourses/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /meta/{docId} { allow read: if true; }
+
+    // User profile documents: users/{uid}
+    // Shape: uid, name, firstName, lastName, email, dob, gender, photoURL,
+    //        courseId, subcourseId, courseSetupComplete,
+    //        stats { testsTaken, streak, rank, points }, createdAt, updatedAt
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // A user may create and edit their OWN document, but must never write the
+      // `role` field: isAdmin() above is derived from users/{uid}.role, so
+      // allowing it would let anyone grant themselves admin over every
+      // collection in this file.
+      allow create: if isOwner(userId) && !request.resource.data.keys().hasAny(['role']);
+      allow update: if isAdmin() ||
+                       (isOwner(userId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+
+      // Needed for "Delete Account", which removes the profile document before
+      // deleting the auth identity.
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Security rules do NOT cascade into subcollections, so these need their
+      // own match blocks — without them every attempt/QOTD write fell through
+      // to the deny-all at the bottom of this file.
+      match /attempts/{attemptId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /qotd/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      // Catch-all for any future per-user subcollection.
+      match /{userSubcollection=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /app_categories/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
+    match /app_mocktest/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
+    match /app_syllabus/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
+
+    match /app_quiz_results/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    match /app_bookmarks/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    match /app_notes/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
+    match /app_notifications/{docId} { allow read: if isSignedIn(); allow create, update, delete: if isAdmin(); }
+
+    // Home banners & About Developer — locked down now that seeding is done.
+    // Readable by anyone signed in, writable by admin only.
+    match /app_home_banners/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /app_developers/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ===== Exam Hub =====
+    // TEMPORARY: write is open so the in-app seed button can populate these.
+    // Once seeding is done, change every `write: if true` below to
+    // `write: if isAdmin()` — same pattern already applied to app_courses and
+    // app_home_banners after their seeding finished.
+    match /app_exam_provinces/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_sections/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_sets/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+    match /app_exam_rules/{docId} {
+      allow read: if true;
+      allow write: if true; // TODO: tighten to isAdmin() after seeding
+    }
+
+    // One public row per attempt, used to build per-exam leaderboards. Needed
+    // because users/{uid}/exam_attempts is private and cannot be queried across
+    // users. A user may only create rows for themselves, and rows are immutable
+    // so a score can never be edited after the fact.
+    match /app_exam_rankings/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // Default deny-all
+    match /{document=**} { allow read, write: if false; }
+  }
+}

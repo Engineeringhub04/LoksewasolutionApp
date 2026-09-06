@@ -1,0 +1,97 @@
+{
+  "expo": {
+    "name": "Loksewa Solution",
+    "slug": "LoksewasolutionApp",
+    "owner": "mrchettry",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "scheme": "loksewasolutionapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.loksewasolutionnp.hub",
+      "associatedDomains": ["applinks:kbr.com.np", "applinks:loksewa-solution-app.firebaseapp.com"]
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#000000",
+      "borderColor": "#000000",
+      "barStyle": "light",
+      "position": "relative",
+      "enforceContrast": false
+    },
+    "android": {
+      "package": "com.loksewasolutionnp.hub",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "kbr.com.np",
+              "pathPrefix": "/constitution"
+            },
+            {
+              "scheme": "https",
+              "host": "loksewa-solution-app.firebaseapp.com",
+              "pathPrefix": "/__/auth"
+            }
+          ]
+        }
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1330",
+        "foregroundImage": "./assets/images/logo.png"
+      },
+      "edgeToEdgeEnabled": false,
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B1330",
+          "dark": {
+            "backgroundColor": "#0B1330"
+          }
+        }
+      ],
+      "expo-video",
+      "expo-web-browser",
+      "expo-document-picker",
+      [
+        "expo-navigation-bar",
+        {
+          "backgroundColor": "#000000",
+          "borderColor": "#000000",
+          "barStyle": "light",
+          "position": "relative"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Loksewa Solution to access your photos to set a profile picture or attach images to posts.",
+          "cameraPermission": "Allow Loksewa Solution to access your camera to take a profile picture or attach photos to posts."
+        }
+      ],
+      "@react-native-google-signin/google-signin"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
