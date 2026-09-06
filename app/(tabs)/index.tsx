@@ -43,7 +43,7 @@ interface LinkItem {
 const quickLinks: LinkItem[] = [
   { key: 'daily-test', icon: 'timer', label: 'Daily Test', route: '/question-of-the-day', color: '#1D4ED8' },
   { key: 'current-affairs', icon: 'newspaper', label: 'Current Affairs', route: '/current-affairs', color: '#059669' },
-  { key: 'syllabus', icon: 'document-text', label: 'Syllabus', route: '/under-construction?page=Syllabus', color: '#EA580C' },
+  { key: 'syllabus', icon: 'document-text', label: 'Syllabus', route: '/syllabus', color: '#EA580C' },
   { key: 'gorkhapatra', icon: 'reader', label: 'Gorkhapatra', route: '/gorkhapatra', color: '#7C3AED' },
 ];
 
