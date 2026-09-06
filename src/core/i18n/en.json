@@ -1,4 +1,11 @@
 {
+  "syllabus": {
+    "title": "Syllabus",
+    "seedButton": "Seed Data",
+    "seedSuccess": "Syllabus data seeded successfully!",
+    "seedError": "Failed to seed syllabus data.",
+    "comingSoon": "Syllabus content coming soon"
+  },
   "nav": {
     "home": "Home",
     "exam": "Exam",
