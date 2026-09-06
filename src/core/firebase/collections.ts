@@ -121,4 +121,9 @@ export const Collections = {
   // Coupon codes — admin-created, time-limited, usable by both auto and
   // manual flows.
   couponCodes: 'app_coupon_codes',
+
+  // ===== Syllabus =====
+  // Flat collection: one document per course+subcourse combination.
+  // Document ID = courseId__subcourseId for O(1) direct reads (no query needed).
+  syllabusData: 'app_syllabusdata',
 } as const;
