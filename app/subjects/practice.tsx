@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,6 @@ import { fetchPracticeQuestionSet, type LearningQuestion } from '@/src/core/fire
 import { fetchLearningProgress, saveLearningProgress, type LearningProgress } from '@/src/core/firebase/services/learningProgress';
 import { fetchMyContentPurchases } from '@/src/core/firebase/services/contentPurchases';
 import { Text } from '@/src/components/misc/Text';
-import { Button } from '@/src/components/buttons/Button';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
@@ -279,6 +278,24 @@ export default function PracticeModeScreen() {
     />
   );
 
+  // Declared once and mounted in each early return: the error and empty states
+  // still have to answer the back button, and the two copies this replaces had
+  // already started to drift from each other.
+  const exitDialog = (
+    <ConfirmDialog
+      visible={showLeaveConfirm}
+      tone="danger"
+      icon="exit-outline"
+      confirmIcon="exit-outline"
+      title={t('learningModes.exitPracticeTitle')}
+      message={t('learningModes.exitPracticeMessage')}
+      confirmLabel={t('learningModes.exit')}
+      cancelLabel={t('learningModes.keepPracticing')}
+      onConfirm={leavePractice}
+      onCancel={() => setShowLeaveConfirm(false)}
+    />
+  );
+
   if (loading) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -295,16 +312,7 @@ export default function PracticeModeScreen() {
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
         <DataNotFound title={t('common.somethingWentWrong')} description={t('common.retry')} onRetry={() => void load()} />
-        <ConfirmDialog
-          visible={showLeaveConfirm}
-          title={t('learningModes.exitPracticeTitle')}
-          message={t('learningModes.exitPracticeMessage')}
-          confirmLabel={t('learningModes.exit')}
-          cancelLabel={t('learningModes.keepPracticing')}
-          destructive
-          onConfirm={leavePractice}
-          onCancel={() => setShowLeaveConfirm(false)}
-        />
+        {exitDialog}
       </View>
     );
   }
@@ -315,16 +323,7 @@ export default function PracticeModeScreen() {
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
         <DataNotFound title={t('learning.noQuestions')} description={t('learningModes.noPracticeQuestions')} />
-        <ConfirmDialog
-          visible={showLeaveConfirm}
-          title={t('learningModes.exitPracticeTitle')}
-          message={t('learningModes.exitPracticeMessage')}
-          confirmLabel={t('learningModes.exit')}
-          cancelLabel={t('learningModes.keepPracticing')}
-          destructive
-          onConfirm={leavePractice}
-          onCancel={() => setShowLeaveConfirm(false)}
-        />
+        {exitDialog}
       </View>
     );
   }
@@ -416,50 +415,56 @@ export default function PracticeModeScreen() {
         <Pressable disabled={!premium && dailyUsed >= dailyLimit && !currentAttempted} onPress={() => (isLast ? openEndOfQuestions() : setCurrent((value) => value + 1))} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLast ? (proSubjectActive ? t('learningModes.waitingForQuestions') : t('learningModes.dailyLimitReachedTitle')) : t('learningModes.nextQuestion')}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable>
       </View>
 
-      <Modal visible={showLimit} transparent animationType="fade" onRequestClose={() => setShowLimit(false)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowLimit(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.limitModal, { backgroundColor: colors.surface, borderRadius: radius.lg }]}>
-            <View style={[styles.modalIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="speedometer-outline" size={30} color={colors.warning} /></View>
-            <Text variant="h2" weight="semiBold" style={{ textAlign: 'center' }}>{t('learningModes.dailyLimitReachedTitle')}</Text>
-            <Text variant="body" secondary style={{ textAlign: 'center' }}>{t('learningModes.dailyLimitReachedMessage')}</Text>
-            <Text variant="caption" secondary style={{ textAlign: 'center' }}>{t('learningModes.subscribeToCrackLimit')}</Text>
-            <Button label={t('learningModes.subscription')} onPress={openSubscription} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <ConfirmDialog
+        visible={showLimit}
+        tone="warning"
+        icon="diamond"
+        title={t('learningModes.dailyLimitReachedTitle')}
+        message={t('learningModes.dailyLimitReachedMessage')}
+        confirmLabel={t('learningModes.subscription')}
+        confirmIcon="diamond-outline"
+        cancelLabel={t('common.close')}
+        onConfirm={openSubscription}
+        onCancel={() => setShowLimit(false)}
+      >
+        {/* The upsell line is a second, quieter sentence rather than part of
+            `message`, so the limit itself stays the headline. */}
+        <Text variant="caption" secondary>{t('learningModes.subscribeToCrackLimit')}</Text>
+      </ConfirmDialog>
 
-      <Modal visible={showWaiting} transparent animationType="fade" onRequestClose={() => setShowWaiting(false)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowWaiting(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.limitModal, { backgroundColor: colors.surface, borderRadius: radius.lg }]}>
-            <View style={[styles.modalIcon, { backgroundColor: `${colors.success}18` }]}><Ionicons name="checkmark-done-outline" size={30} color={colors.success} /></View>
-            <Text variant="h2" weight="semiBold" style={{ textAlign: 'center' }}>{t('learningModes.availableQuestionsCompleteTitle')}</Text>
-            <Text variant="body" secondary style={{ textAlign: 'center' }}>{t('learningModes.availableQuestionsCompleteMessage')}</Text>
-            <Button label={t('learningModes.waitingForQuestions')} variant="secondary" disabled onPress={() => undefined} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Nothing to act on — the questions simply run out — so the single button
+          dismisses. The old version offered only a disabled button, which left
+          the backdrop tap as the sole way out. */}
+      <ConfirmDialog
+        visible={showWaiting}
+        tone="info"
+        icon="checkmark-done-outline"
+        singleButton
+        title={t('learningModes.availableQuestionsCompleteTitle')}
+        message={t('learningModes.availableQuestionsCompleteMessage')}
+        confirmLabel={t('common.ok')}
+        onConfirm={() => setShowWaiting(false)}
+        onCancel={() => setShowWaiting(false)}
+      />
 
-      <Modal visible={showLeaveConfirm} transparent animationType="fade" onRequestClose={() => setShowLeaveConfirm(false)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowLeaveConfirm(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.leaveModal, { backgroundColor: colors.surface, borderColor: `${colors.warning}55`, borderRadius: radius.lg }]}>
-            <View style={styles.leaveTopRow}>
-              <View style={[styles.leaveIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="pause-circle-outline" size={29} color={colors.warning} /></View>
-              <View style={styles.leaveTitleBlock}>
-                <Text variant="h2" weight="semiBold">{t('learningModes.pausePracticeTitle')}</Text>
-                <Text variant="bodySmall" secondary>{t('learningModes.pausePracticeMessage')}</Text>
-              </View>
-            </View>
-            <View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}>
-              <Ionicons name="cloud-done-outline" size={19} color={colors.success} />
-              <Text variant="caption" weight="bold" style={{ color: colors.success }}>{t('learningModes.progressSynced')}</Text>
-            </View>
-            <View style={styles.leaveActions}>
-              <Button label={t('learningModes.keepPracticing')} variant="secondary" onPress={() => setShowLeaveConfirm(false)} />
-              <Button label={t('learningModes.leavePractice')} onPress={leavePractice} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Pausing is not destructive: progress is already synced, which the badge
+          below keeps saying. Hence tone="info" rather than danger. */}
+      <ConfirmDialog
+        visible={showLeaveConfirm}
+        tone="info"
+        icon="pause-circle"
+        title={t('learningModes.pausePracticeTitle')}
+        message={t('learningModes.pausePracticeMessage')}
+        confirmLabel={t('learningModes.leavePractice')}
+        cancelLabel={t('learningModes.keepPracticing')}
+        onConfirm={leavePractice}
+        onCancel={() => setShowLeaveConfirm(false)}
+      >
+        <View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}>
+          <Ionicons name="cloud-done-outline" size={19} color={colors.success} />
+          <Text variant="caption" weight="bold" style={{ color: colors.success }}>{t('learningModes.progressSynced')}</Text>
+        </View>
+      </ConfirmDialog>
     </View>
   );
 }
@@ -493,13 +498,6 @@ const styles = StyleSheet.create({
   sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   historyItem: { borderTopWidth: 1, paddingTop: 11, flexDirection: 'row', gap: 9 },
   statusDot: { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
-  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 22 },
-  limitModal: { width: '100%', padding: 22, gap: 13, alignItems: 'stretch' },
-  modalIcon: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  leaveModal: { width: '100%', overflow: 'hidden', borderWidth: 1, elevation: 8 },
-  leaveTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 22, paddingBottom: 8 },
-  leaveTitleBlock: { flex: 1, gap: 5, paddingTop: 2 },
-  leaveIcon: { width: 56, height: 56, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  saveBadge: { marginHorizontal: 22, marginTop: 12, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  leaveActions: { padding: 22, paddingTop: 18, gap: 10 },
+  // Sits inside the dialog body now, so it carries no outer margins of its own.
+  saveBadge: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });

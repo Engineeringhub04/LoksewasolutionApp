@@ -23,6 +23,7 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { PremiumGateDialog } from '@/src/components/feedback/PremiumGateDialog';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Button } from '@/src/components/buttons/Button';
 import { ProgressRing } from '@/src/components/misc/ProgressRing';
@@ -247,22 +248,19 @@ export default function SubjectChaptersScreen() {
 
       <PageLoaderOverlay visible={chapterData.loading} label={t('common.loading')} />
 
-      <Modal visible={!!premiumChapter} transparent animationType="fade" onRequestClose={() => setPremiumChapter(null)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumChapter(null)}>
-          <Pressable style={[styles.premiumModal, { backgroundColor: colors.card }]} onPress={(event) => event.stopPropagation()}>
-            <View style={styles.premiumIcon}><Ionicons name="lock-closed" size={28} color="#B45309" /></View>
-            <Text variant="h2" weight="bold" style={styles.modalTitle}>{t('subjects.chaptersPage.premiumTitle')}</Text>
-            <Text variant="body" secondary style={styles.modalCenteredText}>{premiumChapter ? chapterName(premiumChapter, chapterLanguage) : ''}</Text>
-            <Text variant="bodySmall" secondary style={styles.modalCenteredText}>{t('subjects.chaptersPage.premiumMessage')}</Text>
-            <Button
-              label={t('subjects.chaptersPage.goToSubscriptionPlan')}
-              onPress={() => { setPremiumChapter(null); router.push('/subscription'); }}
-              icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />}
-            />
-            <Button label={t('common.close')} variant="text" onPress={() => setPremiumChapter(null)} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <PremiumGateDialog
+        visible={!!premiumChapter}
+        title={t('subjects.chaptersPage.premiumTitle')}
+        message={t('subjects.chaptersPage.premiumMessage')}
+        itemName={premiumChapter ? chapterName(premiumChapter, chapterLanguage) : undefined}
+        confirmLabel={t('subjects.chaptersPage.goToSubscriptionPlan')}
+        cancelLabel={t('common.close')}
+        onConfirm={() => {
+          setPremiumChapter(null);
+          router.push('/subscription');
+        }}
+        onCancel={() => setPremiumChapter(null)}
+      />
 
       <Modal visible={!!selectedChapter} transparent animationType="slide" onRequestClose={() => setSelectedChapter(null)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setSelectedChapter(null)}>
@@ -331,11 +329,6 @@ const styles = StyleSheet.create({
   progressTextWrap: { flex: 1, gap: 5 },
   progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
-  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  premiumModal: { width: '100%', maxWidth: 420, borderRadius: 24, padding: 22, gap: 12, alignItems: 'center' },
-  premiumIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0DE' },
-  modalTitle: { textAlign: 'center' },
-  modalCenteredText: { textAlign: 'center' },
   sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.42)' },
   bottomSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, gap: 8 },
   sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#CBD5E1', alignSelf: 'center', marginBottom: 6 },

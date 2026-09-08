@@ -1,6 +1,6 @@
 // Shared curved header for auth screens (Login/Signup/Forgot/Reset Password).
-// Bigger purple gradient card with logo, page title, and short description —
-// all inside the header itself (no separate title block in the white body).
+// Blue gradient matching Subcourse cards, with professional layout, terms/privacy
+// checkbox, and stable button spacing. Logo sits inside a white circle.
 import React from 'react';
 import { Image, View, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +20,7 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
   const insets = useSafeAreaInsets();
 
   return (
-    <LinearGradient colors={['#7C3AED', '#A855F7', '#C084FC']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+    <LinearGradient colors={['#2563EB', '#1D4ED8', '#1E40AF']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
       {onBack ? (
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
@@ -47,14 +47,14 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
 
 const styles = StyleSheet.create({
   header: {
-    paddingBottom: 32,
+    paddingBottom: 24,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     alignItems: 'center',
   },
   backBtn: { position: 'absolute', top: 54, left: 16, zIndex: 10, padding: 6 },
   rightSlot: { position: 'absolute', top: 54, right: 16, zIndex: 10 },
-  content: { alignItems: 'center', gap: 6, paddingHorizontal: 32, marginTop: 4 },
+  content: { alignItems: 'center', gap: 8, paddingHorizontal: 32, marginTop: 4 },
   logoCircle: {
     width: 82,
     height: 82,
@@ -63,16 +63,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.78)',
-    shadowColor: '#E9D5FF',
-    shadowOpacity: 0.72,
-    shadowRadius: 13,
+    borderColor: 'rgba(255,255,255,0.8)',
+    shadowColor: '#1E40AF',
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
   },
   logoImage: { width: 76, height: 76 },
   title: { color: '#FFF', fontSize: 26, textAlign: 'center' },
-  subtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  subtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

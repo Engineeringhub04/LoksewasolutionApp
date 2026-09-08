@@ -37,16 +37,32 @@ function buildHtml(base64: string): string {
   // same code was reliable on iOS purely because WKWebView doesn't have that
   // race. Baking the data into the document itself removes the race
   // entirely: there is no separate injection step to lose the ordering on.
+  // A transparent text layer is drawn on top of each page canvas so the user can
+  // select and copy text on editable (non-scanned) PDFs — scanned papers simply
+  // have no text layer content and fall back to the image, which is correct.
+  // Double-tap toggles a 2x zoom centred on the tap point; pinch-zoom still works
+  // through the viewport meta tag.
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="${PDFJS}/pdf_viewer.min.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: #ffffff; }
-    #pages { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 0 24px; background: #ffffff; }
-    canvas { max-width: 100%; height: auto; display: block; box-shadow: none; background: #ffffff; }
+    html, body { background: #ffffff; }
+    #pages { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 0 24px; background: #ffffff; }
+    .pageWrap { position: relative; max-width: 100%; background: #ffffff; }
+    .pageWrap canvas { max-width: 100%; height: auto; display: block; background: #ffffff; }
+    /* pdf.js text layer: invisible glyphs positioned over the canvas so native
+       text selection / copy works. pdf_viewer.min.css styles .textLayer; these
+       overrides keep it aligned to our responsive (max-width:100%) canvas. */
+    .textLayer {
+      position: absolute; inset: 0; overflow: hidden; opacity: 1; line-height: 1;
+      -webkit-user-select: text; user-select: text;
+    }
+    .textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0 0; }
+    .textLayer ::selection { background: rgba(37,99,235,0.35); }
   </style>
 </head>
 <body>
@@ -80,16 +96,47 @@ function buildHtml(base64: string): string {
           function renderPage(pageNumber) {
             return pdf.getPage(pageNumber).then(function (page) {
               var viewport = page.getViewport({ scale: scale });
+
+              var wrap = document.createElement('div');
+              wrap.className = 'pageWrap';
+              wrap.setAttribute('data-page', String(pageNumber));
+
               var canvas = document.createElement('canvas');
               canvas.width = viewport.width;
               canvas.height = viewport.height;
               canvas.style.width = '100%';
-              canvas.setAttribute('data-page', String(pageNumber));
-              container.appendChild(canvas);
-              return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise.then(function () {
-                rendered += 1;
-                post({ type: 'renderProgress', rendered: rendered, totalPages: pdf.numPages });
-              });
+              wrap.appendChild(canvas);
+              container.appendChild(wrap);
+
+              return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise
+                .then(function () {
+                  // Build the selectable text layer. Wrapped in its own catch so a
+                  // text-layer failure never blocks the page image from showing.
+                  return page.getTextContent().then(function (textContent) {
+                    // The canvas is displayed at CSS width 100%, so the text layer
+                    // must be scaled by the same ratio to stay aligned.
+                    var cssScale = canvas.clientWidth / viewport.width || 1;
+                    var textLayerDiv = document.createElement('div');
+                    textLayerDiv.className = 'textLayer';
+                    textLayerDiv.style.width = viewport.width + 'px';
+                    textLayerDiv.style.height = viewport.height + 'px';
+                    textLayerDiv.style.transform = 'scale(' + cssScale + ')';
+                    textLayerDiv.style.transformOrigin = '0 0';
+                    wrap.appendChild(textLayerDiv);
+                    if (pdfjsLib.renderTextLayer) {
+                      return pdfjsLib.renderTextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: viewport,
+                        textDivs: [],
+                      }).promise;
+                    }
+                  }).catch(function () { /* scanned page — no text layer */ });
+                })
+                .then(function () {
+                  rendered += 1;
+                  post({ type: 'renderProgress', rendered: rendered, totalPages: pdf.numPages });
+                });
             });
           }
 
@@ -103,15 +150,15 @@ function buildHtml(base64: string): string {
           post({ type: 'error', message: String(err && err.message ? err.message : err) });
         });
 
-        // Whichever canvas covers the middle of the screen is the current page.
+        // Whichever page covers the middle of the screen is the current page.
         var lastReported = 0;
         function reportVisiblePage() {
-          var canvases = container.getElementsByTagName('canvas');
+          var wraps = container.getElementsByClassName('pageWrap');
           var middle = window.innerHeight / 2;
-          for (var i = 0; i < canvases.length; i++) {
-            var rect = canvases[i].getBoundingClientRect();
+          for (var i = 0; i < wraps.length; i++) {
+            var rect = wraps[i].getBoundingClientRect();
             if (rect.top <= middle && rect.bottom >= middle) {
-              var page = parseInt(canvases[i].getAttribute('data-page'), 10);
+              var page = parseInt(wraps[i].getAttribute('data-page'), 10);
               if (page && page !== lastReported) {
                 lastReported = page;
                 post({ type: 'page', page: page });
@@ -126,6 +173,32 @@ function buildHtml(base64: string): string {
           ticking = true;
           requestAnimationFrame(function () { reportVisiblePage(); ticking = false; });
         });
+
+        // Double-tap to zoom: toggles the document between 1x and 2x, anchored on
+        // the tapped point so the tapped content stays under the finger. Ignored
+        // when the tap is really the end of a text selection.
+        var zoomed = false;
+        var lastTap = 0;
+        document.addEventListener('touchend', function (e) {
+          if (window.getSelection && String(window.getSelection()).length > 0) return;
+          var now = Date.now();
+          if (now - lastTap < 300 && e.changedTouches && e.changedTouches.length) {
+            e.preventDefault();
+            var t = e.changedTouches[0];
+            var factor = zoomed ? 1 : 2;
+            var docX = (window.pageXOffset + t.clientX);
+            var docY = (window.pageYOffset + t.clientY);
+            document.body.style.transformOrigin = '0 0';
+            document.body.style.transform = zoomed ? '' : 'scale(2)';
+            if (!zoomed) {
+              window.scrollTo(docX * 2 - t.clientX, docY * 2 - t.clientY);
+            }
+            zoomed = !zoomed;
+            lastTap = 0;
+          } else {
+            lastTap = now;
+          }
+        }, { passive: false });
       } catch (e) {
         post({ type: 'error', message: String(e) });
       }

@@ -10,9 +10,18 @@ export interface DataNotFoundProps {
   title?: string;
   description?: string;
   onRetry?: () => void;
+  /**
+   * Overrides for the action button. Defaults to "Try Again" + refresh, which is
+   * right when the data merely failed to load — but wrong when the content is
+   * deliberately unavailable (a Daily Test that has not unlocked yet), where the
+   * only sensible action is to go back. A button that says "Try Again" and then
+   * navigates away would be a lie, so the caller can relabel it.
+   */
+  retryLabel?: string;
+  retryIcon?: keyof typeof Ionicons.glyphMap;
 }
 
-export function DataNotFound({ title = 'Data Not Found', description = "We couldn't load this content. Please try again.", onRetry }: DataNotFoundProps) {
+export function DataNotFound({ title = 'Data Not Found', description = "We couldn't load this content. Please try again.", onRetry, retryLabel = 'Try Again', retryIcon = 'refresh' }: DataNotFoundProps) {
   const { colors, spacing } = useTheme();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm }}>
@@ -21,8 +30,8 @@ export function DataNotFound({ title = 'Data Not Found', description = "We could
       <Text variant="body" secondary style={{ textAlign: 'center' }}>{description}</Text>
       {onRetry ? (
         <Pressable onPress={onRetry} style={[styles.retryBtn, { backgroundColor: colors.primary }]}>
-          <Ionicons name="refresh" size={15} color={colors.onPrimary} />
-          <Text variant="bodySmall" weight="bold" style={{ color: colors.onPrimary }}>Try Again</Text>
+          <Ionicons name={retryIcon} size={15} color={colors.onPrimary} />
+          <Text variant="bodySmall" weight="bold" style={{ color: colors.onPrimary }}>{retryLabel}</Text>
         </Pressable>
       ) : null}
     </View>

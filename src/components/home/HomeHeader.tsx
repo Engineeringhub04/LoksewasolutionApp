@@ -45,6 +45,13 @@ function greeting(): string {
 // attached to the gesture rather than "catching up" after the fact.
 const COLLAPSE_DISTANCE = 150;
 
+/**
+ * Avatar glow colour — the SAME green ring the Profile header uses, in both the
+ * expanded and collapsed state. The avatar is the same person in both tabs, so
+ * it must not be dressed differently depending on which one you are looking at.
+ */
+const GLOW_GREEN = '#22C55E';
+
 // Height (excluding safe-area inset) of the header in its expanded/collapsed
 // states — exported so the Home screen can reserve exactly this much space
 // at the top of its ScrollView content (via paddingTop), since the header
@@ -144,7 +151,9 @@ export function HomeHeader({
       >
         <View style={styles.topRow}>
           <Pressable onPress={onProfilePress} style={styles.profileRow}>
-            <Avatar uri={photoURL} name={displayName ?? undefined} size={48} />
+            <View style={styles.avatarGlow}>
+              <Avatar uri={photoURL} name={displayName ?? undefined} size={44} />
+            </View>
             <View style={{ gap: 1 }}>
               <Text variant="bodySmall" style={styles.greeting}>{greeting()},</Text>
               <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={1}>{firstName}</Text>
@@ -180,8 +189,8 @@ export function HomeHeader({
         pointerEvents={collapsed ? 'auto' : 'none'}
       >
         <View style={styles.collapsedRow}>
-          <Pressable onPress={onProfilePress}>
-            <Avatar uri={photoURL} name={displayName ?? undefined} size={34} />
+          <Pressable onPress={onProfilePress} style={styles.collapsedAvatarGlow}>
+            <Avatar uri={photoURL} name={displayName ?? undefined} size={30} />
           </Pressable>
 
           <Pressable onPress={() => router.push('/search')} style={styles.collapsedSearchIcon} accessibilityLabel="Search">
@@ -235,6 +244,20 @@ const styles = StyleSheet.create({
   },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  // Same ring as ProfileHeader: solid green border, translucent green fill, and a
+  // soft halo (shadow* on iOS, elevation on Android).
+  avatarGlow: {
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2.5,
+    borderColor: GLOW_GREEN,
+    backgroundColor: 'rgba(34,197,94,0.22)',
+    shadowColor: GLOW_GREEN,
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
+  },
   greeting: { color: 'rgba(255,255,255,0.8)' },
   name: { color: '#FFF', fontSize: 17 },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -264,6 +287,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // The ring must survive the collapse, just scaled down — same as Profile.
+  collapsedAvatarGlow: {
+    padding: 2,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: GLOW_GREEN,
+    backgroundColor: 'rgba(34,197,94,0.22)',
+    shadowColor: GLOW_GREEN,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
   collapsedSearchIcon: {
     width: 32,
     height: 32,

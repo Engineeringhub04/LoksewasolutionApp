@@ -5,6 +5,7 @@ import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Image as NativeImage, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
+import * as NativeSplashScreen from 'expo-splash-screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -210,6 +211,10 @@ export default function SplashScreen() {
       if (routedRef.current) return;
       routedRef.current = true;
 
+      // Hide native splash exactly once, after decision is made. The fade is off
+      // in app.json so this is a sharp cut, not a cross-fade.
+      await NativeSplashScreen.hideAsync();
+
       if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
       if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
@@ -219,8 +224,13 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  const logoWidth = Math.min(width * 0.48, 220);
-  const logoHeight = logoWidth * 0.74;
+  // The logo art is landscape (~1.31:1), NOT square. The PNG is now tightly
+  // trimmed (no baked-in transparent padding), so we size it by width and derive
+  // height from the real aspect. The box hugs the art — no dead space below the
+  // mark, so the app name sits right under it instead of being pushed away.
+  const LOGO_ASPECT = 375 / 287; // trimmed asset ratio (≈1.31)
+  const logoWidth = Math.min(width * 0.64, 300);
+  const logoHeight = logoWidth / LOGO_ASPECT;
   return (
     <LinearGradient colors={['#061A73', '#062C91', '#03145C']} style={styles.container}>
       <SplashDecorations />

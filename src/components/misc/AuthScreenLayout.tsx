@@ -47,7 +47,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 24 },
-  body: { paddingHorizontal: 24, paddingTop: 28 },
+  body: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
   headerWrap: {
     position: 'absolute',
     top: 0,

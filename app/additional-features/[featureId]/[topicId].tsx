@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button } from '@/src/components/buttons/Button';
+import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
@@ -322,16 +322,53 @@ export default function AdditionalFeatureTopicScreen() {
 
   const modeHeader = <SubpageHeader title={topicTitle} onBackPress={() => (track === 'practice' ? setShowLeaveConfirm(true) : router.back())} />;
 
+  // Declared once and mounted in each early return: the error and empty states
+  // still have to answer the back button while the practice track is active.
+  const exitDialog = (
+    <ConfirmDialog
+      visible={showLeaveConfirm}
+      tone="danger"
+      icon="exit-outline"
+      confirmIcon="exit-outline"
+      title={labels.exitTitle}
+      message={labels.exitMessage}
+      confirmLabel={labels.leavePractice}
+      cancelLabel={labels.keepPracticing}
+      onConfirm={leavePractice}
+      onCancel={() => setShowLeaveConfirm(false)}
+    >
+      <View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}>
+        <Ionicons name="phone-portrait-outline" size={19} color={colors.success} />
+        <Text variant="caption" weight="bold" style={{ color: colors.success }}>{labels.progressSaved}</Text>
+      </View>
+    </ConfirmDialog>
+  );
+
+  // Notice, not a question: the day's quota is spent either way, so one button.
+  const limitDialog = (
+    <ConfirmDialog
+      visible={showLimit}
+      tone="warning"
+      icon="speedometer-outline"
+      singleButton
+      title={labels.dailyLimitTitle}
+      message={labels.dailyLimitMessage}
+      confirmLabel={labels.keepPracticing}
+      onConfirm={() => setShowLimit(false)}
+      onCancel={() => setShowLimit(false)}
+    />
+  );
+
   if (loading) {
     return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<PageLoaderOverlay visible label={language === 'ne' ? 'प्रश्नहरू लोड हुँदैछन्...' : 'Loading questions...'} /></View>;
   }
 
   if (loadError) {
-    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<DataNotFound title={language === 'ne' ? 'प्रश्नहरू लोड गर्न सकिएन।' : 'Unable to load questions.'} description={labels.retry} onRetry={() => void load()} /><LeaveConfirmation visible={showLeaveConfirm} labels={labels} colors={colors} radius={radius} onCancel={() => setShowLeaveConfirm(false)} onConfirm={leavePractice} /></View>;
+    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<DataNotFound title={language === 'ne' ? 'प्रश्नहरू लोड गर्न सकिएन।' : 'Unable to load questions.'} description={labels.retry} onRetry={() => void load()} />{exitDialog}</View>;
   }
 
   if (questions.length === 0) {
-    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<DataNotFound title={language === 'ne' ? 'यस विषयका प्रश्नहरू उपलब्ध छैनन्।' : 'No questions are available for this topic.'} description="" /><LeaveConfirmation visible={showLeaveConfirm} labels={labels} colors={colors} radius={radius} onCancel={() => setShowLeaveConfirm(false)} onConfirm={leavePractice} /></View>;
+    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<DataNotFound title={language === 'ne' ? 'यस विषयका प्रश्नहरू उपलब्ध छैनन्।' : 'No questions are available for this topic.'} description="" />{exitDialog}</View>;
   }
 
   return (
@@ -366,8 +403,8 @@ export default function AdditionalFeatureTopicScreen() {
         </ScrollView>
       )}
 
-      <LimitModal visible={showLimit} labels={labels} colors={colors} radius={radius} onClose={() => setShowLimit(false)} />
-      <LeaveConfirmation visible={showLeaveConfirm} labels={labels} colors={colors} radius={radius} onCancel={() => setShowLeaveConfirm(false)} onConfirm={leavePractice} />
+      {limitDialog}
+      {exitDialog}
     </View>
   );
 }
@@ -392,14 +429,6 @@ function PracticeQuestion({ question, index, total, selected, attempted, correct
 
 function isLastLabel(index: number, total: number, labels: ModeLabels): string {
   return index === total - 1 ? labels.finish : labels.next;
-}
-
-function LimitModal({ visible, labels, colors, radius, onClose }: { visible: boolean; labels: ModeLabels; colors: ThemeColors; radius: ThemeRadius; onClose: () => void }) {
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose}><Pressable onPress={(event) => event.stopPropagation()} style={[styles.limitModal, { backgroundColor: colors.surface, borderRadius: radius.lg }]}><View style={[styles.modalIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="speedometer-outline" size={30} color={colors.warning} /></View><Text variant="h2" weight="semiBold" style={{ textAlign: 'center' }}>{labels.dailyLimitTitle}</Text><Text variant="body" secondary style={{ textAlign: 'center' }}>{labels.dailyLimitMessage}</Text><Button label={labels.keepPracticing} variant="secondary" onPress={onClose} /></Pressable></Pressable></Modal>;
-}
-
-function LeaveConfirmation({ visible, labels, colors, radius, onCancel, onConfirm }: { visible: boolean; labels: ModeLabels; colors: ThemeColors; radius: ThemeRadius; onCancel: () => void; onConfirm: () => void }) {
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}><Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={onCancel}><Pressable onPress={(event) => event.stopPropagation()} style={[styles.leaveModal, { backgroundColor: colors.surface, borderColor: `${colors.warning}55`, borderRadius: radius.lg }]}><View style={styles.leaveTopRow}><View style={[styles.leaveIcon, { backgroundColor: `${colors.warning}18` }]}><Ionicons name="pause-circle-outline" size={29} color={colors.warning} /></View><View style={styles.leaveTitleBlock}><Text variant="h2" weight="semiBold">{labels.exitTitle}</Text><Text variant="bodySmall" secondary>{labels.exitMessage}</Text></View></View><View style={[styles.saveBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}55` }]}><Ionicons name="phone-portrait-outline" size={19} color={colors.success} /><Text variant="caption" weight="bold" style={{ color: colors.success }}>{labels.progressSaved}</Text></View><View style={styles.leaveActions}><Button label={labels.keepPracticing} variant="secondary" onPress={onCancel} /><Button label={labels.leavePractice} onPress={onConfirm} /></View></Pressable></Pressable></Modal>;
 }
 
 const styles = StyleSheet.create({
@@ -439,13 +468,6 @@ const styles = StyleSheet.create({
   bottomButton: { minHeight: 50, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, flex: 0.85 },
   nextButton: { minHeight: 50, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, flex: 1.35 },
   nextButtonLabel: { color: '#FFF', flex: 1, textAlign: 'center', lineHeight: 18, fontSize: 13 },
-  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 22 },
-  limitModal: { width: '100%', padding: 22, gap: 13, alignItems: 'stretch' },
-  modalIcon: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  leaveModal: { width: '100%', overflow: 'hidden', borderWidth: 1, elevation: 8 },
-  leaveTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 22, paddingBottom: 8 },
-  leaveTitleBlock: { flex: 1, gap: 5, paddingTop: 2 },
-  leaveIcon: { width: 56, height: 56, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  saveBadge: { marginHorizontal: 22, marginTop: 12, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  leaveActions: { padding: 22, paddingTop: 18, gap: 10 },
+  // Sits inside the dialog body now, so it carries no outer margins of its own.
+  saveBadge: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });

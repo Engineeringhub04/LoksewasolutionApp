@@ -30,6 +30,7 @@ import { TextField } from '@/src/components/inputs/TextField';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { RejectReasonDialog } from '@/src/components/admin/RejectReasonDialog';
 
 export default function AdminSubscriptionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -226,25 +227,17 @@ export default function AdminSubscriptionDetailScreen() {
         onCancel={() => setShowApproveConfirm(false)}
       />
 
-      <Modal visible={showRejectDialog} transparent animationType="fade" onRequestClose={() => setShowRejectDialog(false)}>
-        <Pressable style={[styles.modalOverlay, { backgroundColor: colors.overlay }]} onPress={() => setShowRejectDialog(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={[styles.modalCard, { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg }]}>
-            <Text variant="h3" weight="semiBold">{t('subscription.adminRejectTitle')}</Text>
-            <TextField
-              placeholder={t('subscription.adminRejectReasonPlaceholder')}
-              value={rejectReason}
-              onChangeText={setRejectReason}
-              multiline
-              numberOfLines={3}
-              containerStyle={{ marginTop: spacing.sm }}
-            />
-            <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.md }]}>
-              <Button label={t('common.cancel')} variant="secondary" onPress={() => setShowRejectDialog(false)} style={{ flex: 1 }} />
-              <Button label={t('subscription.adminReject')} variant="danger" onPress={handleReject} style={{ flex: 1 }} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <RejectReasonDialog
+        visible={showRejectDialog}
+        title={t('subscription.adminRejectTitle')}
+        placeholder={t('subscription.adminRejectReasonPlaceholder')}
+        reason={rejectReason}
+        onChangeReason={setRejectReason}
+        confirmLabel={t('subscription.adminReject')}
+        submitting={busy}
+        onConfirm={handleReject}
+        onCancel={() => setShowRejectDialog(false)}
+      />
 
       <Modal visible={fullscreen} transparent animationType="fade" onRequestClose={() => setFullscreen(false)}>
         <Pressable style={styles.fullscreenOverlay} onPress={() => setFullscreen(false)}>
@@ -271,7 +264,6 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusBanner: { borderWidth: 1 },
   actionPanel: { borderWidth: 1.5 },
   profileCard: { borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -282,8 +274,6 @@ const styles = StyleSheet.create({
   screenshot: { width: '100%', height: 220, borderRadius: 12 },
   urlRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingVertical: 8 },
   urlIconBtn: { padding: 8 },
-  modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  modalCard: { width: '88%' },
   fullscreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
   fullscreenImage: { width: '100%', height: '100%' },
 });

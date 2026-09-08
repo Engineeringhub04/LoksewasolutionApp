@@ -13,6 +13,9 @@ export * from './inputs/Switch';
 export * from './nav/TopAppBar';
 export * from './nav/TabBar';
 export * from './feedback/ToastHost';
+// AppDialog is the shared modal shell; ConfirmDialog is the yes/no question built
+// on it. Reach for ConfirmDialog first — AppDialog only when the body is custom.
+export * from './feedback/AppDialog';
 export * from './feedback/ConfirmDialog';
 export * from './feedback/BottomSheet';
 export * from './feedback/Spinner';

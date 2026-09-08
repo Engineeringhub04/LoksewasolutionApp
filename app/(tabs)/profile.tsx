@@ -4,7 +4,7 @@
 // services/profile.ts), not just the cached auth session, so the values survive
 // reinstalls and match across devices.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { View, Share, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';

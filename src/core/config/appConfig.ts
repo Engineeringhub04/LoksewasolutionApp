@@ -1,5 +1,6 @@
 // Single source of truth (PRD §5). Every environment/branding/key value lives here.
 // No screen or component may hardcode these values.
+import { Platform } from 'react-native';
 
 export const AppConfig = {
   identity: {
@@ -9,7 +10,12 @@ export const AppConfig = {
     buildNumber: 1,
     tagline: 'Prepare Smarter, Score Higher',
     logoAsset: require('../../../assets/images/logo.png'),
-    splashAsset: require('../../../assets/images/logo_nobg.png'),
+    // Platform-specific splash marks: iOS ships a 1024², Android a 512². Both
+    // are square (1:1) transparent PNGs — render them in a SQUARE box.
+    splashAsset: Platform.select({
+      ios: require('../../../assets/images/logo_nobg_ios.png'),
+      default: require('../../../assets/images/logo_nobg.png'),
+    }),
   },
   api: {
     baseUrl: 'https://api.loksewasolution.com.np/v1',

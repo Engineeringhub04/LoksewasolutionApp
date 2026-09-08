@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as NativeSplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -168,6 +169,13 @@ const styles = StyleSheet.create({
 });
 
 export default function RootLayout() {
+  // Prevents the native splash screen from automatically hiding — the custom splash
+  // screen (app/index.tsx) MUST be the one that hides it, with an explicit .hide()
+  // after the decision is made (i.e., inside the useEffect that routes away). This
+  // call should block at the module load, before the React tree starts rendering,
+  // otherwise the native splash would auto-hide earlier than we want.
+  void NativeSplashScreen.preventAutoHideAsync();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

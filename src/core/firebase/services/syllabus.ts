@@ -1,13 +1,11 @@
 // Syllabus service — one document per course+subcourse combination.
 // Document ID = `{courseId}__{subcourseId}` so every fetch is a single
 // direct getDocument() call (O(1) read, no query, no index needed).
-import {
-  commitWrites,
-  setWrite,
-  getDocument,
-  serverTimestamp,
-} from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
+import {
+  getDocument,
+  runQuery,
+} from '@/src/core/firebase/firestoreRest';
 
 export interface SyllabusData {
   id: string;
@@ -23,9 +21,6 @@ export interface SyllabusData {
   createdAt: unknown;
   updatedAt: unknown;
 }
-
-const SYLLABUS_PDF_PLACEHOLDER =
-  'https://drive.google.com/file/d/1wdiV-Uh8sAVtBCJ2K4KjxrPGk42MLGAZ/view?usp=sharing';
 
 function syllabusDocId(courseId: string, subcourseId: string): string {
   return `${courseId}__${subcourseId}`;
@@ -65,108 +60,21 @@ export async function fetchSyllabusData(
   return syllabusFromDocument(doc, syllabusDocId(courseId, subcourseId));
 }
 
-interface SyllabusSeedEntry {
-  courseId: string;
-  subcourseId: string;
-  name: string;
-  nameNe: string;
-  order: number;
-}
-
-const SYLLABUS_SEED_DATA: SyllabusSeedEntry[] = [
-  {
-    courseId: 'civil-engineering',
-    subcourseId: 'civil-assistant-sub-engineer',
-    name: 'Civil Assistant Sub Engineer 4th Level Syllabus',
-    nameNe: 'सिभिल सहायक सब इन्जिनियर ४थो तह पाठ्यक्रम',
-    order: 1,
-  },
-  {
-    courseId: 'civil-engineering',
-    subcourseId: 'civil-sub-engineer',
-    name: 'Civil Sub Engineer 5th Level Syllabus',
-    nameNe: 'सिभिल सब इन्जिनियर ५औं तह पाठ्यक्रम',
-    order: 2,
-  },
-  {
-    courseId: 'civil-engineering',
-    subcourseId: 'civil-engineering-7th',
-    name: 'Civil Engineering 7th Level Syllabus',
-    nameNe: 'सिभिल इन्जिनियरिङ ७औं तह पाठ्यक्रम',
-    order: 3,
-  },
-  {
-    courseId: 'geometric-engineering',
-    subcourseId: 'amin',
-    name: 'Amin 4th Level Syllabus',
-    nameNe: 'अमिन ४थो तह पाठ्यक्रम',
-    order: 4,
-  },
-  {
-    courseId: 'geometric-engineering',
-    subcourseId: 'surveyor',
-    name: 'Surveyor 5th Level Syllabus',
-    nameNe: 'सर्भेयर ५औं तह पाठ्यक्रम',
-    order: 5,
-  },
-  {
-    courseId: 'geometric-engineering',
-    subcourseId: 'geometric-engineering-7th',
-    name: 'Geometric Engineering 7th Level Syllabus',
-    nameNe: 'ज्यामितीय इन्जिनियरिङ ७औं तह पाठ्यक्रम',
-    order: 6,
-  },
-  {
-    courseId: 'electrical-engineering',
-    subcourseId: 'electrical-assistant-engineer',
-    name: 'Electrical Assistant Engineer 4th Level Syllabus',
-    nameNe: 'विद्युत सहायक इन्जिनियर ४थो तह पाठ्यक्रम',
-    order: 7,
-  },
-  {
-    courseId: 'electrical-engineering',
-    subcourseId: 'sub-electrical-engineer',
-    name: 'Sub Electrical Engineer 5th Level Syllabus',
-    nameNe: 'सब विद्युत इन्जिनियर ५औं तह पाठ्यक्रम',
-    order: 8,
-  },
-  {
-    courseId: 'electrical-engineering',
-    subcourseId: 'electrical-engineering-7th',
-    name: 'Electrical Engineering 7th Level Syllabus',
-    nameNe: 'विद्युत इन्जिनियरिङ ७औं तह पाठ्यक्रम',
-    order: 9,
-  },
-];
-
 /**
- * Seeds all 9 syllabus documents into `app_syllabusdata`.
- * Safe to call multiple times — uses setWrite (merge) so existing
- * pdfLink overrides are preserved on re-seed.
- * Admin/dev utility only — guarded by isAdmin check in the UI.
+ * Fetches every syllabus record for a course (all its subcourse levels), sorted
+ * by `order`. One query scoped by `courseId` — the Syllabus screen shows one
+ * card per level (4th / 5th / 7th, etc.) for whichever course the user enrolled in.
+ *
+ * `active` is filtered client-side rather than in the query so a single-field
+ * index on `courseId` is enough (no composite index needed on Spark plan).
  */
-export async function seedSyllabusData(): Promise<number> {
-  const writes = SYLLABUS_SEED_DATA.map((entry) =>
-    setWrite(
-      `${Collections.syllabusData}/${syllabusDocId(entry.courseId, entry.subcourseId)}`,
-      {
-        name: entry.name,
-        nameNe: entry.nameNe,
-        courseId: entry.courseId,
-        subcourseId: entry.subcourseId,
-        pdfLink: SYLLABUS_PDF_PLACEHOLDER,
-        isPro: false,
-        price: 0,
-        active: true,
-        order: entry.order,
-        isSeed: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    ),
-  );
-
-  await commitWrites(writes);
-  return writes.length;
+export async function fetchSyllabusList(courseId: string): Promise<SyllabusData[]> {
+  if (!courseId) return [];
+  const rows = await runQuery(Collections.syllabusData, {
+    where: [{ field: 'courseId', op: '==', value: courseId }],
+  });
+  return rows
+    .map((row) => syllabusFromDocument(row, String(row.id ?? '')))
+    .filter((item) => item.active)
+    .sort((a, b) => a.order - b.order);
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, FlatList, Pressable, Modal, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { View, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,7 @@ import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { AppDialog } from '@/src/components/feedback/AppDialog';
 import { DiscussionActionMenu, type DiscussionActionMenuItem } from '@/src/components/discussion/DiscussionActionMenu';
 import { DiscussionReportModal, type DiscussionReportTarget } from '@/src/components/discussion/DiscussionReportModal';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
@@ -262,45 +263,35 @@ export default function DiscussionFeedScreen() {
         />
       )}
 
-      <Modal visible={showGuidelines} transparent animationType="fade" onRequestClose={() => setShowGuidelines(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.guidelinesSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalIcon, { backgroundColor: `${colors.primary}18` }]}>
-                <Ionicons name="book" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="h2" weight="bold">{guidelines?.title ?? t('discussion.guidelines')}</Text>
-                <Text variant="caption" secondary>{t('discussion.title')}</Text>
-              </View>
-              <View style={styles.modalActions}>
-                <Pressable onPress={() => setShowGuidelines(false)} accessibilityLabel="Close" style={styles.modalIconButton}>
-                  <Ionicons name="close" size={22} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-            </View>
-            {guidelinesLoading ? (
-              <View style={styles.guidelinesLoading}>
-                <Ionicons name="sync-outline" size={22} color={colors.primary} />
-                <Text variant="body" secondary>{t('common.loading')}</Text>
-              </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
-                <Text variant="body" secondary style={{ lineHeight: 22 }}>{guidelines?.body ?? t('discussion.guidelinesBody')}</Text>
-                {(guidelines?.bullets ?? []).map((bullet, index) => (
-                  <View key={`${bullet}-${index}`} style={styles.guidelineRow}>
-                    <View style={[styles.checkIcon, { backgroundColor: `${colors.primary}18` }]}>
-                      <Ionicons name="checkmark" size={15} color={colors.primary} />
-                    </View>
-                    <Text variant="body" style={{ flex: 1, lineHeight: 21 }}>{bullet}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
+      {/* Guidelines are a notice, not a question: one footer button dismisses,
+          which is what the sheet's lone X used to do. */}
+      <AppDialog
+        visible={showGuidelines}
+        icon="information-circle"
+        title={guidelines?.title ?? t('discussion.guidelines')}
+        subtitle={t('discussion.title')}
+        message={guidelinesLoading ? undefined : guidelines?.body ?? t('discussion.guidelinesBody')}
+        singleButton
+        confirmLabel={t('common.ok')}
+        onConfirm={() => setShowGuidelines(false)}
+        onCancel={() => setShowGuidelines(false)}
+      >
+        {guidelinesLoading ? (
+          <View style={styles.guidelinesLoading}>
+            <Ionicons name="sync-outline" size={22} color={colors.primary} />
+            <Text variant="body" secondary>{t('common.loading')}</Text>
           </View>
-        </View>
-      </Modal>
+        ) : (
+          (guidelines?.bullets ?? []).map((bullet, index) => (
+            <View key={`${bullet}-${index}`} style={styles.guidelineRow}>
+              <View style={[styles.checkIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <Ionicons name="checkmark" size={15} color={colors.primary} />
+              </View>
+              <Text variant="body" style={{ flex: 1, lineHeight: 21 }}>{bullet}</Text>
+            </View>
+          ))
+        )}
+      </AppDialog>
 
       <DiscussionActionMenu
         visible={Boolean(selectedPost)}
@@ -351,13 +342,6 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: '#FFF', paddingVertical: 12, fontSize: 14 },
   clearSearch: { padding: 4 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2,6,23,0.62)' },
-  guidelinesSheet: { width: '100%', maxHeight: '82%', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26, borderWidth: 1, elevation: 12 },
-  modalHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 4, backgroundColor: '#CBD5E1', marginBottom: 18 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 18 },
-  modalIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  modalActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  modalIconButton: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   guidelinesLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 28 },
   guidelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   checkIcon: { width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginTop: 1 },

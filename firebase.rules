@@ -82,6 +82,14 @@ service cloud.firestore {
       match /qotd/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
+      // Daily Test results: private per-user history. Owner can create and read
+      // their own attempts; edits/deletes are admin-only so a saved score can't
+      // be tampered with.
+      match /daily_test_results/{resultId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin();
+      }
       match /current_affairs_progress/{dateKey} {
         allow read: if isOwner(userId) || isAdmin();
         allow create, update: if isOwner(userId) &&
@@ -471,7 +479,14 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-    match /app_syllabus/{docId} {
+    match /app_syllabusdata/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Daily Test models. One document per model, readable by any signed-in user
+    // (the client filters to the enrolled subcourse); only admins can seed/edit.
+    match /app_daily_test_models/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

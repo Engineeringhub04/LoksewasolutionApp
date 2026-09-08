@@ -1,11 +1,12 @@
-import React, { useRef } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { Text } from '@/src/components/misc/Text';
 import { Avatar } from '@/src/components/misc/Avatar';
+import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 
 export interface CommentCardProps {
   authorName: string;
@@ -27,13 +28,18 @@ export function CommentCard({ authorName, authorPhoto, body, timestamp, likeCoun
   const scale = useSharedValue(1);
   const menuRef = useRef<View>(null);
   const segments = body.split(URL_PATTERN);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 
-  const openLink = (value: string) => {
-    const url = value.startsWith('http') ? value : `https://${value}`;
-    Alert.alert(t('discussion.openLinkTitle'), url, [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('discussion.openLink'), onPress: () => Linking.openURL(url).catch(() => undefined) },
-    ]);
+  // The normalized address is what goes into state, so the dialog subtitle shows
+  // the exact url that will be opened — same as the old alert's message did.
+  const requestOpenLink = (value: string) => {
+    setPendingUrl(value.startsWith('http') ? value : `https://${value}`);
+  };
+
+  const confirmOpenLink = () => {
+    const url = pendingUrl;
+    setPendingUrl(null);
+    if (url) void Linking.openURL(url).catch(() => undefined);
   };
 
   const handleLike = () => {
@@ -44,47 +50,61 @@ export function CommentCard({ authorName, authorPhoto, body, timestamp, likeCoun
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <View style={[styles.container, { marginLeft: indent ? spacing.xl : 0, paddingVertical: spacing.sm }]}>
-      <Avatar uri={authorPhoto} name={authorName} size={38} />
-      <View style={{ flex: 1, gap: 5 }}>
-        <View style={styles.authorRow}>
-          <Text variant="bodySmall" weight="semiBold" style={{ flex: 1 }} numberOfLines={1}>{authorName}</Text>
-          <Text variant="caption" secondary>{timestamp}</Text>
-          {onMenuPress ? (
-            <Pressable
-              ref={menuRef}
-              onPress={() => menuRef.current?.measureInWindow((_x, y, _width, height) => onMenuPress?.({ top: y + height + 4, right: 16 }))}
-              accessibilityRole="button"
-              accessibilityLabel={t('discussion.commentOptions')}
-              hitSlop={8}
-              style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+    <>
+      <View style={[styles.container, { marginLeft: indent ? spacing.xl : 0, paddingVertical: spacing.sm }]}>
+        <Avatar uri={authorPhoto} name={authorName} size={38} />
+        <View style={{ flex: 1, gap: 5 }}>
+          <View style={styles.authorRow}>
+            <Text variant="bodySmall" weight="semiBold" style={{ flex: 1 }} numberOfLines={1}>{authorName}</Text>
+            <Text variant="caption" secondary>{timestamp}</Text>
+            {onMenuPress ? (
+              <Pressable
+                ref={menuRef}
+                onPress={() => menuRef.current?.measureInWindow((_x, y, _width, height) => onMenuPress?.({ top: y + height + 4, right: 16 }))}
+                accessibilityRole="button"
+                accessibilityLabel={t('discussion.commentOptions')}
+                hitSlop={8}
+                style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={{ borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.sm }}>
+            <Text variant="body" style={{ lineHeight: 21 }}>
+              {segments.map((segment, index) => {
+                const isLink = /^(https?:\/\/|www\.)/i.test(segment);
+                return isLink ? (
+                  <Text key={`${segment}-${index}`} variant="body" style={styles.link} onPress={() => requestOpenLink(segment)}>
+                    {segment}
+                  </Text>
+                ) : segment;
+              })}
+            </Text>
+          </View>
+          <View style={styles.actionRow}>
+            <Pressable onPress={handleLike} style={({ pressed }) => [styles.likeButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t('discussion.likeComment')}>
+              <Animated.View style={animatedStyle}>
+                <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? '#E11D48' : colors.textSecondary} />
+              </Animated.View>
+              <Text variant="caption" weight="semiBold" secondary>{likeCount}</Text>
             </Pressable>
-          ) : null}
-        </View>
-        <View style={{ borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.sm }}>
-          <Text variant="body" style={{ lineHeight: 21 }}>
-            {segments.map((segment, index) => {
-              const isLink = /^(https?:\/\/|www\.)/i.test(segment);
-              return isLink ? (
-                <Text key={`${segment}-${index}`} variant="body" style={styles.link} onPress={() => openLink(segment)}>
-                  {segment}
-                </Text>
-              ) : segment;
-            })}
-          </Text>
-        </View>
-        <View style={styles.actionRow}>
-          <Pressable onPress={handleLike} style={({ pressed }) => [styles.likeButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={t('discussion.likeComment')}>
-            <Animated.View style={animatedStyle}>
-              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? '#E11D48' : colors.textSecondary} />
-            </Animated.View>
-            <Text variant="caption" weight="semiBold" secondary>{likeCount}</Text>
-          </Pressable>
+          </View>
         </View>
       </View>
-    </View>
+
+      <ConfirmDialog
+        visible={Boolean(pendingUrl)}
+        tone="info"
+        icon="link"
+        title={t('discussion.openLinkTitle')}
+        subtitle={pendingUrl ?? undefined}
+        message={t('discussion.openLinkMessage')}
+        confirmLabel={t('discussion.openLink')}
+        onConfirm={confirmOpenLink}
+        onCancel={() => setPendingUrl(null)}
+      />
+    </>
   );
 }
 

@@ -126,4 +126,12 @@ export const Collections = {
   // Flat collection: one document per course+subcourse combination.
   // Document ID = courseId__subcourseId for O(1) direct reads (no query needed).
   syllabusData: 'app_syllabusdata',
+
+  // ===== Daily Test =====
+  // One document per Daily Test model (a small daily quiz). Scoped by
+  // course+subcourse so the query is filtered to just the enrolled subcourse
+  // (single-field index on subcourseId — Spark-plan friendly, low read count).
+  dailyTestModels: 'app_daily_test_models',
+  /** Per-user Daily Test results (private history, one doc per attempt). */
+  dailyTestResults: (uid: string) => `users/${uid}/daily_test_results`,
 } as const;

@@ -146,11 +146,58 @@ async function parseErrorMessage(res: Response): Promise<string> {
   }
 }
 
+// ---------- Server clock ----------
+//
+// Every HTTP response Google sends carries a `Date` header, i.e. authoritative
+// server time, for free — no extra request and no extra document read. We record
+// the offset between it and the device clock so date-gated features (the Daily
+// Test release date) can be judged against real time instead of a clock the user
+// can change in Settings. Cheap, and it self-heals on the next call.
+
+/** serverTime − deviceTime, in ms. 0 until the first response is seen. */
+let serverSkewMs = 0;
+let sawServerTime = false;
+/**
+ * Below this we treat the device clock as correct. Network latency and rounding
+ * make a small skew meaningless, and honouring it would make `now()` jitter.
+ */
+const SKEW_IGNORE_MS = 60_000;
+
+/** Records the server clock from any Firestore response. Never throws. */
+function noteServerTime(res: Response): void {
+  try {
+    const header = res.headers?.get?.('date');
+    if (!header) return;
+    const serverMs = Date.parse(header);
+    if (!Number.isFinite(serverMs)) return;
+    const skew = serverMs - Date.now();
+    serverSkewMs = Math.abs(skew) < SKEW_IGNORE_MS ? 0 : skew;
+    sawServerTime = true;
+  } catch {
+    // A polyfilled Response without headers — fall back to the device clock.
+  }
+}
+
+/**
+ * Best-known current time: the server's if we have heard from it and the device
+ * disagrees by more than a minute, otherwise the device's. Use this anywhere a
+ * date decides what the user is allowed to see.
+ */
+export function serverNow(): Date {
+  return new Date(Date.now() + serverSkewMs);
+}
+
+/** True once any response has told us the server time. */
+export function hasServerTime(): boolean {
+  return sawServerTime;
+}
+
 // ---------- Reads ----------
 
 /** Fetches a single document by path (e.g. "subjects/math"). Returns null if it doesn't exist. */
 export async function getDocument(path: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(buildUrl(`${DOCUMENTS_URL}/${path}`), { headers: await authHeaders() });
+  noteServerTime(res);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await parseErrorMessage(res));
   return fromFirestoreDocument(await res.json());
@@ -165,6 +212,7 @@ export async function listDocuments(collectionPath: string): Promise<Record<stri
       buildUrl(`${DOCUMENTS_URL}/${collectionPath}`, { pageSize: '300', ...(pageToken ? { pageToken } : {}) }),
       { headers: await authHeaders() }
     );
+    noteServerTime(res);
     if (!res.ok) throw new Error(await parseErrorMessage(res));
     const data = await res.json();
     for (const doc of data.documents ?? []) results.push(fromFirestoreDocument(doc));

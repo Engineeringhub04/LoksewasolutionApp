@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -23,7 +23,7 @@ import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Button } from '@/src/components/buttons/Button';
+import { PremiumGateDialog } from '@/src/components/feedback/PremiumGateDialog';
 import { Text } from '@/src/components/misc/Text';
 
 const SUBJECT_COLORS = ['#2563EB', '#7C3AED', '#059669', '#EA580C'];
@@ -202,27 +202,19 @@ export default function SubjectListScreen() {
         label={t('common.loading')}
       />
 
-      <Modal visible={!!premiumSubject} transparent animationType="fade" onRequestClose={() => setPremiumSubject(null)}>
-        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setPremiumSubject(null)}>
-          <Pressable style={[styles.premiumModal, { backgroundColor: colors.card }]} onPress={(event) => event.stopPropagation()}>
-            <View style={styles.premiumIcon}>
-              <Ionicons name="lock-closed" size={28} color="#B45309" />
-            </View>
-            <Text variant="h2" weight="bold" style={{ textAlign: 'center' }}>{t('subjects.premiumTitle')}</Text>
-            <Text variant="body" secondary style={{ textAlign: 'center' }}>{premiumSubject?.name}</Text>
-            <Text variant="bodySmall" secondary style={{ textAlign: 'center' }}>{t('subjects.premiumMessage')}</Text>
-            <Button
-              label={t('subjects.goToSubscriptionPlan')}
-              onPress={() => {
-                setPremiumSubject(null);
-                router.push('/subscription');
-              }}
-              icon={<Ionicons name="card-outline" size={18} color={colors.onPrimary} />}
-            />
-            <Button label={t('common.close')} variant="text" onPress={() => setPremiumSubject(null)} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <PremiumGateDialog
+        visible={!!premiumSubject}
+        title={t('subjects.premiumTitle')}
+        message={t('subjects.premiumMessage')}
+        itemName={premiumSubject?.name}
+        confirmLabel={t('subjects.goToSubscriptionPlan')}
+        cancelLabel={t('common.close')}
+        onConfirm={() => {
+          setPremiumSubject(null);
+          router.push('/subscription');
+        }}
+        onCancel={() => setPremiumSubject(null)}
+      />
     </View>
   );
 }
@@ -327,28 +319,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     rowGap: 12,
-  },
-  modalBackdrop: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  premiumModal: {
-    width: '100%',
-    maxWidth: 390,
-    padding: 24,
-    borderRadius: 24,
-    gap: 13,
-    alignItems: 'center',
-  },
-  premiumIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 3,
-    backgroundColor: '#FEF3C7',
   },
 });
