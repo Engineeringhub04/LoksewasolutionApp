@@ -6,6 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
+import { formatTimeAgo } from '@/src/core/notifications/timeAgo';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
@@ -53,7 +54,7 @@ function groupByDate(items: AppNotification[]) {
 
 export default function NotificationsScreen() {
   const { colors, spacing, radius } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const [activeTab, setActiveTab] = useState<NotificationCategory>('app');
@@ -142,8 +143,9 @@ export default function NotificationsScreen() {
               icon={item.icon as never}
               title={item.title}
               preview={item.preview}
-              timestamp={item.createdAt?.toDate().toLocaleTimeString() ?? ''}
+              timestamp={formatTimeAgo(item.createdAt, language, t)}
               unread={!item.read}
+              imageUrl={item.imageUrl}
               onPress={() => handlePress(item)}
             />
           )}

@@ -87,7 +87,14 @@
           "cameraPermission": "Allow Loksewa Solution to access your camera to take a profile picture or attach photos to posts."
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo_nobg.png",
+          "color": "#061A73"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

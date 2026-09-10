@@ -3,9 +3,10 @@
 // SDK-based auth.ts exactly, so no call site outside this file needs to change.
 import { firebaseEnv } from './env';
 import { signOutNativeGoogleIfAvailable } from './googleAuth';
-import { setSession, clearSession, updateSessionUser, getValidIdToken, subscribeToAuthChanges as subscribeToSessionChanges, type AppUser } from './session';
+import { setSession, clearSession, updateSessionUser, getValidIdToken, getCurrentUid, subscribeToAuthChanges as subscribeToSessionChanges, type AppUser } from './session';
 import { getDocument, setDocument, serverTimestamp } from './firestoreRest';
 import { Collections } from './collections';
+import { removeTokenForUser } from '@/src/core/notifications/pushNotifications';
 
 const IDENTITY_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
 
@@ -112,6 +113,20 @@ export async function loginWithEmail(email: string, password: string): Promise<A
 }
 
 export async function logout(): Promise<void> {
+  // Remove this device's push token from users/{uid}/push_tokens BEFORE the
+  // session is cleared. The delete needs a valid idToken (the rule requires the
+  // owner); once clearSession() runs there is no auth left and the row would be
+  // stranded — the user would keep receiving "login-only" pushes after logging
+  // out. The auth-state listener also fires on sign-out, but by then the token
+  // is already gone, so registering/removing here is the reliable path.
+  const uid = await getCurrentUid();
+  if (uid) {
+    try {
+      await removeTokenForUser(uid);
+    } catch {
+      /* best-effort — never block logout on token cleanup */
+    }
+  }
   await signOutNativeGoogleIfAvailable();
   await clearSession();
 }
@@ -151,6 +166,16 @@ export async function confirmPasswordReset(oobCode: string, newPassword: string)
 export async function deleteCurrentAccount(): Promise<void> {
   const idToken = await getValidIdToken();
   if (!idToken) return;
+  // Drop this device's push token while we still have auth (same reasoning as
+  // logout()). Deleting the account leaves its subcollections behind otherwise.
+  const uid = await getCurrentUid();
+  if (uid) {
+    try {
+      await removeTokenForUser(uid);
+    } catch {
+      /* best-effort */
+    }
+  }
   await identityRequest('delete', { idToken });
   await clearSession();
 }

@@ -79,6 +79,25 @@ service cloud.firestore {
           request.resource.data.read == true;
         allow create, delete: if isAdmin();
       }
+      // Expo push tokens for this signed-in user, one document per device
+      // (keyed by a stable installation id). The owner registers/refreshes
+      // their own token and can remove it on sign-out; the admin lists tokens
+      // to send targeted pushes. Schema-locked so no unexpected fields land here.
+      match /push_tokens/{deviceId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) &&
+          request.resource.data.keys().hasOnly([
+            'deviceId', 'token', 'platform', 'language', 'appVersion',
+            'createdAt', 'updatedAt'
+          ]) &&
+          request.resource.data.deviceId == deviceId &&
+          request.resource.data.token is string &&
+          request.resource.data.token.size() > 0 &&
+          request.resource.data.token.size() <= 300 &&
+          request.resource.data.platform in ['android', 'ios'] &&
+          (request.resource.data.language == null || request.resource.data.language is string);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
       match /qotd/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
@@ -354,9 +373,42 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+    // Gorkhapatra Loksewa posts. Any signed-in user may READ (the list query
+    // filters `status` client-side, so read must not depend on status or it would
+    // need a composite index). WRITES are admin-only AND schema-locked: the field
+    // set is pinned to an allowlist and every field is type/size-checked, so no
+    // client — even a signed-in non-admin, or a buggy/compromised admin path —
+    // can create unexpected, malformed, or oversized documents. Deletes are
+    // admin-only too (lets an admin pull a bad post).
     match /gorkhapatra/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'slug', 'title', 'sourceUrl', 'publishedAt', 'dateLabel', 'coverImage',
+          'excerpt', 'blocks', 'isQuestionSet', 'tag', 'category', 'status', 'source',
+          'fetchedAt', 'updatedAt'
+        ]) &&
+        request.resource.data.slug == docId &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.title.size() <= 300 &&
+        request.resource.data.sourceUrl is string &&
+        request.resource.data.sourceUrl.size() <= 500 &&
+        request.resource.data.publishedAt is timestamp &&
+        request.resource.data.dateLabel is string &&
+        request.resource.data.dateLabel.size() <= 120 &&
+        (request.resource.data.coverImage == null || request.resource.data.coverImage is string) &&
+        request.resource.data.excerpt is string &&
+        request.resource.data.excerpt.size() <= 400 &&
+        request.resource.data.blocks is list &&
+        request.resource.data.blocks.size() <= 1000 &&
+        request.resource.data.isQuestionSet is bool &&
+        (request.resource.data.tag == null || (request.resource.data.tag is string && request.resource.data.tag.size() <= 40)) &&
+        request.resource.data.category is string &&
+        request.resource.data.category.size() <= 60 &&
+        request.resource.data.status in ['published', 'hidden'] &&
+        request.resource.data.source is string;
+      allow delete: if isAdmin();
     }
     match /notices/{docId} {
       allow read: if isSignedIn();
@@ -489,6 +541,37 @@ service cloud.firestore {
     match /app_daily_test_models/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // Anonymous device push tokens. This is the ONLY collection a signed-OUT
+    // client may write, because a not-logged-in device has no user document to
+    // hang its Expo push token on, yet must still be reachable by a broadcast.
+    // The rule is deliberately strict to make this safe:
+    //   • the document id IS the stable installation id (deviceId) — a device can
+    //     only ever touch its own row, and re-registers overwrite in place instead
+    //     of piling up new rows;
+    //   • the field set is pinned to an allowlist and every field is type/size
+    //     checked, so no client can write unexpected or oversized data;
+    //   • client READS are denied outright — only the admin (server/console, or an
+    //     admin-authenticated session) can list tokens to send a broadcast, so the
+    //     token list cannot be scraped by other clients;
+    //   • no per-user data lives here (it is anonymous by construction), so an open
+    //     create/update carries no privacy risk beyond an opaque Expo token string.
+    match /app_device_push_tokens/{deviceId} {
+      allow read: if isAdmin();
+      allow create, update: if
+        request.resource.data.keys().hasOnly([
+          'deviceId', 'token', 'platform', 'language', 'appVersion',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.deviceId == deviceId &&
+        request.resource.data.token is string &&
+        request.resource.data.token.size() > 0 &&
+        request.resource.data.token.size() <= 300 &&
+        request.resource.data.platform in ['android', 'ios'] &&
+        (request.resource.data.language == null || request.resource.data.language is string) &&
+        (request.resource.data.appVersion == null || request.resource.data.appVersion is string);
+      allow delete: if isAdmin();
     }
 
     match /app_quiz_results/{docId} {

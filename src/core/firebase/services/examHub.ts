@@ -299,6 +299,20 @@ export async function fetchExamSets(params: {
     .sort((a, b) => (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0));
 }
 
+/**
+ * Every exam set for a subcourse, across all sections/provinces. Used to schedule
+ * local "goes live" notifications so the alert covers the whole subcourse, not just
+ * the section tab the user happens to be looking at. One equality query, same as
+ * fetchExamSets, minus the in-memory section/province narrowing.
+ */
+export async function fetchExamSetsForSubcourse(subcourseId: string): Promise<ExamSet[]> {
+  if (!subcourseId) return [];
+  const docs = await runQuery(Collections.examSets, {
+    where: [{ field: 'subcourseId', op: '==', value: subcourseId }],
+  });
+  return docs.map(parseExamSet);
+}
+
 export async function fetchExamSet(examSetId: string): Promise<ExamSet | null> {
   const doc = await getDocument(`${Collections.examSets}/${examSetId}`);
   return doc ? parseExamSet(doc) : null;

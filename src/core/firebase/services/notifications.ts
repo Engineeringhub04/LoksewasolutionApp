@@ -19,6 +19,12 @@ export interface AppNotification {
   createdAt: FirestoreTimestamp | null;
   deepLink?: string;
   category?: NotificationCategory;
+  /**
+   * Optional banner image (a hosted URL, e.g. Cloudinary/Firebase). Shown in the
+   * inbox row and, on a real build, as a big-picture push in the tray. Absent on
+   * text-only notifications.
+   */
+  imageUrl?: string | null;
 }
 
 /**

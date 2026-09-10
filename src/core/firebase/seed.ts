@@ -1,6 +1,8 @@
 // Dev-only demo data seeder. Populates Firestore with 2-3 sample docs per collection
 // so every screen in the app has something real to render without manual data entry.
-// Triggered from the "Seed Demo Data" button on the Login screen (dev builds only).
+// This is a dev-only utility with NO UI trigger (the old "Seed Demo Data" login
+// button was removed). Gorkhapatra content is never seeded here - it is ingested
+// only by the standalone scraper.
 import { commitWrites, setWrite, serverTimestamp, type WriteSpec } from './firestoreRest';
 import { Collections } from './collections';
 import { isFirebaseConfigured } from './env';
@@ -127,14 +129,10 @@ export async function seedDemoData(): Promise<void> {
     writes.push(setWrite(`${Collections.currentAffairs}/${c.id}`, { ...c }));
   }
 
-  // Gorkhapatra
-  const gorkhapatra = [
-    { id: 'gp-1', date: daysAgo(0), sections: [{ title: 'Editorial', summary: 'Todays editorial on public service reform...' }] },
-    { id: 'gp-2', date: daysAgo(1), sections: [{ title: 'National News', summary: 'Coverage of national assembly proceedings...' }] },
-  ];
-  for (const g of gorkhapatra) {
-    writes.push(setWrite(`${Collections.gorkhapatra}/${g.id}`, { ...g }));
-  }
+  // Gorkhapatra posts are intentionally NOT seeded. Gorkhapatra is auto-ingested,
+  // REAL content written only by the standalone scraper (the gorkhapatra-automation
+  // repo, via a service account). The app shows an empty state until the first
+  // real post arrives - we never surface demo/placeholder Gorkhapatra data.
 
   // Notices
   const notices = [

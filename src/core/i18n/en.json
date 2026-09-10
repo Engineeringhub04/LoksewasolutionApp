@@ -229,8 +229,20 @@
     "empty": "No current affairs published for this date yet"
   },
   "gorkhapatra": {
-    "title": "Daily Gorkhapatra",
-    "empty": "No edition available for this date"
+    "title": "Gorkhapatra Loksewa",
+    "intro": "Gorkhapatra's Loksewa material, in the app",
+    "empty": "No posts available yet",
+    "questionSet": "Question Set",
+    "read": "Read",
+    "loadMore": "Load more",
+    "noMore": "You're all caught up",
+    "openSource": "View on Gorkhapatra",
+    "sourceNote": "Source: Gorkhapatra Online",
+    "loading": "Loading Gorkhapatra...",
+    "notFound": "Post not found",
+    "addedAgo": "Added {{time}} ago",
+    "justNow": "just now",
+    "sourceBanner": "All the content shown here is collected from the official {{link}} website."
   },
   "qotd": {
     "title": "Question of the Day",
@@ -453,7 +465,9 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "earlier": "Earlier",
-    "empty": "No notifications yet"
+    "empty": "No notifications yet",
+    "justNow": "Just now",
+    "ago": "{{time}} ago"
   },
   "search": {
     "title": "Search",

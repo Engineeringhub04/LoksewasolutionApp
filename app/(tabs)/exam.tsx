@@ -23,6 +23,7 @@ import {
   fetchProvinces,
   fetchExamSections,
   fetchExamSets,
+  fetchExamSetsForSubcourse,
   fetchExamRules,
   fetchExamAttempts,
   resolveExamCardState,
@@ -33,6 +34,8 @@ import {
 } from '@/src/core/firebase/services/examHub';
 import { fetchMyExamAnswersBySet, type ExamAnswer } from '@/src/core/firebase/services/examAnswers';
 import { fetchMyExamPurchases } from '@/src/core/firebase/services/examPurchases';
+import { serverNow } from '@/src/core/firebase/firestoreRest';
+import { syncExamSetNotifications } from '@/src/core/notifications/examScheduler';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ExamCard } from '@/src/components/exam/ExamCard';
@@ -77,10 +80,12 @@ export default function ExamScreen() {
    */
   const [rulesMode, setRulesMode] = useState<'info' | 'start'>('info');
 
-  // Drives the countdown labels without re-fetching anything.
-  const [now, setNow] = useState(() => Date.now());
+  // Drives the countdown labels without re-fetching anything. Uses serverNow()
+  // (device clock corrected by the Firestore server-time skew) so winding the
+  // phone clock forward can't reveal a set before its real start time.
+  const [now, setNow] = useState(() => serverNow().getTime());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+    const timer = setInterval(() => setNow(serverNow().getTime()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
 
@@ -101,6 +106,20 @@ export default function ExamScreen() {
         : Promise.resolve([]),
     [subcourseId, sectionId, provinceId]
   );
+
+  // Reconcile the device's local "goes live" notifications for the WHOLE
+  // subcourse (all sections/provinces), not just the tab in view — otherwise
+  // switching tabs would cancel alerts for the others. A login user only loads
+  // their enrolled subcourse, so this is automatically subcourse-targeted;
+  // anonymous devices with no subcourse simply schedule nothing here. Fires even
+  // if the app is later backgrounded/closed — no backend (Spark plan, no CF).
+  const scheduleSets = useAsyncData(
+    () => (subcourseId ? fetchExamSetsForSubcourse(subcourseId) : Promise.resolve([] as ExamSet[])),
+    [subcourseId]
+  );
+  useEffect(() => {
+    if (scheduleSets.data) void syncExamSetNotifications(scheduleSets.data, subcourseLabel);
+  }, [scheduleSets.data, subcourseLabel]);
 
   const attempts = useAsyncData<Record<string, ExamAttempt[]>>(
     () => (user ? fetchExamAttempts(user.uid) : Promise.resolve({} as Record<string, ExamAttempt[]>)),

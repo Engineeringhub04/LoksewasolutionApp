@@ -9,12 +9,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import 'react-native-reanimated';
 
 import { ThemeProvider, useTheme } from '@/src/core/theme';
-import { I18nProvider } from '@/src/core/i18n';
+import { I18nProvider, useTranslation } from '@/src/core/i18n';
 import { ToastHost } from '@/src/components/feedback/ToastHost';
 import { OfflineBanner } from '@/src/components/feedback/OfflineBanner';
 import { initNetworkListener } from '@/src/core/store/networkStore';
 import { initAuthListener, useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { initNotifications } from '@/src/core/notifications/initNotifications';
 
 export const unstable_settings = {
   anchor: 'index',
@@ -48,6 +49,11 @@ function RootStack() {
     Platform.OS === 'android' && !isTabRoute && !isSplashRoute && systemBottomInset > 0;
   const userUid = useAuthStore((s) => s.user?.uid ?? null);
   const handledResetUrl = useRef<string | null>(null);
+  const { language } = useTranslation();
+  // Kept in a ref so the notification init (run once) always reads the CURRENT
+  // language when it saves a token, without re-initializing on every switch.
+  const languageRef = useRef(language);
+  languageRef.current = language;
 
   const openResetLink = useCallback((url: string | null) => {
     if (!url || handledResetUrl.current === url) return;
@@ -77,11 +83,19 @@ function RootStack() {
   useEffect(() => {
     const unsubNetwork = initNetworkListener();
     const unsubAuth = initAuthListener();
+    // Push notifications: registers this device's Expo token (login → user doc,
+    // logout → anonymous device collection) and routes taps to their deep link.
+    // No-op in Expo Go / on simulators; requires an EAS build to actually receive.
+    const unsubNotifications = initNotifications({
+      getLanguage: () => languageRef.current,
+      onDeepLink: (deepLink) => router.push(deepLink as never),
+    });
     return () => {
       unsubNetwork();
       unsubAuth();
+      unsubNotifications();
     };
-  }, []);
+  }, [router]);
 
   // Warm the profile cache in the BACKGROUND as soon as a session exists, so the
   // Profile tab renders real data immediately instead of showing a loader on

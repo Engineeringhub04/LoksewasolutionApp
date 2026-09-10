@@ -134,4 +134,18 @@ export const Collections = {
   dailyTestModels: 'app_daily_test_models',
   /** Per-user Daily Test results (private history, one doc per attempt). */
   dailyTestResults: (uid: string) => `users/${uid}/daily_test_results`,
+
+  // ===== Push Notifications =====
+  // Anonymous device push tokens. Because the app requires login to reach Home,
+  // a NOT-logged-in device has no user document to attach its Expo push token to —
+  // it lives here instead, keyed by a stable installation id. This is the ONLY
+  // client-writable-while-signed-out collection; its rule is schema-locked and
+  // client reads are denied (only an admin can list tokens to send a broadcast).
+  devicePushTokens: 'app_device_push_tokens',
+  // Logged-in devices store their Expo push token in a per-user subcollection
+  // (keyed by the same stable installation id) so it can be listed by the admin
+  // for targeted sends and removed cleanly on sign-out. A subcollection is used
+  // instead of a field on the user doc because the user-doc update rule pins the
+  // owner-writable key set and does not include a tokens field.
+  userPushTokens: (uid: string) => `users/${uid}/push_tokens`,
 } as const;
