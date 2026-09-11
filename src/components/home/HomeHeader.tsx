@@ -29,7 +29,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
 import { Avatar } from '@/src/components/misc/Avatar';
-import { Badge } from '@/src/components/misc/Badge';
+import { PulsingBadge } from '@/src/components/misc/PulsingBadge';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { CourseInfoCard } from '@/src/components/home/CourseInfoCard';
 
@@ -166,7 +166,7 @@ export function HomeHeader({
               <Ionicons name="notifications-outline" size={20} color="#FFF" />
               {notificationCount > 0 ? (
                 <View style={styles.badgeWrap}>
-                  <Badge count={notificationCount} />
+                  <PulsingBadge count={notificationCount} />
                 </View>
               ) : null}
             </Pressable>
@@ -208,7 +208,7 @@ export function HomeHeader({
             <Ionicons name="notifications-outline" size={17} color="#FFF" />
             {notificationCount > 0 ? (
               <View style={styles.badgeWrapSmall}>
-                <Badge count={notificationCount} />
+                <PulsingBadge count={notificationCount} />
               </View>
             ) : null}
           </Pressable>

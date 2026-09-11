@@ -467,7 +467,9 @@
     "earlier": "Earlier",
     "empty": "No notifications yet",
     "justNow": "Just now",
-    "ago": "{{time}} ago"
+    "ago": "{{time}} ago",
+    "detailTitle": "Notification details",
+    "openLink": "Click here"
   },
   "search": {
     "title": "Search",

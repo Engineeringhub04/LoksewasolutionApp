@@ -12,7 +12,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.loksewasolutionnp.hub",
-      "associatedDomains": ["applinks:kbr.com.np", "applinks:loksewa-solution-app.firebaseapp.com"]
+      "associatedDomains": [
+        "applinks:kbr.com.np",
+        "applinks:loksewa-solution-app.firebaseapp.com"
+      ]
     },
     "androidNavigationBar": {
       "backgroundColor": "#000000",
@@ -27,7 +30,10 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "data": [
             {
               "scheme": "https",
@@ -48,7 +54,10 @@
       },
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -99,6 +108,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "backgroundColor": "#000000",
+        "borderColor": "#000000",
+        "barStyle": "light",
+        "position": "relative"
+      },
+      "eas": {
+        "projectId": "cd2fb7bb-37c0-4411-810a-a91177555f42"
+      }
     }
   }
 }

@@ -58,6 +58,11 @@ export interface ExamSet {
   id: string;
   courseId: string;
   subcourseId: string;
+  /** All targeted courses/sub-courses — a set can serve several at once. The
+   *  singular courseId/subcourseId above stay populated (first of each) for the
+   *  rules-doc lookup and display. */
+  courseIds: string[];
+  subcourseIds: string[];
   provinceId: string;
   sectionId: string;
 
@@ -208,10 +213,16 @@ function parseQuestions(value: unknown): ExamQuestion[] {
 }
 
 function parseExamSet(doc: Record<string, unknown>): ExamSet {
+  const subcourseIds = strArray(doc.subcourseIds);
+  const courseIds = strArray(doc.courseIds);
+  const subcourseId = str(doc.subcourseId) || subcourseIds[0] || '';
+  const courseId = str(doc.courseId) || courseIds[0] || '';
   return {
     id: str(doc.id),
-    courseId: str(doc.courseId),
-    subcourseId: str(doc.subcourseId),
+    courseId,
+    subcourseId,
+    courseIds: courseIds.length ? courseIds : courseId ? [courseId] : [],
+    subcourseIds: subcourseIds.length ? subcourseIds : subcourseId ? [subcourseId] : [],
     provinceId: str(doc.provinceId),
     sectionId: str(doc.sectionId),
     title: str(doc.title),
@@ -272,13 +283,38 @@ export async function fetchExamSections(courseId: string | null, subcourseId: st
 }
 
 /**
+ * Raw exam-set docs whose target includes this sub-course. A set can target one
+ * sub-course (legacy `subcourseId` string) or several (`subcourseIds` array), so
+ * we run BOTH queries and merge by id: `subcourseIds array-contains` catches the
+ * new multi-target sets and `subcourseId ==` catches every set written before
+ * multi-select (no data migration needed). Neither query needs a composite index,
+ * and the array-contains query simply returns nothing for docs without the field.
+ */
+async function fetchExamSetDocsForSubcourse(subcourseId: string): Promise<Record<string, unknown>[]> {
+  const [multi, legacy] = await Promise.all([
+    runQuery(Collections.examSets, {
+      where: [{ field: 'subcourseIds', op: 'array-contains', value: subcourseId }],
+    }).catch(() => [] as Record<string, unknown>[]),
+    runQuery(Collections.examSets, {
+      where: [{ field: 'subcourseId', op: '==', value: subcourseId }],
+    }).catch(() => [] as Record<string, unknown>[]),
+  ]);
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const d of [...multi, ...legacy]) {
+    const id = str(d.id);
+    if (id) byId.set(id, d);
+  }
+  return Array.from(byId.values());
+}
+
+/**
  * Exam sets for the current selection. `provinceId === ALL_PROVINCES` returns
  * every province's sets, which is what the "All Board" chip shows.
  *
- * Filtering is done with a single equality query on subcourseId plus in-memory
- * narrowing, deliberately: combining three equality filters with an orderBy would
- * require a composite Firestore index that has to be created by hand, and the
- * per-subcourse result set is small.
+ * Filtering pulls the sub-course's sets (see fetchExamSetDocsForSubcourse) then
+ * narrows by section/province in memory, deliberately: combining several equality
+ * filters with an orderBy would require a hand-made composite Firestore index, and
+ * the per-subcourse result set is small.
  */
 export async function fetchExamSets(params: {
   subcourseId: string;
@@ -288,9 +324,7 @@ export async function fetchExamSets(params: {
   const { subcourseId, sectionId, provinceId } = params;
   if (!subcourseId) return [];
 
-  const docs = await runQuery(Collections.examSets, {
-    where: [{ field: 'subcourseId', op: '==', value: subcourseId }],
-  });
+  const docs = await fetchExamSetDocsForSubcourse(subcourseId);
 
   return docs
     .map(parseExamSet)
@@ -302,14 +336,12 @@ export async function fetchExamSets(params: {
 /**
  * Every exam set for a subcourse, across all sections/provinces. Used to schedule
  * local "goes live" notifications so the alert covers the whole subcourse, not just
- * the section tab the user happens to be looking at. One equality query, same as
+ * the section tab the user happens to be looking at. Same sub-course fetch as
  * fetchExamSets, minus the in-memory section/province narrowing.
  */
 export async function fetchExamSetsForSubcourse(subcourseId: string): Promise<ExamSet[]> {
   if (!subcourseId) return [];
-  const docs = await runQuery(Collections.examSets, {
-    where: [{ field: 'subcourseId', op: '==', value: subcourseId }],
-  });
+  const docs = await fetchExamSetDocsForSubcourse(subcourseId);
   return docs.map(parseExamSet);
 }
 

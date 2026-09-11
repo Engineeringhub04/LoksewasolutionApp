@@ -4,6 +4,7 @@ import type { AppUser } from '@/src/core/firebase/session';
 import { subscribeToAuthChanges } from '@/src/core/firebase/auth';
 import { clearHomeDataCache } from '@/src/core/services/homePrefetch';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { useNotificationStore } from '@/src/core/store/notificationStore';
 
 interface AuthState {
   user: AppUser | null;
@@ -22,6 +23,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       // a second fetch caused by a stale course/profile dependency.
       clearHomeDataCache();
       useProfileStore.getState().clear();
+      // The bell badge count is per-user too — drop it so the next account (or
+      // the signed-out state) never inherits the previous user's unread count.
+      useNotificationStore.getState().reset();
     }
     set({ user, initializing: false });
   },

@@ -1,6 +1,6 @@
 import { fetchHomeBanners, type HomeBanner } from '@/src/core/firebase/services/banners';
 import { fetchDevelopers, type Developer } from '@/src/core/firebase/services/developer';
-import { fetchNotifications, type AppNotification } from '@/src/core/firebase/services/notifications';
+import { fetchInbox, type AppNotification } from '@/src/core/firebase/services/notifications';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
 import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
 
@@ -35,7 +35,7 @@ async function fetchSnapshot(key: HomeDataKey, force = false): Promise<HomeDataS
   const [banners, developers, notifications, subjectDetails, qotdAnswered] = await Promise.all([
     fetchHomeBanners(),
     fetchDevelopers(),
-    key.uid ? fetchNotifications(key.uid) : Promise.resolve([]),
+    key.uid ? fetchInbox(key.uid) : Promise.resolve([]),
     fetchSubjectDetails(key.courseId, key.subcourseId, { force }),
     key.uid
       ? hasAnsweredQotdToday(key.uid, key.courseId)

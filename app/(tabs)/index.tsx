@@ -11,6 +11,7 @@ import { useTheme } from '@/src/core/theme';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { useNotificationStore } from '@/src/core/store/notificationStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useTranslation } from '@/src/core/i18n';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
@@ -187,7 +188,15 @@ export default function HomeScreen() {
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
 
-  const unreadCount = useMemo(() => (notifications.data ?? []).filter((n) => !n.read).length, [notifications.data]);
+  // Bell badge count. Home's inbox slice comes from a CACHED snapshot, so we
+  // seed the shared notification store from it and then let the Notifications
+  // page (fresh fetch + mark-read) keep that store live. The header subscribes
+  // to the store, so a notification read elsewhere reflects here on return
+  // without spending another Firestore read.
+  const badgeCount = useNotificationStore((s) => s.unreadCount);
+  useEffect(() => {
+    if (notifications.data) useNotificationStore.getState().setFromList(notifications.data);
+  }, [notifications.data]);
   const homeSubjects = useMemo(() => (subjectDetails.data ?? []).slice(0, 6), [subjectDetails.data]);
   const recentNotices = useMemo(() => APP_NOTICES.slice(0, 3), []);
 
@@ -216,7 +225,7 @@ export default function HomeScreen() {
       // saved in Edit Profile shows up here immediately — no refresh needed.
       displayName={storeProfile?.name || user?.displayName || null}
       photoURL={storeProfile?.photoURL ?? user?.photoURL}
-      notificationCount={unreadCount}
+      notificationCount={badgeCount}
       isDark={effective === 'dark'}
       onToggleTheme={toggleTheme}
       onNotificationsPress={() => router.push('/notifications')}

@@ -17,6 +17,8 @@ interface InitArgs {
   getLanguage: () => string | null;
   /** Navigate to a deep link when a notification is tapped. */
   onDeepLink: (deepLink: string) => void;
+  /** Fired when a push arrives while the app is foregrounded — bumps the bell. */
+  onReceived?: () => void;
 }
 
 let started = false;
@@ -25,7 +27,7 @@ let started = false;
  * Initializes push notifications. Idempotent — safe to call once from the root
  * layout. Returns a disposer that tears down every subscription.
  */
-export function initNotifications({ getLanguage, onDeepLink }: InitArgs): () => void {
+export function initNotifications({ getLanguage, onDeepLink, onReceived }: InitArgs): () => void {
   if (started) return () => undefined;
   started = true;
 
@@ -53,6 +55,7 @@ export function initNotifications({ getLanguage, onDeepLink }: InitArgs): () => 
     onResponse: (deepLink) => {
       if (deepLink) onDeepLink(deepLink);
     },
+    onReceived,
   });
 
   return () => {

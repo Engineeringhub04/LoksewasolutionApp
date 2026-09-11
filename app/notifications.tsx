@@ -1,5 +1,5 @@
 // §37 Notifications
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, SectionList, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,10 +8,14 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { useTranslation } from '@/src/core/i18n';
 import { formatTimeAgo } from '@/src/core/notifications/timeAgo';
 import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
+import { useNotificationStore } from '@/src/core/store/notificationStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useRefreshOnFocus } from '@/src/core/hooks/useRefreshOnFocus';
 import {
-  fetchNotifications,
+  fetchInbox,
+  addBroadcastReadId,
+  addBroadcastReadIds,
   markAllNotificationsRead,
   markNotificationRead,
   resolveNotificationCategory,
@@ -57,15 +61,25 @@ export default function NotificationsScreen() {
   const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const profile = useProfileStore((s) => s.profile);
+  // Same name source the Home greeting uses, so a broadcast's "Hello, X" matches.
+  const displayName = profile?.name || user?.displayName || undefined;
   const [activeTab, setActiveTab] = useState<NotificationCategory>('app');
 
   const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
-    return fetchNotifications(user.uid);
-  }, [user?.uid]);
+    return fetchInbox(user.uid, displayName);
+  }, [user?.uid, displayName]);
 
   // Returning to this screen must show current data without a manual pull.
   useRefreshOnFocus(refresh);
+
+  // This screen always fetches fresh, so it is the authority on the unread
+  // count. Push it to the shared store so the Home bell badge (which otherwise
+  // reads a cached snapshot) reflects reality the moment the user returns.
+  useEffect(() => {
+    if (data) useNotificationStore.getState().setFromList(data);
+  }, [data]);
 
   const tabs: { key: NotificationCategory; label: string }[] = [
     { key: 'app', label: t('notifications.tabApp') },
@@ -81,16 +95,49 @@ export default function NotificationsScreen() {
 
   const handleMarkAllRead = async () => {
     if (!user) return;
-    await markAllNotificationsRead(user.uid);
+    // Broadcast rows are read from a shared doc, so "read" for them is local; mark
+    // both the private inbox (Firestore) and the broadcast set (AsyncStorage).
+    const broadcastIds = (data ?? []).filter((n) => n.isBroadcast).map((n) => n.id);
+    await Promise.all([
+      markAllNotificationsRead(user.uid),
+      addBroadcastReadIds(user.uid, broadcastIds),
+    ]);
+    useNotificationStore.getState().setUnreadCount(0);
     showToast(t('notifications.markedAllRead'), 'success');
     refetch();
   };
 
-  const handlePress = async (item: AppNotification) => {
+  const handlePress = (item: AppNotification) => {
     if (!user) return;
-    if (!item.read) await markNotificationRead(user.uid, item.id);
-    if (item.deepLink) router.push(item.deepLink as never);
-    refetch();
+    // Navigate FIRST so the detail page opens instantly — no waiting on a
+    // mark-read round-trip and no list reload flashing behind the transition.
+    // Open a dedicated detail page (NOT the deep link directly). The detail page
+    // shows the full notification and, when the admin attached a path, offers a
+    // "click here" button that navigates there. Passing the fields as params
+    // avoids a second Firestore read for a document we already hold in memory.
+    router.push({
+      pathname: '/notification/[id]',
+      params: {
+        id: item.id,
+        title: item.title,
+        body: item.preview,
+        icon: item.icon,
+        imageUrl: item.imageUrl ?? '',
+        deepLink: item.deepLink ?? '',
+        category: item.category ?? 'app',
+        createdAtMs: item.createdAt ? String(item.createdAt.toDate().getTime()) : '',
+      },
+    });
+    // Mark read in the BACKGROUND (fire-and-forget). The store drops the count
+    // optimistically, and the on-focus refresh reconciles the row on return, so
+    // we never block navigation or reload the list under a loading overlay.
+    if (!item.read) {
+      useNotificationStore.getState().decrement(1);
+      const markRead = item.isBroadcast
+        ? addBroadcastReadId(user.uid, item.id)
+        : markNotificationRead(user.uid, item.id);
+      void markRead.catch(() => undefined);
+    }
   };
 
   return (

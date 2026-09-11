@@ -66,6 +66,10 @@ export const Collections = {
   reports: 'reports',
   contactMessages: 'contactMessages',
   notifications: 'notifications',
+  // Admin campaign audit log AND the app's global broadcast feed. Docs tagged
+  // `kind: 'gorkhapatra'` are surfaced in every login user's inbox (including
+  // accounts created later), so historical broadcasts stay visible to new users.
+  appNotifications: 'app_notifications',
   meta: 'meta',
   appOnboardingSettings: 'app_onboarding-settings',
   homeBanners: 'app_home_banners',

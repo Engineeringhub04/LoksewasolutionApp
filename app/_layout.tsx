@@ -15,6 +15,7 @@ import { OfflineBanner } from '@/src/components/feedback/OfflineBanner';
 import { initNetworkListener } from '@/src/core/store/networkStore';
 import { initAuthListener, useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
+import { useNotificationStore } from '@/src/core/store/notificationStore';
 import { initNotifications } from '@/src/core/notifications/initNotifications';
 
 export const unstable_settings = {
@@ -89,6 +90,10 @@ function RootStack() {
     const unsubNotifications = initNotifications({
       getLanguage: () => languageRef.current,
       onDeepLink: (deepLink) => router.push(deepLink as never),
+      // A push arriving while the app is open bumps the Home bell instantly.
+      // REST-only Firestore has no onSnapshot, so this listener is what keeps
+      // the badge live without a manual refresh.
+      onReceived: () => useNotificationStore.getState().increment(1),
     });
     return () => {
       unsubNetwork();

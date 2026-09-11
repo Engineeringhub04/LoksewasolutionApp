@@ -68,7 +68,10 @@ function getProjectId(): string | undefined {
  */
 export async function getExpoPushToken(): Promise<string | null> {
   try {
-    if (!Device.isDevice) return null; // simulators/emulators can't receive push
+    if (!Device.isDevice) {
+      if (__DEV__) console.warn('[push] No token: not a physical device — emulators/simulators cannot receive push.');
+      return null; // simulators/emulators can't receive push
+    }
 
     await ensureAndroidChannel();
 
@@ -78,16 +81,32 @@ export async function getExpoPushToken(): Promise<string | null> {
       const requested = await Notifications.requestPermissionsAsync();
       status = requested.status;
     }
-    if (status !== 'granted') return null;
+    if (status !== 'granted') {
+      if (__DEV__) console.warn('[push] No token: notification permission was not granted.');
+      return null;
+    }
 
     const projectId = getProjectId();
+    if (!projectId && __DEV__) {
+      // This is the usual reason users/{uid}/push_tokens stays empty: with no
+      // EAS projectId, getExpoPushTokenAsync throws below and we return null, so
+      // nothing is ever written. Run `eas init` to add expo.extra.eas.projectId
+      // to app.json, then use an EAS dev/prod build (Expo Go on SDK 54 cannot
+      // mint remote push tokens even with a projectId).
+      console.warn(
+        '[push] No EAS projectId found (app.json → expo.extra.eas.projectId is missing). ' +
+          'Push token cannot be minted. Run `eas init`, then rebuild with an EAS build.',
+      );
+    }
     const tokenResponse = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
+      projectId ? { projectId } : undefined,
     );
+    if (__DEV__) console.log('[push] Expo push token acquired:', tokenResponse.data);
     return tokenResponse.data ?? null;
-  } catch {
+  } catch (e) {
     // Expo Go on SDK 54, missing projectId in a bare build, or transient failure —
     // registration is best-effort and must never break app startup.
+    if (__DEV__) console.warn('[push] getExpoPushTokenAsync failed:', e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -167,8 +186,10 @@ export async function registerPushToken(uid: string | null, language?: string | 
       await saveTokenForAnonymous({ token, language });
     }
     registered = true;
-  } catch {
+    if (__DEV__) console.log(`[push] token saved for ${uid ? `user ${uid}` : 'anonymous device'}.`);
+  } catch (e) {
     /* best-effort: a write failure must not break startup */
+    if (__DEV__) console.warn('[push] token write failed:', e instanceof Error ? e.message : e);
   }
   return token;
 }
@@ -180,6 +201,10 @@ export function hasRegistered(): boolean {
 export interface NotificationListeners {
   /** Fired when a notification is tapped (foreground, background, or cold start). */
   onResponse: (deepLink: string | null) => void;
+  /** Fired when a push ARRIVES while the app is foregrounded (not tapped). Used to
+   *  bump the Home bell in real time, since Firestore here is REST-only (no
+   *  onSnapshot) and nothing else would update the count until a manual refresh. */
+  onReceived?: () => void;
 }
 
 /**
@@ -189,7 +214,7 @@ export interface NotificationListeners {
  * `data.deepLink` — the same field the in-app inbox uses — so tapping a tray push
  * lands on the same screen as tapping the inbox row.
  */
-export function attachNotificationListeners({ onResponse }: NotificationListeners): () => void {
+export function attachNotificationListeners({ onResponse, onReceived }: NotificationListeners): () => void {
   const extractDeepLink = (response: Notifications.NotificationResponse | null): string | null => {
     const data = response?.notification.request.content.data as { deepLink?: unknown } | undefined;
     return typeof data?.deepLink === 'string' ? data.deepLink : null;
@@ -199,6 +224,11 @@ export function attachNotificationListeners({ onResponse }: NotificationListener
     onResponse(extractDeepLink(response));
   });
 
+  // Foreground arrival (push received, NOT tapped) → bump the bell live.
+  const receivedSub = onReceived
+    ? Notifications.addNotificationReceivedListener(() => onReceived())
+    : null;
+
   // Cold start: the app was launched by tapping a notification.
   void Notifications.getLastNotificationResponseAsync().then((response) => {
     const link = extractDeepLink(response);
@@ -207,5 +237,6 @@ export function attachNotificationListeners({ onResponse }: NotificationListener
 
   return () => {
     responseSub.remove();
+    receivedSub?.remove();
   };
 }
