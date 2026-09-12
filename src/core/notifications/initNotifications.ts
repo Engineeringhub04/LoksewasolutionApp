@@ -11,6 +11,7 @@ import {
   removeTokenForUser,
   attachNotificationListeners,
 } from '@/src/core/notifications/pushNotifications';
+import { clearExamSetNotifications } from '@/src/core/notifications/examScheduler';
 
 interface InitArgs {
   /** Current UI language, stored with the token so the admin can segment sends. */
@@ -30,6 +31,11 @@ let started = false;
 export function initNotifications({ getLanguage, onDeepLink, onReceived }: InitArgs): () => void {
   if (started) return () => undefined;
   started = true;
+
+  // One-time migration cleanup: old builds may have scheduled a local exam-live
+  // notification. Central remote push now owns this event, so remove stale local
+  // schedules at every app launch to prevent a duplicate at exam start.
+  void clearExamSetNotifications();
 
   let currentUid: string | null | undefined; // undefined = first callback not seen yet
 

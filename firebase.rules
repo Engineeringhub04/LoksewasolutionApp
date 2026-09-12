@@ -34,6 +34,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // One-copy announcements: every signed-in app user reads the same document.
+    match /app_global_notification/{notificationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // User profile. Privilege and subscription fields are never client-writable.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
