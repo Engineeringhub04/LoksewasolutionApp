@@ -65,6 +65,8 @@ export interface ExamSet {
   subcourseIds: string[];
   provinceId: string;
   sectionId: string;
+  /** Admin's draft switch. Unpublished sets never reach the Exam Hub. */
+  isPublished: boolean;
 
   title: string;
   /** Database-controlled amount used only when a pro set is purchased. */
@@ -187,6 +189,60 @@ function strArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
+/**
+ * Section/province ids written by older builds of the admin website, mapped onto
+ * the canonical ids seeded in seedExamHub.ts. `fetchExamSets` compares a set's
+ * sectionId against the id of an app_exam_sections document, so a set stored as
+ * 'mcq' instead of 'mcq-tests' is fetched but filtered out — the card silently
+ * never appears. Normalising on read repairs those documents without a data
+ * migration, and is harmless for correctly-stored sets.
+ */
+const LEGACY_SECTION_ALIASES: Record<string, string> = {
+  mcq: 'mcq-tests',
+  mcq_tests: 'mcq-tests',
+  theory: 'theory-desk',
+  theory_desk: 'theory-desk',
+  past_questions: 'past-qns',
+  'past-questions': 'past-qns',
+  past_qns: 'past-qns',
+  gk_pm: 'gk-pm',
+  gkpm: 'gk-pm',
+};
+
+const LEGACY_PROVINCE_ALIASES: Record<string, string> = {
+  sudurpashchim: 'sudurpaschim',
+  sudurpashchhim: 'sudurpaschim',
+  'sudur-paschim': 'sudurpaschim',
+};
+
+function canonicalSectionId(value: string): string {
+  const key = value.trim().toLowerCase();
+  return key ? (LEGACY_SECTION_ALIASES[key] ?? key) : key;
+}
+
+function canonicalProvinceId(value: string): string {
+  const key = value.trim().toLowerCase();
+  return key ? (LEGACY_PROVINCE_ALIASES[key] ?? key) : key;
+}
+
+/**
+ * Admin writes `isPublished`; some older documents have no such field, and a few
+ * carry string forms ('true' / 'draft'). Anything we cannot read as an explicit
+ * "no" counts as published, so a set can never disappear just because the flag
+ * is missing.
+ */
+function isPublishedFlag(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const s = value.trim().toLowerCase();
+    if (['false', '0', 'no', 'off', 'draft', 'unpublished', 'hidden', 'disabled'].includes(s)) return false;
+    return true;
+  }
+  return true;
+}
+
 /** Timestamps come back from the REST client as { toDate, toMillis }, not Date. */
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -223,8 +279,9 @@ function parseExamSet(doc: Record<string, unknown>): ExamSet {
     subcourseId,
     courseIds: courseIds.length ? courseIds : courseId ? [courseId] : [],
     subcourseIds: subcourseIds.length ? subcourseIds : subcourseId ? [subcourseId] : [],
-    provinceId: str(doc.provinceId),
-    sectionId: str(doc.sectionId),
+    provinceId: canonicalProvinceId(str(doc.provinceId)),
+    sectionId: canonicalSectionId(str(doc.sectionId)),
+    isPublished: isPublishedFlag(doc.isPublished),
     title: str(doc.title),
     price: num(doc.price, 50),
     currency: str(doc.currency, 'NPR'),
@@ -325,11 +382,14 @@ export async function fetchExamSets(params: {
   if (!subcourseId) return [];
 
   const docs = await fetchExamSetDocsForSubcourse(subcourseId);
+  const wantedSection = canonicalSectionId(sectionId);
+  const wantedProvince = canonicalProvinceId(provinceId);
 
   return docs
     .map(parseExamSet)
-    .filter((set) => set.sectionId === sectionId)
-    .filter((set) => provinceId === ALL_PROVINCES || set.provinceId === provinceId)
+    .filter((set) => set.isPublished)
+    .filter((set) => set.sectionId === wantedSection)
+    .filter((set) => provinceId === ALL_PROVINCES || set.provinceId === wantedProvince)
     .sort((a, b) => (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0));
 }
 
@@ -342,7 +402,8 @@ export async function fetchExamSets(params: {
 export async function fetchExamSetsForSubcourse(subcourseId: string): Promise<ExamSet[]> {
   if (!subcourseId) return [];
   const docs = await fetchExamSetDocsForSubcourse(subcourseId);
-  return docs.map(parseExamSet);
+  // Draft sets must not schedule a "goes live" alert.
+  return docs.map(parseExamSet).filter((set) => set.isPublished);
 }
 
 export async function fetchExamSet(examSetId: string): Promise<ExamSet | null> {
