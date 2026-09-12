@@ -187,12 +187,9 @@ export async function fetchBroadcastNotifications(
  * never hide the private inbox, but a private-inbox failure still propagates so
  * the screen keeps showing its error state.
  */
-export async function fetchInbox(uid: string, displayName?: string, max = 50): Promise<AppNotification[]> {
-  const [personal, broadcast] = await Promise.all([
-    fetchNotifications(uid, max),
-    fetchBroadcastNotifications(uid, displayName, max).catch(() => [] as AppNotification[]),
-  ]);
-  return [...personal, ...broadcast]
-    .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
-    .slice(0, max);
+export async function fetchInbox(uid: string, _displayName?: string, max = 50): Promise<AppNotification[]> {
+  // Gorkhapatra announcements are tray-push only. Their delivery audit belongs
+  // exclusively to Admin → Notification Manager → Gorkhapatra Details, so the
+  // mobile Notification page intentionally returns only private inbox records.
+  return fetchNotifications(uid, max);
 }
