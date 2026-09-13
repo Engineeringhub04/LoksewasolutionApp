@@ -141,15 +141,19 @@ export default function GorkhapatraScreen() {
           {posts.length === 0 && !page1.loading ? (
             <EmptyState icon="reader-outline" title={t('gorkhapatra.empty')} />
           ) : (
-            posts.map((post) => (
-              <GorkhapatraCard
-                key={post.id}
-                post={post}
-                onPress={() => openPost(post)}
-                questionSetLabel={t('gorkhapatra.questionSet')}
-                readLabel={t('gorkhapatra.read')}
-              />
-            ))
+            // Same rhythm the notifications inbox uses between its rows, so the
+            // two lists read as one design language.
+            <View style={{ gap: spacing.sm }}>
+              {posts.map((post) => (
+                <GorkhapatraCard
+                  key={post.id}
+                  post={post}
+                  onPress={() => openPost(post)}
+                  questionSetLabel={t('gorkhapatra.questionSet')}
+                  readLabel={t('gorkhapatra.read')}
+                />
+              ))}
+            </View>
           )}
 
           {/* Pagination footer */}

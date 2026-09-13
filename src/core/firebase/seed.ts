@@ -120,14 +120,7 @@ export async function seedDemoData(): Promise<void> {
     writes.push(setWrite(`${Collections.liveExams}/${l.id}`, { ...l, createdAt: serverTimestamp() }));
   }
 
-  // Current affairs
-  const currentAffairs = [
-    { id: 'ca-1', headline: 'Nepal signs new trade agreement', summary: 'Nepal and neighboring country sign a bilateral trade pact...', category: 'Economy', date: daysAgo(0) },
-    { id: 'ca-2', headline: 'New hydropower project inaugurated', summary: 'A 456MW hydropower project began commercial operation...', category: 'National', date: daysAgo(1) },
-  ];
-  for (const c of currentAffairs) {
-    writes.push(setWrite(`${Collections.currentAffairs}/${c.id}`, { ...c }));
-  }
+  // Current affairs seed data removed on 2026-09-13 together with the feature.
 
   // Gorkhapatra posts are intentionally NOT seeded. Gorkhapatra is auto-ingested,
   // REAL content written only by the standalone scraper (the gorkhapatra-automation

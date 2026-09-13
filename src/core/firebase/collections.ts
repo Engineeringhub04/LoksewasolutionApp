@@ -40,12 +40,8 @@ export const Collections = {
   mockTests: 'mockTests',
   liveExams: 'liveExams',
   attempts: 'attempts',
-  // Current Affairs: global verified articles/questions, grouped packs, and per-user state.
-  currentAffairs: 'currentAffairs',
-  currentAffairsArticles: 'app_current_affairs_articles',
-  currentAffairsQuestions: 'app_current_affairs_questions',
-  currentAffairsPacks: 'app_current_affairs_packs',
-  currentAffairsProgress: (uid: string) => `users/${uid}/current_affairs_progress`,
+  // Current Affairs collections were removed on 2026-09-13 along with the
+  // feature's screens and service. Re-add them here if the feature is rebuilt.
   gorkhapatra: 'gorkhapatra',
   notices: 'notices',
   discussions: 'discussions',

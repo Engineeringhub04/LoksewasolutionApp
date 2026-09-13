@@ -2,7 +2,9 @@
 import { runQuery, setDocument, deleteDocument, serverTimestamp, type FirestoreTimestamp } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 
-export type BookmarkType = 'note' | 'currentAffairs' | 'question' | 'discussion' | 'chapter';
+// 'currentAffairs' was dropped on 2026-09-13 with the Current Affairs feature.
+// Any legacy docs still carrying that type simply match no tab and stay hidden.
+export type BookmarkType = 'note' | 'question' | 'discussion' | 'chapter';
 
 export interface Bookmark {
   id: string;

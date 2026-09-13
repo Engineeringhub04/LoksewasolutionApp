@@ -1,26 +1,39 @@
-// List card for one Gorkhapatra Loksewa post. Premium feel: an optional
-// edge-to-edge cover image on top, then a dark-orange date chip and a DB-driven
-// badge, the title, a short excerpt, and a footer row with the "added X ago" time
-// and a Read affordance. The whole card is one pressable that opens the native
-// detail screen — no stray inner cards.
+// List card for one Gorkhapatra Loksewa post.
+//
+// Deliberately built to the SAME recipe as the notification inbox row
+// (src/components/cards/NotificationRow.tsx) — per explicit user feedback that
+// the topic list should feel like the notifications page, where every row is
+// obviously its own separate card: rounded surface tile, hairline border,
+// pressed state swapping surface -> surfaceAlt, a pill icon tile on the left,
+// then title / excerpt / meta row, with the cover image inset at the bottom.
+//
+// The one extra flourish is the left accent spine: at rest it is a short nub
+// parked at the vertical centre, and on touch it grows from that centre
+// outward (up AND down) to the full card height, then retracts on release.
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation, type Language } from '@/src/core/i18n';
 import { Text } from '@/src/components/misc/Text';
-import { Card } from '@/src/components/cards/Card';
 import type { GorkhapatraPost } from '@/src/core/firebase/services/content';
 
 const ACCENT = '#7C3AED'; // matches the Gorkhapatra quick-link accent on Home
+const ACCENT_DARK = '#A78BFA'; // lighter violet so the spine stays visible on the dark surface
 
-// Dark-orange highlight for the date chip (point 2). Lighter text on a warmer,
-// more translucent fill in dark mode so it stays legible on the dark card.
+// Dark-orange highlight for the date chip. Lighter text on a warmer, more
+// translucent fill in dark mode so it stays legible on the dark card.
 const DATE_CHIP = {
   light: { fg: '#C2410C', bg: 'rgba(234,88,12,0.12)' },
   dark: { fg: '#FDBA74', bg: 'rgba(251,146,60,0.16)' },
 } as const;
+
+// Height of the resting nub. Small enough to read as a quiet accent mark, big
+// enough that the "grows from here" origin is obvious once you press.
+const SPINE_NUB_HEIGHT = 26;
+const SPINE_WIDTH = 4;
 
 function formatDate(value: GorkhapatraPost['publishedAt']): string {
   if (!value) return '';
@@ -93,85 +106,144 @@ export interface GorkhapatraCardProps {
 }
 
 export function GorkhapatraCard({ post, onPress, questionSetLabel, readLabel }: GorkhapatraCardProps) {
-  const { colors, spacing, radius, effective } = useTheme();
+  const { colors, spacing, radius, motion, effective } = useTheme();
   const { t, language } = useTranslation();
 
-  const dateChip = DATE_CHIP[effective === 'dark' ? 'dark' : 'light'];
+  const isDark = effective === 'dark';
+  const accent = isDark ? ACCENT_DARK : ACCENT;
+  const dateChip = DATE_CHIP[isDark ? 'dark' : 'light'];
   // DB-driven badge: use the authored `tag` when present, otherwise fall back to
   // the localized "question set" label so the badge is never hardcoded.
   const badge = post.tag ?? (post.isQuestionSet ? questionSetLabel : null);
   const addedAgo = formatAddedAgo(post.fetchedAt, language, t);
+  const dateLabel = post.dateLabel || formatDate(post.publishedAt);
+
+  // 0 = resting nub, 1 = spine filled to the full card height.
+  const fill = useSharedValue(0);
+
+  // scaleY on a full-height bar, not an animated `height`. RN scales around the
+  // view's centre, so one shared value gives the exact "opens from the middle,
+  // upward and downward at once" motion the design asks for — and it runs on
+  // the UI thread instead of re-laying-out the card on every frame.
+  const fillStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: fill.value }] }));
+  // The nub dissolves as the full bar takes over, so the two never read as two
+  // separate marks stacked on top of each other mid-animation.
+  const nubStyle = useAnimatedStyle(() => ({ opacity: 1 - fill.value }));
+
+  const handlePressIn = () => {
+    fill.value = withTiming(1, { duration: motion.standard, easing: Easing.out(Easing.cubic) });
+  };
+  const handlePressOut = () => {
+    fill.value = withTiming(0, { duration: motion.standard, easing: Easing.in(Easing.cubic) });
+  };
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.94 : 1 }]}>
-      <Card style={[styles.card, { borderColor: colors.border }]}>
-        {post.coverImage ? (
-          <Image
-            source={{ uri: post.coverImage }}
-            style={styles.cover}
-            contentFit="cover"
-            cachePolicy="disk"
-            transition={200}
-          />
-        ) : null}
-        <View style={{ padding: spacing.cardPadding }}>
-          <View style={styles.metaRow}>
-            <View style={[styles.pill, { backgroundColor: dateChip.bg }]}>
-              <Ionicons name="calendar-outline" size={13} color={dateChip.fg} />
-              <Text variant="caption" weight="semiBold" style={{ color: dateChip.fg }}>
-                {post.dateLabel || formatDate(post.publishedAt)}
-              </Text>
-            </View>
-            {badge ? (
-              <View style={[styles.pill, styles.badgePill, { backgroundColor: 'rgba(124,58,237,0.12)' }]}>
-                <Ionicons name="pricetag" size={12} color={ACCENT} />
-                <Text variant="caption" weight="semiBold" style={{ color: ACCENT }}>{badge}</Text>
-              </View>
-            ) : null}
-          </View>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessibilityRole="button"
+      accessibilityLabel={post.title}
+      accessibilityHint={readLabel}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          padding: spacing.md,
+          // Extra left inset so the accent spine never crowds the icon tile.
+          paddingLeft: spacing.md + 6,
+          borderRadius: radius.lg,
+          borderColor: pressed ? accent + '55' : colors.divider,
+          backgroundColor: pressed ? colors.surfaceAlt : colors.surface,
+        },
+      ]}
+    >
+      {/* Accent spine track. Absolute + full height so the fill can reach the
+          card's top and bottom edges; overflow:hidden on the card clips it to
+          the rounded corners. */}
+      <View style={styles.spineTrack} pointerEvents="none">
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: accent }, fillStyle]} />
+        <Animated.View style={[styles.spineNub, { backgroundColor: accent }, nubStyle]} />
+      </View>
 
-          <Text variant="bodyLarge" weight="bold" numberOfLines={2} style={{ marginTop: spacing.sm }}>
+      <View style={styles.row}>
+        <View
+          style={[
+            styles.iconWrap,
+            { borderRadius: radius.pill, backgroundColor: isDark ? 'rgba(167,139,250,0.18)' : 'rgba(124,58,237,0.12)' },
+          ]}
+        >
+          <Ionicons name={post.isQuestionSet ? 'help-circle' : 'document-text'} size={20} color={accent} />
+        </View>
+
+        <View style={styles.content}>
+          <Text variant="body" weight="bold" numberOfLines={2} style={styles.title}>
             {post.title}
           </Text>
+
           {post.excerpt ? (
-            <Text variant="body" secondary numberOfLines={2} style={{ marginTop: spacing.xs, lineHeight: 20 }}>
+            <Text variant="bodySmall" secondary numberOfLines={3} style={styles.preview}>
               {post.excerpt}
             </Text>
           ) : null}
 
-          <View style={[styles.divider, { backgroundColor: colors.border, marginTop: spacing.md }]} />
-
-          <View style={styles.footerRow}>
-            {addedAgo ? (
-              <View style={styles.addedAgo}>
-                <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
-                <Text variant="caption" secondary>{addedAgo}</Text>
+          <View style={styles.metaRow}>
+            {dateLabel ? (
+              <View style={[styles.pill, { backgroundColor: dateChip.bg }]}>
+                <Ionicons name="calendar-outline" size={12} color={dateChip.fg} />
+                <Text variant="caption" weight="semiBold" style={{ color: dateChip.fg }}>
+                  {dateLabel}
+                </Text>
               </View>
-            ) : (
-              <View />
-            )}
-            <View style={[styles.readPill, { backgroundColor: effective === 'dark' ? 'rgba(59,130,246,0.16)' : 'rgba(124,58,237,0.10)' }]}>
-              <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{readLabel}</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-            </View>
+            ) : null}
+            {badge ? (
+              <Text variant="caption" weight="semiBold" numberOfLines={1} style={{ color: accent }}>
+                {badge}
+              </Text>
+            ) : null}
+            {addedAgo ? (
+              <Text variant="caption" secondary style={styles.time}>
+                {addedAgo}
+              </Text>
+            ) : null}
           </View>
         </View>
-      </Card>
+      </View>
+
+      {/* Cover image sits at the bottom, inset by the card padding — same place
+          the notification card puts its image. */}
+      {post.coverImage ? (
+        <Image
+          source={{ uri: post.coverImage }}
+          style={[styles.image, { borderRadius: radius.md, backgroundColor: colors.surfaceAlt }]}
+          contentFit="cover"
+          cachePolicy="disk"
+          transition={150}
+        />
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  // Override Card's default padding so the cover image can bleed to the rounded
-  // edges; overflow:hidden clips it to the card's border radius. A hairline
-  // border crisps the card edge against the background (premium polish).
-  card: { padding: 0, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
-  cover: { width: '100%', height: 168, backgroundColor: '#E5E7EB' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
-  badgePill: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(124,58,237,0.28)' },
-  divider: { height: StyleSheet.hairlineWidth, width: '100%' },
-  footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  addedAgo: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  readPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
+  // overflow:hidden keeps the animated spine inside the rounded corners.
+  card: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  spineTrack: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: SPINE_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spineNub: { width: SPINE_WIDTH, height: SPINE_NUB_HEIGHT, borderRadius: SPINE_WIDTH / 2 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  iconWrap: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  content: { flex: 1, gap: 4 },
+  title: { flex: 1 },
+  preview: { lineHeight: 18 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 9, marginTop: 3 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  time: { marginLeft: 'auto' },
+  image: { width: '100%', height: 150, marginTop: 12 },
 });

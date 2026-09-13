@@ -16,6 +16,13 @@ export interface SubjectCardColoredProps {
   purchasedLabel?: string;
   footerLabel?: string;
   onFooterPress?: () => void;
+  /**
+   * Size overrides. Home's horizontal rail keeps the compact 150x130 default;
+   * the Subjects grid passes a measured width so two cards fill the row instead
+   * of leaving a dead gutter on the right.
+   */
+  width?: number;
+  height?: number;
 }
 
 function darken(hex: string, amount: number): string {
@@ -38,12 +45,15 @@ export function SubjectCardColored({
   purchasedLabel = 'Purchased (Active)',
   footerLabel,
   onFooterPress,
+  width,
+  height,
 }: SubjectCardColoredProps) {
   const darkerShade = darken(backgroundColor, 40);
+  const sizeStyle = { ...(width ? { width } : null), ...(height ? { height } : null) };
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
-      <LinearGradient colors={[backgroundColor, darkerShade]} style={styles.card}>
+      <LinearGradient colors={[backgroundColor, darkerShade]} style={[styles.card, sizeStyle]}>
         <View style={styles.glow} />
 
         {premium ? (
@@ -155,6 +165,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    // Pinned to the bottom so the row sits flush with the card edge whatever
+    // height the caller passes, instead of floating right under the title.
+    marginTop: 'auto',
     paddingTop: 4,
   },
   footerText: {

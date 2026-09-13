@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -29,6 +29,17 @@ import { Text } from '@/src/components/misc/Text';
 const SUBJECT_COLORS = ['#2563EB', '#7C3AED', '#059669', '#EA580C'];
 const SUBJECT_ICONS: (keyof typeof Ionicons.glyphMap)[] = ['globe-outline', 'briefcase-outline', 'construct-outline'];
 
+/**
+ * The grid is two columns wide. The card component's own default is the compact
+ * 150x130 used by Home's horizontal rail; on a ~360-410dp phone that leaves a
+ * visible dead gutter on the right of this grid, which is what looked broken.
+ * Here the width is measured from the viewport so the pair always fills the row,
+ * and the height is trimmed a little so the cards read wider than tall.
+ */
+const SUBJECT_GRID_COLUMNS = 2;
+const SUBJECT_GRID_GAP = 12;
+const SUBJECT_CARD_HEIGHT = 150;
+
 type JourneyStatProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -52,6 +63,10 @@ export default function SubjectListScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const subjectCardWidth = Math.floor(
+    (windowWidth - spacing.screenPadding * 2 - SUBJECT_GRID_GAP * (SUBJECT_GRID_COLUMNS - 1)) / SUBJECT_GRID_COLUMNS,
+  );
   const { courseInfo, profile, loading: profileLoading, loadedUid } = useProfileStore();
   const { user, initializing: authInitializing } = useAuthStore();
   // Wait for auth and the authenticated user's course scope before fetching subjects.
@@ -189,6 +204,8 @@ export default function SubjectListScreen() {
                 purchased={subject.pro && hasActivePro}
                 purchasedLabel={t('subjects.purchasedActive')}
                 footerLabel={t('subjects.viewChapter')}
+                width={subjectCardWidth}
+                height={SUBJECT_CARD_HEIGHT}
                 onPress={() => handleSubjectAction(subject)}
                 onFooterPress={() => handleSubjectAction(subject)}
               />
@@ -226,9 +243,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   journeyCard: {
-    minHeight: 252,
     borderRadius: 28,
-    padding: 20,
+    padding: 18,
     overflow: 'hidden',
     shadowColor: '#0C2D91',
     shadowOpacity: 0.28,
@@ -258,7 +274,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   journeyTitle: {
     color: '#FFFFFF',
@@ -285,23 +301,22 @@ const styles = StyleSheet.create({
   },
   journeyStat: {
     flex: 1,
-    minHeight: 126,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderRadius: 19,
     backgroundColor: 'rgba(105,132,204,0.58)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
   },
   journeyStatIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 7,
+    marginBottom: 6,
     borderWidth: 2,
     backgroundColor: '#C7D9FF',
   },
@@ -317,7 +332,9 @@ const styles = StyleSheet.create({
   subjectGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 12,
+    // Card widths are measured to fill the row exactly, so an explicit gap keeps
+    // a lone final card left-aligned instead of stretched by space-between.
+    columnGap: SUBJECT_GRID_GAP,
+    rowGap: SUBJECT_GRID_GAP,
   },
 });

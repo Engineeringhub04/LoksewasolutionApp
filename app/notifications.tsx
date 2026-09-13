@@ -13,6 +13,7 @@ import { addGlobalReadId, addGlobalReadIds, fetchInbox, markAllNotificationsRead
 import { formatTimeAgo } from '@/src/core/notifications/timeAgo';
 import { showToast } from '@/src/core/store/toastStore';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
+import { Text } from '@/src/components/misc/Text';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { NotificationRow } from '@/src/components/cards/NotificationRow';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
@@ -36,8 +37,10 @@ export default function NotificationsScreen() {
     useNotificationStore.getState().setFromList(data);
   }, [data]);
 
+  const hasUnread = items.some((item) => !item.read);
+
   const handleMarkAllRead = () => {
-    if (!user || !items.some((item) => !item.read)) return;
+    if (!user || !hasUnread) return;
     const globalIds = items.filter((item) => item.source === 'global').map((item) => item.id);
     setItems((current) => current.map((item) => ({ ...item, read: true })));
     useNotificationStore.getState().setUnreadCount(0);
@@ -64,8 +67,22 @@ export default function NotificationsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('notifications.title')} rightSlot={<>
         <ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} size={36} />
-        <Pressable onPress={handleMarkAllRead} style={({ pressed }) => [styles.headerButton, { opacity: pressed ? 0.7 : 1 }]} accessibilityRole="button" accessibilityLabel={t('notifications.markAllRead')} hitSlop={6}>
-          <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
+        {/* Labelled action instead of a bare tick icon — the icon alone did not
+            say what it would do. Fixed width so it never resizes between the
+            enabled and dimmed (nothing unread) states. */}
+        <Pressable
+          onPress={handleMarkAllRead}
+          disabled={!hasUnread}
+          style={({ pressed }) => [styles.markAllButton, { opacity: !hasUnread ? 0.45 : pressed ? 0.75 : 1 }]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !hasUnread }}
+          accessibilityLabel={t('notifications.markAllRead')}
+          hitSlop={6}
+        >
+          <Ionicons name="checkmark-done" size={15} color="#FFFFFF" />
+          <Text variant="caption" weight="bold" numberOfLines={1} style={styles.markAllText}>
+            {t('notifications.markAllReadShort')}
+          </Text>
         </Pressable>
       </>} />
       <PageLoaderOverlay visible={loading} label="Loading Notifications..." />
@@ -80,4 +97,20 @@ export default function NotificationsScreen() {
     </View>
   );
 }
-const styles = StyleSheet.create({ headerButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' } });
+const styles = StyleSheet.create({
+  markAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  // Capped so the longer Nepali label truncates instead of squeezing the
+  // centred header title. Devanagari needs a touch more room than Latin.
+  markAllText: { color: '#FFFFFF', fontSize: 11, letterSpacing: 0.1, maxWidth: 78 },
+});

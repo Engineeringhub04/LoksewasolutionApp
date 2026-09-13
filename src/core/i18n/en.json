@@ -224,9 +224,13 @@
     "corrupted": "This file could not be opened",
     "redownload": "Redownload"
   },
-  "currentAffairs": {
-    "title": "Current Affairs",
-    "empty": "No current affairs published for this date yet"
+  "underConstruction": {
+    "badge": "In progress",
+    "heading": "Under construction",
+    "body": "We're building this feature right now. It will be available in an upcoming update.",
+    "progress": "{{percent}}% complete",
+    "note": "Thanks for your patience.",
+    "goBack": "Go Back"
   },
   "gorkhapatra": {
     "title": "Gorkhapatra Loksewa",
@@ -428,7 +432,6 @@
   "bookmarks": {
     "title": "Bookmarks",
     "notes": "Notes",
-    "currentAffairs": "Current Affairs",
     "questions": "Questions",
     "discussions": "Discussions",
     "chapters": "Chapters",
@@ -458,6 +461,7 @@
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Mark all as read",
+    "markAllReadShort": "Mark all read",
     "markedAllRead": "All notifications marked as read",
     "tabApp": "App Notice",
     "tabUser": "User Notices",

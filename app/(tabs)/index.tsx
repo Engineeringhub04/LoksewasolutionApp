@@ -45,7 +45,10 @@ interface LinkItem {
 // Quick Links
 const quickLinks: LinkItem[] = [
   { key: 'daily-test', icon: 'timer', label: 'Daily Test', route: '/daily-test', color: '#1D4ED8' },
-  { key: 'current-affairs', icon: 'newspaper', label: 'Current Affairs', route: '/current-affairs', color: '#059669' },
+  // Current Affairs pages were removed on 2026-09-13 pending a rebuild; the
+  // tile now goes to the shared Under Construction placeholder like the other
+  // not-yet-built features, so there is no dead link.
+  { key: 'current-affairs', icon: 'newspaper', label: 'Current Affairs', route: '/under-construction?page=Current Affairs', color: '#059669' },
   { key: 'syllabus', icon: 'document-text', label: 'Syllabus', route: '/syllabus', color: '#EA580C' },
   { key: 'gorkhapatra', icon: 'reader', label: 'Gorkhapatra', route: '/gorkhapatra', color: '#7C3AED' },
 ];
@@ -73,7 +76,10 @@ const appGuide: LinkItem[] = [
   { key: 'achievements', icon: 'ribbon-outline', label: 'Achievements', route: '/achievements' },
   { key: 'help', icon: 'help-buoy-outline', label: 'Help Center', route: '/settings/help-center' },
   { key: 'notifications', icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
-  { key: 'settings', icon: 'settings-outline', label: 'Settings', route: '/settings' },
+  // Replaced the old 'Settings' tile: that screen was a duplicate of what
+  // Profile already offers (language/theme/logout/delete), so it was removed.
+  // Same destination as Profile → Subscription Details.
+  { key: 'subscription', icon: 'diamond-outline', label: 'Subscription Details', route: '/subscription' },
   // Same screen as Profile → More → App Info, so both entry points match.
   { key: 'about', icon: 'information-circle-outline', label: 'App Info', route: '/app-info' },
 ];

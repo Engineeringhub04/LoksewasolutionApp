@@ -390,7 +390,17 @@ export async function fetchExamSets(params: {
     .filter((set) => set.isPublished)
     .filter((set) => set.sectionId === wantedSection)
     .filter((set) => provinceId === ALL_PROVINCES || set.provinceId === wantedProvince)
-    .sort((a, b) => (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0));
+    // Newest sets on top, older ones sink to the bottom. Sets with no startTime
+    // yet (drafts that were published without a schedule) keep the tail so a
+    // missing date can never outrank a real, recently-scheduled set.
+    .sort((a, b) => {
+      const aStart = a.startTime?.getTime() ?? null;
+      const bStart = b.startTime?.getTime() ?? null;
+      if (aStart === null && bStart === null) return 0;
+      if (aStart === null) return 1;
+      if (bStart === null) return -1;
+      return bStart - aStart;
+    });
 }
 
 /**

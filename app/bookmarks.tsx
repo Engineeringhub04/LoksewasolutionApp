@@ -60,7 +60,6 @@ export default function BookmarksScreen() {
         <TabBar
           items={[
             { key: 'note', label: t('bookmarks.notes') },
-            { key: 'currentAffairs', label: t('bookmarks.currentAffairs') },
             { key: 'question', label: t('bookmarks.questions') },
             { key: 'discussion', label: t('bookmarks.discussions') },
             { key: 'chapter', label: t('bookmarks.chapters') },

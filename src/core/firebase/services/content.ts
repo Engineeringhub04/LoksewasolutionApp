@@ -31,14 +31,6 @@ export interface Notice {
   date: { toDate: () => Date } | null;
 }
 
-export interface CurrentAffairItem {
-  id: string;
-  headline: string;
-  summary: string;
-  category: string;
-  date: { toDate: () => Date } | null;
-}
-
 /**
  * A single ordered piece of a Gorkhapatra post body, reconstructed natively
  * (NOT an iframe/webview — the user explicitly rejected webview). Images point
@@ -128,12 +120,8 @@ export async function fetchNotices(max = 20): Promise<Notice[]> {
   })) as unknown as Notice[];
 }
 
-export async function fetchCurrentAffairs(max = 30): Promise<CurrentAffairItem[]> {
-  return (await runQuery(Collections.currentAffairs, {
-    orderBy: [{ field: 'date', direction: 'desc' }],
-    limit: max,
-  })) as unknown as CurrentAffairItem[];
-}
+// fetchCurrentAffairs / CurrentAffairItem were removed on 2026-09-13 along with
+// the Current Affairs feature and its `currentAffairs` collection.
 
 // Small page size keeps the first read cheap: with a handful of manual posts the
 // whole feed is one page, and each Firestore read is billed per document, so a

@@ -119,7 +119,6 @@ export const AppConfig = {
     minimumVersion: '1.0.0',
     latestVersion: '1.0.0',
     defaultExamTimerMinutes: 60,
-    currentAffairsSourceId: 'loksewa-current-affairs',
     features: {
       discussion: true,
       leaderboard: true,
