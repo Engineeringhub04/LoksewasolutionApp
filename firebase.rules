@@ -759,6 +759,30 @@ service cloud.firestore {
          changedOnly(['transactionRef', 'screenshotUrl', 'customerMessage', 'updatedAt']));
       allow delete: if isAdmin();
     }
+    // Question of the Day: Admin schedules exactly one document per Kathmandu date key.
+    match /app_qotd_daily/{dateKey} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.isPublished == true);
+      allow create, update, delete: if isAdmin();
+    }
+    match /meta/qotd_metadata {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+    match /users/{userId}/questionofdata/{docId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // Every content/version attempt is immutable. A replacement question on
+      // the same Kathmandu date receives a new attempt document; summary alone
+      // may be updated by its owner.
+      allow create: if isOwner(userId) &&
+        (docId == 'summary' ||
+         (request.resource.data.dateKey is string &&
+          request.resource.data.selectedOptionId in ['A', 'B', 'C', 'D'] &&
+          request.resource.data.isCorrect is bool &&
+          request.resource.data.snapshot is map));
+      allow update: if isOwner(userId) && docId == 'summary';
+      allow delete: if isAdmin();
+    }
+
     // Default deny-all: any collection not explicitly listed above is closed.
     match /{document=**} {
       allow read, write: if false;

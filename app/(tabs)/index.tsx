@@ -3,7 +3,7 @@
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { AppState, ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -21,6 +21,8 @@ import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeHeader, getHomeHeaderExpandedHeight } from '@/src/components/home/HomeHeader';
 import { BannerCarousel } from '@/src/components/home/BannerCarousel';
+import { useQotdStore } from '@/src/core/store/qotdStore';
+import { getKathmanduDateKey, getKathmanduMidnightDelay } from '@/src/core/firebase/services/qotd';
 import { QuestionOfDayCard } from '@/src/components/home/QuestionOfDayCard';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { QuickLinkButton } from '@/src/components/home/QuickLinkButton';
@@ -137,20 +139,33 @@ export default function HomeScreen() {
     homeDataDeps,
     { enabled: homeDataEnabled },
   );
-  const qotdAnswered = useAsyncData(
-    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.qotdAnswered),
+  const storeQotdDay = useQotdStore((s) => s.day);
+  const hydrateQotd = useQotdStore((s) => s.hydrate);
+  const loadQotd = useQotdStore((s) => s.load);
+  useEffect(() => {
+    if (!user?.uid || !homeDataEnabled) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { void loadQotd(user.uid, enrolledCourseId, enrolledSubcourseId, true); arm(); }, getKathmanduMidnightDelay()); };
+    arm();
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') { const state = useQotdStore.getState(); const shouldCheck = Date.now() - state.checkedAt >= 30000 && Boolean(!state.day?.question || state.day?.result); void loadQotd(user.uid, enrolledCourseId, enrolledSubcourseId, shouldCheck); } });
+    return () => { clearTimeout(timer); sub.remove(); };
+  }, [user?.uid, enrolledCourseId, enrolledSubcourseId, homeDataEnabled, loadQotd]);
+  const qotdPrefetch = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.qotdDay),
     homeDataDeps,
     { enabled: homeDataEnabled },
   );
 
-  // qotdAnswered is included so the overlay stays up until EVERY source has
+  useEffect(() => { if (qotdPrefetch.data) hydrateQotd(qotdPrefetch.data); }, [qotdPrefetch.data, hydrateQotd]);
+  const qotdDay = storeQotdDay?.courseId === enrolledCourseId && storeQotdDay?.subcourseId === enrolledSubcourseId ? storeQotdDay : qotdPrefetch.data;
+  // QOTD is included so the overlay stays up until EVERY source has
   // settled — it was refreshed but not tracked, so the loader could disappear
   // while that request was still in flight.
   const refreshing =
     banners.refreshing ||
     developers.refreshing ||
     notifications.refreshing ||
-    qotdAnswered.refreshing ||
+    qotdPrefetch.refreshing ||
     subjectDetails.refreshing;
   const [showRefreshLoader, setShowRefreshLoader] = useState(false);
   // Keep the native pull-to-refresh spinner visible briefly before placing the
@@ -173,7 +188,7 @@ export default function HomeScreen() {
     banners.loading ||
     developers.loading ||
     notifications.loading ||
-    qotdAnswered.loading ||
+    qotdPrefetch.loading ||
     subjectDetails.loading
   );
   const onRefresh = () => {
@@ -182,7 +197,7 @@ export default function HomeScreen() {
     void banners.refresh();
     void developers.refresh();
     void notifications.refresh();
-    void qotdAnswered.refresh();
+    void qotdPrefetch.refresh();
     void subjectDetails.refresh();
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
@@ -262,7 +277,7 @@ export default function HomeScreen() {
 
       {/* Question of the Day */}
       <View style={{ marginTop: spacing.sm }}>
-        <QuestionOfDayCard answered={qotdAnswered.data === true} onPress={() => router.push('/question-of-the-day')} />
+        <QuestionOfDayCard status={!qotdDay || qotdDay.courseId !== enrolledCourseId || qotdDay.subcourseId !== enrolledSubcourseId ? 'empty' : qotdDay.result ? 'completed' : qotdDay.question ? 'live' : 'empty'} onPress={() => router.push('/question-of-the-day')} />
       </View>
 
       {/* Subjects */}

@@ -2,14 +2,14 @@ import { fetchHomeBanners, type HomeBanner } from '@/src/core/firebase/services/
 import { fetchDevelopers, type Developer } from '@/src/core/firebase/services/developer';
 import { fetchInbox, type AppNotification } from '@/src/core/firebase/services/notifications';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
-import { hasAnsweredQotdToday } from '@/src/core/firebase/services/qotd';
+import { fetchQotdDay, type QotdDay } from '@/src/core/firebase/services/qotd';
 
 export interface HomeDataSnapshot {
   banners: HomeBanner[];
   developers: Developer[];
   notifications: AppNotification[];
   subjectDetails: SubjectDetail[];
-  qotdAnswered: boolean;
+  qotdDay: QotdDay | null;
 }
 
 export interface HomeDataKey {
@@ -32,17 +32,17 @@ function keyOf(key: HomeDataKey): string {
 }
 
 async function fetchSnapshot(key: HomeDataKey, force = false): Promise<HomeDataSnapshot> {
-  const [banners, developers, notifications, subjectDetails, qotdAnswered] = await Promise.all([
+  const [banners, developers, notifications, subjectDetails, qotdDay] = await Promise.all([
     fetchHomeBanners(),
     fetchDevelopers(),
     key.uid ? fetchInbox(key.uid) : Promise.resolve([]),
     fetchSubjectDetails(key.courseId, key.subcourseId, { force }),
     key.uid
-      ? hasAnsweredQotdToday(key.uid, key.courseId)
-      : Promise.resolve(false),
+      ? fetchQotdDay(key.uid, key.courseId, key.subcourseId).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
-  return { banners, developers, notifications, subjectDetails, qotdAnswered };
+  return { banners, developers, notifications, subjectDetails, qotdDay };
 }
 
 export function getCachedHomeData(key: HomeDataKey): HomeDataSnapshot | null {

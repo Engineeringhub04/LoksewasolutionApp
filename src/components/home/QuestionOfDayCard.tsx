@@ -1,69 +1,9 @@
-// Professional Question of the Day card for Home. Shows a blinking "LIVE" tag
-// before the user has answered today's question (per-course, once per day),
-// and a static "COMPLETED" tag after.
-import React, { useEffect } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, withRepeat, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
-import { useTheme } from '@/src/core/theme';
-import { Text } from '@/src/components/misc/Text';
-
-interface QuestionOfDayCardProps {
-  answered: boolean;
-  onPress: () => void;
-}
-
-export function QuestionOfDayCard({ answered, onPress }: QuestionOfDayCardProps) {
-  const { radius } = useTheme();
-  const blink = useSharedValue(1);
-
-  useEffect(() => {
-    if (!answered) {
-      blink.value = withRepeat(withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.ease) }), -1, true);
-    }
-  }, [answered, blink]);
-
-  const blinkStyle = useAnimatedStyle(() => ({ opacity: answered ? 1 : blink.value }));
-
-  return (
-    <Pressable onPress={onPress} style={{ marginHorizontal: 16, marginBottom: 16 }}>
-      <LinearGradient colors={['#4338CA', '#6366F1', '#818CF8']} style={[styles.card, { borderRadius: radius.lg }]}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="bulb" size={26} color="#FFF" />
-        </View>
-
-        <View style={styles.textCol}>
-          <Text variant="bodyLarge" weight="bold" style={styles.title}>Question of the Day</Text>
-          <Text variant="bodySmall" style={styles.subtitle}>
-            {answered ? "You've answered today's question" : 'Test your knowledge with a new question'}
-          </Text>
-        </View>
-
-        <Animated.View style={[styles.tag, { backgroundColor: answered ? '#16A34A' : '#DC2626' }, blinkStyle]}>
-          <Text variant="caption" weight="bold" style={styles.tagText}>{answered ? 'DONE' : 'LIVE'}</Text>
-        </Animated.View>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-    shadowColor: '#4338CA',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  textCol: { flex: 1, gap: 2 },
-  title: { color: '#FFF' },
-  subtitle: { color: 'rgba(255,255,255,0.85)' },
-  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  tagText: { color: '#FFF', fontSize: 10, letterSpacing: 0.5 },
-});
+import React,{useEffect}from'react';
+import{View,Pressable,StyleSheet}from'react-native';
+import Ionicons from'@expo/vector-icons/Ionicons';
+import{LinearGradient}from'expo-linear-gradient';
+import Animated,{useSharedValue,withRepeat,withTiming,useAnimatedStyle,Easing}from'react-native-reanimated';
+import{useTheme}from'@/src/core/theme';import{Text}from'@/src/components/misc/Text';import{useTranslation}from'@/src/core/i18n';
+export type QotdCardStatus='loading'|'live'|'completed'|'empty';
+export function QuestionOfDayCard({status,onPress}:{status:QotdCardStatus;onPress:()=>void}){const{radius}=useTheme(),{language}=useTranslation(),pulse=useSharedValue(1),live=status==='live';useEffect(()=>{pulse.value=live?withRepeat(withTiming(.35,{duration:800,easing:Easing.inOut(Easing.ease)}),-1,true):1},[live,pulse]);const dot=useAnimatedStyle(()=>({opacity:live?pulse.value:1}));const done=status==='completed',empty=status==='empty';const label=done?(language==='ne'?'पूरा भयो':'COMPLETED'):empty?(language==='ne'?'प्रश्न छैन':'NO QUESTION'):status==='loading'?'LOADING':'LIVE';const subtitle=done?(language==='ne'?'आजको लक्ष्य पूरा भयो। भोलि फेरि भेटौँला।':'Today’s challenge is complete. See you tomorrow.'):empty?(language==='ne'?'तपाईंको कोर्सका लागि आज प्रश्न थपिएको छैन।':'No question is scheduled for your course today.'):language==='ne'?'आजको छोटो चुनौती तयार छ।':'Your daily knowledge challenge is ready.';const accent=done?'#4ADE80':empty?'#94A3B8':'#FF6B6B';return <Pressable onPress={onPress} style={styles.wrap}><LinearGradient colors={['#0B1F51','#143B8F','#2257C7']} start={{x:0,y:0}} end={{x:1,y:1}} style={[styles.card,{borderRadius:radius.lg}]}><View style={styles.glowOne}/><View style={styles.glowTwo}/><View style={styles.top}><View style={styles.eyebrow}><Ionicons name="sparkles" size={12} color="#93C5FD"/><Text variant="overline" weight="bold" style={styles.eyebrowText}>DAILY CHALLENGE</Text></View><Animated.View style={[styles.status,live&&styles.liveStatus,dot]}><View style={[styles.dot,{backgroundColor:accent}]}/><Text variant="overline" weight="bold" style={{color:accent}}>{label}</Text></Animated.View></View><View style={styles.body}><View style={styles.icon}><Ionicons name={done?'checkmark':empty?'calendar-outline':'bulb-outline'} size={25} color="#FFF"/></View><View style={{flex:1,gap:5}}><Text variant="h2" weight="bold" style={styles.title}>{language==='ne'?'आजको प्रश्न':'Question of the Day'}</Text><Text variant="bodySmall" style={styles.subtitle}>{subtitle}</Text></View><View style={styles.arrow}><Ionicons name="arrow-forward" size={17} color="#DBEAFE"/></View></View></LinearGradient></Pressable>}
+const styles=StyleSheet.create({wrap:{marginHorizontal:16,marginBottom:18},card:{minHeight:154,padding:17,overflow:'hidden',borderWidth:1,borderColor:'rgba(255,255,255,.14)',shadowColor:'#1D4ED8',shadowOpacity:.32,shadowRadius:16,shadowOffset:{width:0,height:8},elevation:8},glowOne:{position:'absolute',width:150,height:150,borderRadius:75,right:-42,top:-70,backgroundColor:'rgba(96,165,250,.18)'},glowTwo:{position:'absolute',width:90,height:90,borderRadius:45,left:-28,bottom:-48,backgroundColor:'rgba(255,255,255,.08)'},top:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},eyebrow:{flexDirection:'row',alignItems:'center',gap:6},eyebrowText:{color:'#BFDBFE',letterSpacing:1.2},liveStatus:{shadowColor:'#EF4444',shadowOpacity:.9,shadowRadius:10,shadowOffset:{width:0,height:0},elevation:7,backgroundColor:'rgba(127,29,29,.34)'},status:{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:'rgba(7,18,46,.34)',borderWidth:1,borderColor:'rgba(255,255,255,.1)'},dot:{width:7,height:7,borderRadius:4},body:{flexDirection:'row',alignItems:'center',gap:13,marginTop:20},icon:{width:52,height:52,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:'rgba(255,255,255,.14)',borderWidth:1,borderColor:'rgba(255,255,255,.18)'},title:{color:'#FFF',fontSize:20},subtitle:{color:'rgba(239,246,255,.78)',lineHeight:18},arrow:{width:34,height:34,borderRadius:17,alignItems:'center',justifyContent:'center',backgroundColor:'rgba(255,255,255,.1)'}});

@@ -1,115 +1,18 @@
-// §23 Question of the Day
-import React, { useState } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTheme } from '@/src/core/theme';
-import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { useTranslation } from '@/src/core/i18n';
-import { useAuthStore } from '@/src/core/store/authStore';
-import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchQuestionOfTheDay, submitQotdAnswer } from '@/src/core/firebase/services/qotd';
-import { fetchRandomQuestion } from '@/src/core/firebase/services/questions';
-import { fetchUserCourseInfo } from '@/src/core/firebase/services/courses';
-import { showToast } from '@/src/core/store/toastStore';
-import { TopAppBar } from '@/src/components/nav/TopAppBar';
-import { Text } from '@/src/components/misc/Text';
-import { Card } from '@/src/components/cards/Card';
-import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
-import { Badge } from '@/src/components/misc/Badge';
-
-export default function QuestionOfTheDayScreen() {
-  const { colors, spacing } = useTheme();
-  const { t } = useTranslation();
-  const router = useRouter();
-  void router;
-  const user = useAuthStore((s) => s.user);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [streak, setStreak] = useState(0);
-  const [courseId, setCourseId] = useState<string | null>(null);
-
-  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
-    if (!user) return null;
-    const courseInfo = await fetchUserCourseInfo(user.uid).catch(() => null);
-    const activeCourseId = courseInfo?.courseId ?? null;
-    setCourseId(activeCourseId);
-    const result = await fetchQuestionOfTheDay(user.uid, fetchRandomQuestion, activeCourseId);
-    setSelected(result.answeredIndex);
-    setStreak(result.streak);
-    return result;
-  }, [user?.uid]);
-
-  const alreadyAnswered = data?.answeredIndex !== null && data?.answeredIndex !== undefined;
-
-  const handleSelect = async (optionIndex: number) => {
-    if (alreadyAnswered || !user || !data?.question) return;
-    setSelected(optionIndex);
-    const newStreak = await submitQotdAnswer(user.uid, optionIndex, streak, courseId);
-    setStreak(newStreak);
-    showToast(t('qotd.streakUpdated', { count: newStreak }), 'success');
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <TopAppBar
-        title={t('qotd.title')}
-        actions={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Ionicons name="flame" size={18} color={colors.warning} />
-            <Text variant="bodySmall" weight="semiBold">{streak}</Text>
-          </View>
-        }
-      />
-      <PageLoaderOverlay visible={loading || refreshing} label="Loading Daily Test..." />
-      {loading ? null : error ? (
-        <DataNotFound onRetry={refetch} />
-      ) : !data?.question ? (
-        <DataNotFound title="No Question Available" description="Check back tomorrow for a new question." onRetry={refetch} />
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md }}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
-        >
-          {alreadyAnswered ? (
-            <View style={{ alignSelf: 'flex-start' }}>
-              <Badge label={t('qotd.alreadyAnswered')} color={colors.info} />
-            </View>
-          ) : null}
-          <Text variant="h3" weight="semiBold">{data.question.text}</Text>
-          {data.question.options.map((option, i) => {
-            const isSelected = selected === i;
-            const isCorrect = i === data.question!.correctIndex;
-            const showResult = selected !== null;
-            let borderColor = colors.border;
-            if (showResult && isSelected) borderColor = isCorrect ? colors.success : colors.error;
-            else if (showResult && isCorrect) borderColor = colors.success;
-
-            return (
-              <Pressable
-                key={i}
-                onPress={() => handleSelect(i)}
-                disabled={alreadyAnswered}
-                style={{
-                  padding: spacing.md,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  borderColor,
-                  backgroundColor: colors.surface,
-                }}
-              >
-                <Text variant="bodyLarge">{option}</Text>
-              </Pressable>
-            );
-          })}
-          {selected !== null ? (
-            <Card>
-              <Text variant="bodySmall" weight="semiBold" style={{ marginBottom: spacing.xs }}>{t('result.explanation')}</Text>
-              <Text variant="body" secondary>{data.question.explanation}</Text>
-            </Card>
-          ) : null}
-        </ScrollView>
-      )}
-    </View>
-  );
-}
+import React,{useEffect,useRef,useState}from'react';
+import{ActivityIndicator,AppState,Pressable,ScrollView,StyleSheet,View}from'react-native';
+import Ionicons from'@expo/vector-icons/Ionicons';import{LinearGradient}from'expo-linear-gradient';import Animated,{FadeInDown}from'react-native-reanimated';
+import{SubpageHeader}from'@/src/components/nav/SubpageHeader';import{Text}from'@/src/components/misc/Text';import{AppRefreshControl}from'@/src/components/feedback/AppRefreshControl';import{PageLoaderOverlay}from'@/src/components/feedback/PageLoaderOverlay';import{DataNotFound}from'@/src/components/feedback/DataNotFound';import{useTheme}from'@/src/core/theme';import{useTranslation}from'@/src/core/i18n';import{useAuthStore}from'@/src/core/store/authStore';import{useProfileStore}from'@/src/core/store/profileStore';import{useQotdStore}from'@/src/core/store/qotdStore';import{getKathmanduMidnightDelay}from'@/src/core/firebase/services/qotd';import{showToast}from'@/src/core/store/toastStore';
+const split=(v:string,l:'en'|'ne')=>{const p=v.split('||');return(l==='ne'?p[1]:p[0])?.trim()||p[0]?.trim()||v};const DIFF:Record<string,string>={easy:'#22C55E',medium:'#F59E0B',hard:'#EF4444'};const wait=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
+const mixWithWhite=(value:string,ratio=.55)=>{let hex=value.replace('#','');if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');if(!/^[0-9a-fA-F]{6}$/.test(hex))return'#93C5FD';const channel=(start:number)=>Math.round(start+(255-start)*ratio).toString(16).padStart(2,'0');return`#${channel(parseInt(hex.slice(0,2),16))}${channel(parseInt(hex.slice(2,4),16))}${channel(parseInt(hex.slice(4,6),16))}`.toUpperCase()};
+export default function QuestionOfTheDayScreen(){const{colors,spacing,elevation,effective}=useTheme(),{language}=useTranslation(),user=useAuthStore(s=>s.user),courseInfo=useProfileStore(s=>s.courseInfo),profile=useProfileStore(s=>s.profile),profileLoading=useProfileStore(s=>s.loading),loadProfile=useProfileStore(s=>s.load),{day,loading,error,load,answer}=useQotdStore(),scroll=useRef<ScrollView>(null),[opening,setOpening]=useState(true),[submitting,setSubmitting]=useState<string|null>(null);const courseId=courseInfo?.courseId??profile?.courseId??'',subcourseId=courseInfo?.subcourseId??profile?.subcourseId??'',courseName=courseInfo?.courseName??courseId,subcourseName=courseInfo?.subcourseName??subcourseId,validDay=day?.courseId===courseId&&day?.subcourseId===subcourseId?day:null;const refresh=()=>user&&courseId&&subcourseId?load(user.uid,courseId,subcourseId,true):Promise.resolve();
+ useEffect(()=>{if(user&&!courseInfo&&!profileLoading)void loadProfile(user.uid)},[user?.uid,courseInfo,profileLoading,loadProfile]);useEffect(()=>{let live=true;if(!user)return;if(!courseId||!subcourseId){if(!profileLoading)setOpening(false);return()=>{live=false}}setOpening(true);const shouldVerify=Boolean(validDay&&(!validDay.question||validDay.result));const request=shouldVerify?load(user.uid,courseId,subcourseId,true):validDay?Promise.resolve():load(user.uid,courseId,subcourseId);void Promise.all([request,wait(420)]).finally(()=>{if(live)setOpening(false)});return()=>{live=false}},[user?.uid,courseId,subcourseId,profileLoading,load]);useEffect(()=>{let timer:ReturnType<typeof setTimeout>;const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>{void refresh();arm()},getKathmanduMidnightDelay())};arm();const sub=AppState.addEventListener('change',s=>{if(s==='active'&&user&&courseId&&subcourseId){const state=useQotdStore.getState();const shouldCheck=Date.now()-state.checkedAt>=30000&&Boolean(!state.day?.question||state.day?.result);void load(user.uid,courseId,subcourseId,shouldCheck)}});return()=>{clearTimeout(timer);sub.remove()}},[user?.uid,courseId,subcourseId,load]);
+ const q=validDay?.result?.snapshot??validDay?.question,selected=validDay?.result?.selectedOptionId,correct=q?.correctOptionId,completed=!!validDay?.result,isInitialLoading=opening||profileLoading||Boolean(user&&courseId&&subcourseId&&!validDay);const choose=async(id:string)=>{if(!user||!validDay?.question||completed||submitting)return;setSubmitting(id);try{await Promise.all([answer(user.uid,id),wait(420)]);setTimeout(()=>scroll.current?.scrollToEnd({animated:true}),180)}catch(e){showToast(e instanceof Error?e.message:'Unable to save answer','error')}finally{setSubmitting(null)}};
+ return <View style={{flex:1,backgroundColor:colors.background}}><SubpageHeader title={language==='ne'?'आजको प्रश्न':'Question of the Day'} showThemeToggle/><View style={{flex:1,position:'relative'}}><PageLoaderOverlay visible={isInitialLoading} opaque label={language==='ne'?'आजको प्रश्न तयार हुँदैछ…':'Preparing your daily question…'}/>{!isInitialLoading&&(!courseId||!subcourseId)?<DataNotFound title={language==='ne'?'कोर्स चयन गरिएको छैन':'Course setup required'} description={language==='ne'?'पहिले आफ्नो कोर्स र सब-कोर्स चयन गर्नुहोस्।':'Select your Course and Sub-course first.'}/>:!isInitialLoading&&error&&!q?<DataNotFound onRetry={refresh}/>:!isInitialLoading&&!q?<View style={{flex:1}}><View style={{padding:spacing.screenPadding,paddingBottom:0}}><PremiumStats summary={validDay?.summary} course={`${courseName} · ${subcourseName}`} language={language} elevation={elevation[3]}/></View><DataNotFound title={language==='ne'?'आज प्रश्न थपिएको छैन':'No question added for today'} description={language==='ne'?`${courseName} · ${subcourseName} का लागि आज प्रश्न छैन।`:`No question is scheduled today for ${courseName} · ${subcourseName}.`} onRetry={refresh}/></View>:!isInitialLoading&&q?<ScrollView ref={scroll} refreshControl={<AppRefreshControl refreshing={loading&&!opening} onRefresh={refresh}/>} contentContainerStyle={{padding:spacing.screenPadding,gap:16,paddingBottom:48}}>
+ <PremiumStats summary={validDay?.summary} course={`${q.courseName||courseName} · ${q.subcourseName||subcourseName}`} language={language} elevation={elevation[3]}/>
+ <Animated.View entering={FadeInDown.duration(360)} style={[styles.questionCard,{backgroundColor:colors.surface,borderColor:colors.border},elevation[2]]}><View style={styles.questionTop}><View style={[styles.datePill,{backgroundColor:colors.surfaceAlt}]}><Ionicons name="calendar-outline" size={13} color={colors.primary}/><Text variant="caption" weight="semiBold" style={{color:colors.primary}}>{q.showingDate||validDay?.dateKey}</Text></View><Tag label={q.difficulty.toUpperCase()} color={DIFF[q.difficulty]}/></View>{(q.categories??[]).length>0?<View style={styles.categoryRow}>{(q.categories??[]).map(c=><Tag key={c.id} label={split(c.name,language)} color={c.color||'#2563EB'}/>)}</View>:null}<Text variant="h2" weight="bold" style={styles.questionText}>{split(q.content,language)}</Text><Text variant="caption" secondary>{language==='ne'?'एउटा विकल्प चयन गर्नुहोस्':'Choose the best answer'}</Text></Animated.View>
+ <View style={styles.options}>{q.options.map((o,i)=>{const isSel=selected===o.id,isCorrect=correct===o.id,isSaving=submitting===o.id;let border=colors.border,bg=colors.surface,accent=colors.textSecondary;if(completed&&isCorrect){border='#22C55E';bg=effective==='dark'?'#153526':'#ECFDF5';accent=effective==='dark'?'#86EFAC':'#16A34A'}else if(completed&&isSel){border='#EF4444';bg=effective==='dark'?'#3A1D25':'#FFF1F2';accent=effective==='dark'?'#FCA5A5':'#DC2626'}else if(isSaving){border=colors.primary;bg=effective==='dark'?'#172554':'#EFF6FF';accent=effective==='dark'?'#93C5FD':colors.primary}return <Pressable key={o.id} disabled={completed||!!submitting} onPress={()=>choose(o.id)} style={({pressed})=>[styles.option,{borderColor:border,backgroundColor:bg,opacity:pressed ? 0.94 : 1}]}><View style={[styles.optionLetter,{backgroundColor:`${accent}14`,borderColor:`${accent}35`}]}><Text weight="bold" style={{color:accent}}>{o.id||'ABCD'[i]}</Text></View><Text variant="bodyLarge" weight="medium" style={{flex:1}}>{split(o.content,language)}</Text>{isSaving?<ActivityIndicator size="small" color={colors.primary}/>:completed&&isCorrect?<Ionicons name="checkmark-circle" size={24} color="#16A34A"/>:completed&&isSel?<Ionicons name="close-circle" size={24} color="#DC2626"/>:<Ionicons name="chevron-forward" size={19} color={colors.textDisabled}/>}</Pressable>})}</View>
+ {completed?<Animated.View entering={FadeInDown.duration(450)} style={[styles.resultCard,{backgroundColor:validDay?.result?.isCorrect?'#ECFDF5':'#FFF7ED',borderColor:validDay?.result?.isCorrect?'#86EFAC':'#FDBA74'},elevation[2]]}><View style={[styles.resultIcon,{backgroundColor:validDay?.result?.isCorrect?'#16A34A':'#F59E0B'}]}><Ionicons name={validDay?.result?.isCorrect?'trophy':'bulb'} size={25} color="#FFF"/></View><View style={{flex:1,gap:5}}><Text variant="overline" weight="bold" style={{color:validDay?.result?.isCorrect?'#15803D':'#C2410C'}}>{validDay?.result?.isCorrect?(language==='ne'?'सही उत्तर':'CORRECT ANSWER'):(language==='ne'?'गलत उत्तर':'INCORRECT ANSWER')}</Text><Text variant="h2" weight="bold" style={{color:'#0F172A'}}>{split(validDay?.result?.isCorrect?(q.correctGreeting||'Excellent! || उत्कृष्ट!'):(q.wrongGreeting||'Good attempt! || राम्रो प्रयास!'),language)}</Text></View><View style={styles.explanationDivider}/><View style={{width:'100%',gap:7}}><Text variant="bodySmall" weight="bold" style={{color:'#334155'}}>{language==='ne'?'व्याख्या':'Explanation'}</Text><Text variant="body" style={{color:'#475569',lineHeight:21}}>{split(q.explanation,language)}</Text></View><Text variant="bodySmall" weight="semiBold" style={{color:'#2563EB',marginTop:4}}>{language==='ne'?'आजको प्रश्न पूरा भयो। नयाँ प्रश्नका लागि भोलि फेरि आउनुहोस्। धन्यवाद!':'Completed for today. Come back tomorrow for a new question. Thank you!'}</Text></Animated.View>:null}</ScrollView>:null}</View></View>}
+function PremiumStats({summary,course,language,elevation}:{summary?:{totalAttempts:number;correct:number;averagePercent:number};course:string;language:'en'|'ne';elevation:object}){return <LinearGradient colors={['#0B1F51','#153E90','#2257C7']} start={{x:0,y:0}} end={{x:1,y:1}} style={[styles.statsShell,elevation]}><View style={styles.statsTop}><View><Text variant="overline" weight="bold" style={styles.statsEyebrow}>{language==='ne'?'तपाईंको दैनिक प्रगति':'YOUR DAILY PROGRESS'}</Text><Text variant="bodySmall" style={styles.scopeText}>{course}</Text></View><Ionicons name="analytics-outline" size={23} color="#BFDBFE"/></View><View style={styles.statsRow}><Stat icon="help-circle-outline" value={summary?.totalAttempts??0} label={language==='ne'?'कुल प्रयास':'Total Attempt'}/><Stat icon="checkmark-circle" value={summary?.correct??0} label={language==='ne'?'सही':'Correct'} color="#4ADE80"/><Stat icon="stats-chart" value={`${summary?.averagePercent??0}%`} label={language==='ne'?'औसत':'Average'} color="#7DD3FC"/></View></LinearGradient>}
+function Stat({icon,value,label,color='#FBBF24'}:{icon:keyof typeof Ionicons.glyphMap;value:string|number;label:string;color?:string}){return <View style={styles.statTile}><Ionicons name={icon} size={23} color={color}/><View><Text variant="h2" weight="bold" style={styles.statValue}>{value}</Text><Text variant="bodySmall" style={styles.statLabel}>{label}</Text></View></View>}
+function Tag({label,color}:{label:string;color:string}){const{effective}=useTheme(),displayColor=effective==='dark'?mixWithWhite(color):color;return <View style={{paddingHorizontal:9,paddingVertical:5,borderRadius:999,backgroundColor:`${displayColor}${effective==='dark'?'1F':'16'}`,borderWidth:1,borderColor:`${displayColor}${effective==='dark'?'66':'45'}`}}><Text variant="overline" weight="bold" style={{color:displayColor}}>{label}</Text></View>}
+const styles=StyleSheet.create({statsShell:{borderRadius:22,padding:16,overflow:'hidden'},statsTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:14},statsEyebrow:{color:'#93C5FD',letterSpacing:1.1},scopeText:{color:'rgba(239,246,255,.74)',marginTop:3},statsRow:{flexDirection:'row',gap:9},statTile:{flex:1,minHeight:78,borderRadius:16,padding:11,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,backgroundColor:'rgba(255,255,255,.12)',borderWidth:1,borderColor:'rgba(255,255,255,.11)'},statValue:{color:'#FFF'},statLabel:{color:'rgba(255,255,255,.7)'},questionCard:{borderWidth:1,borderRadius:20,padding:18,gap:12},questionTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},datePill:{flexDirection:'row',alignItems:'center',gap:5,paddingHorizontal:9,paddingVertical:5,borderRadius:999},categoryRow:{flexDirection:'row',flexWrap:'wrap',gap:7},questionText:{fontSize:19,lineHeight:28},options:{gap:11},option:{minHeight:68,paddingHorizontal:14,paddingVertical:12,borderWidth:1.3,borderRadius:17,flexDirection:'row',alignItems:'center',gap:12},optionLetter:{width:38,height:38,borderRadius:12,borderWidth:1,alignItems:'center',justifyContent:'center'},resultCard:{borderWidth:1,borderRadius:20,padding:17,flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:12},resultIcon:{width:48,height:48,borderRadius:15,alignItems:'center',justifyContent:'center'},explanationDivider:{width:'100%',height:1,backgroundColor:'rgba(100,116,139,.18)',marginVertical:2}});
