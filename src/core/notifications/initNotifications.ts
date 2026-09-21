@@ -12,6 +12,15 @@ import {
   attachNotificationListeners,
 } from '@/src/core/notifications/pushNotifications';
 import { clearExamSetNotifications } from '@/src/core/notifications/examScheduler';
+import { fetchUserProfile } from '@/src/core/firebase/services/profile';
+import {
+  EVICTION_PUSH_TYPE,
+  requestDeviceSessionRecheck,
+} from '@/src/core/firebase/services/deviceSession';
+import {
+  registerAdminAlertDevice,
+  unregisterAdminAlertDevice,
+} from '@/src/core/messaging/adminAlerts';
 
 interface InitArgs {
   /** Current UI language, stored with the token so the admin can segment sends. */
@@ -23,6 +32,32 @@ interface InitArgs {
 }
 
 let started = false;
+
+/**
+ * True once THIS device has handed its token to the admin-alert relay. Used only
+ * to decide whether signing out needs to withdraw it, so a normal user's logout
+ * does not POST to the relay at all. If the flag is lost (process killed between
+ * sign-in and sign-out) the relay's own 120-day TTL and DeviceNotRegistered
+ * cleanup remove the entry instead.
+ */
+let adminDeviceRegistered = false;
+
+/**
+ * Admins receive "a user filed a report" pushes through a small Apps Script relay
+ * that holds the admin tokens (see src/core/messaging/adminAlerts.ts for why it
+ * cannot be done directly). The relay only learns about a device when the device
+ * itself checks in — which is what this does, right after the normal token save.
+ *
+ * Best-effort throughout: a non-admin, a missing profile, or an offline relay all
+ * end as a silent no-op. Nothing here can block or break sign-in.
+ */
+async function syncAdminAlertDevice(uid: string, token: string | null): Promise<void> {
+  if (!token) return;
+  const profile = await fetchUserProfile(uid).catch(() => null);
+  if (!profile?.isAdmin) return;
+  await registerAdminAlertDevice({ token, uid, name: profile.name });
+  adminDeviceRegistered = true;
+}
 
 /**
  * Initializes push notifications. Idempotent — safe to call once from the root
@@ -52,16 +87,47 @@ export function initNotifications({ getLanguage, onDeepLink, onReceived }: InitA
     // so a broadcast to that user no longer reaches this device.
     if (previousUid) {
       void removeTokenForUser(previousUid);
+      // Same reasoning for admin alerts — a handed-on or shared phone must stop
+      // receiving other people's reports the moment the admin signs out.
+      if (adminDeviceRegistered) {
+        adminDeviceRegistered = false;
+        void unregisterAdminAlertDevice();
+      }
     }
 
-    void registerPushToken(nextUid, getLanguage());
+    void registerPushToken(nextUid, getLanguage())
+      .then((token) => {
+        if (nextUid) return syncAdminAlertDevice(nextUid, token);
+        return undefined;
+      })
+      .catch(() => undefined);
   });
 
   const detachListeners = attachNotificationListeners({
-    onResponse: (deepLink) => {
+    onResponse: ({ deepLink, type }) => {
+      // A tapped eviction notice opens the app and nothing else: the splash
+      // screen is about to read the claim document and route to login, so there
+      // is no screen worth navigating to. The recheck is still fired for the
+      // case where the app was merely backgrounded and no splash will run.
+      if (type === EVICTION_PUSH_TYPE) {
+        requestDeviceSessionRecheck();
+        return;
+      }
       if (deepLink) onDeepLink(deepLink);
     },
-    onReceived,
+    onReceived: ({ type }) => {
+      // This is the path that makes eviction feel instant. The displaced app is
+      // in the foreground (or in recents, where the OS still delivers to the
+      // running process), so the guard can raise its blocking dialog the moment
+      // the message lands — no refresh, no app switch, no waiting.
+      if (type === EVICTION_PUSH_TYPE) {
+        requestDeviceSessionRecheck();
+        // Deliberately NOT counted on the bell: it is a control message, not an
+        // inbox row, and there is nothing behind it to open.
+        return;
+      }
+      onReceived?.();
+    },
   });
 
   return () => {

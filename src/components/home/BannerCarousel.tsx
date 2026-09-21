@@ -2,10 +2,11 @@
 // (image+color, or color+text only). Autoplay every 3.5s, pauses for 3s when
 // the user touches a slide, then resumes. Manual swipe also works normally.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Pressable, Dimensions, StyleSheet, Linking, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { View, Pressable, Dimensions, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate, Extrapolation, type SharedValue } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
+import { openExternalUrl } from '@/src/core/services/externalLink';
 import type { HomeBanner } from '@/src/core/firebase/services/banners';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -64,7 +65,10 @@ export function BannerCarousel({ banners }: BannerCarouselProps) {
   };
 
   const handleSlidePress = (banner: HomeBanner) => {
-    if (banner.linkUrl) Linking.openURL(banner.linkUrl).catch(() => {});
+    // Admin-typed in the console, so it may well arrive without a scheme —
+    // openExternalUrl adds one and reports a genuinely dead link instead of
+    // swallowing the press.
+    if (banner.linkUrl) void openExternalUrl(banner.linkUrl);
   };
 
   if (banners.length === 0) return null;

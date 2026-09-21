@@ -38,7 +38,7 @@ import {
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { PremiumGateDialog } from '@/src/components/feedback/PremiumGateDialog';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Button } from '@/src/components/buttons/Button';
@@ -343,7 +343,9 @@ export default function SubjectUnitsScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}> 
       <TopAppBar title={t('subjects.unitsPage.units')} onBackPress={() => router.back()} actions={headerActions} />
-      {!unitData.loading ? (
+      {!unitData.settled ? (
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
+      ) : unitData.error ? (
         <ScrollView
           stickyHeaderIndices={unitData.error || allChapters.length === 0 ? undefined : [2]}
           contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
@@ -428,8 +430,6 @@ export default function SubjectUnitsScreen() {
           ) : null}
         </ScrollView>
       ) : null}
-
-      <PageLoaderOverlay visible={unitData.loading} label={t('common.loading')} />
 
       <PremiumGateDialog
         visible={!!premiumChapter}

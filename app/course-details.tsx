@@ -12,7 +12,7 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function CourseDetailsScreen() {
   const { colors, spacing, radius } = useTheme();
@@ -20,7 +20,7 @@ export default function CourseDetailsScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
+  const { data, loading, settled, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     if (!user) return null;
     return fetchUserCourseInfo(user.uid);
   }, [user?.uid]);
@@ -33,7 +33,11 @@ export default function CourseDetailsScreen() {
   return (
     <>
       <SubpageScrollScreen title={t('profile.courseDetails')} refreshing={refreshing} onRefresh={refresh}>
-        {loading ? null : error ? (
+        {!settled ? (
+          <View style={{ flex: 1 }}>
+            <Preloading tinted={false} label={t('courseDetails.loading')} hint={t('loadHints.courseDetails')} />
+          </View>
+        ) : error ? (
           <DataNotFound onRetry={refetch} />
         ) : (
           <>
@@ -70,7 +74,6 @@ export default function CourseDetailsScreen() {
           </>
         )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading || refreshing} label={t('courseDetails.loading')} />
     </>
   );
 }

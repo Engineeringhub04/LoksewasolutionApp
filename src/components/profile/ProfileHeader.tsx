@@ -20,6 +20,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Svg, { Path } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
   useAnimatedReaction,
@@ -29,13 +30,11 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
-import { Avatar } from '@/src/components/misc/Avatar';
+import { ProfileAvatar } from '@/src/components/profile/ProfileAvatar';
+import { NameWithTick } from '@/src/components/misc/NameWithTick';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
 const COLLAPSE_DISTANCE = 150;
-
-/** Avatar glow colour — green in BOTH the expanded and collapsed header. */
-const GLOW_GREEN = '#22C55E';
 
 export const PROFILE_HEADER_EXPANDED_HEIGHT_BASE = 278;
 export const PROFILE_HEADER_COLLAPSED_HEIGHT_BASE = 64;
@@ -53,6 +52,13 @@ interface ProfileHeaderProps {
   /** "Free Plan" or the active premium plan's name (e.g. "Premium Monthly") — shown just below the subcourse pill. */
   planLabel: string;
   isPremiumPlan: boolean;
+  /**
+   * Premium entitlement is active RIGHT NOW — drives the animated avatar ring.
+   * Separate from `isPremiumPlan` on purpose: that one mirrors the stored flag
+   * and must keep matching `planLabel`, while this one also respects the expiry
+   * date, so a lapsed member stops wearing the ring immediately.
+   */
+  pro: boolean;
   /** Short code for the ACTIVE language, e.g. 'EN' / 'ने'. */
   languageShortLabel: string;
   /** Full label for the ACTIVE language, e.g. 'ENGLISH' / 'नेपाली'. */
@@ -70,6 +76,7 @@ export function ProfileHeader({
   subcourseName,
   planLabel,
   isPremiumPlan,
+  pro,
   languageShortLabel,
   languageLabel,
   onToggleLanguage,
@@ -140,23 +147,51 @@ export function ProfileHeader({
         </View>
 
         <View style={styles.avatarBlock}>
-          {/* Green glow ring around the avatar edge */}
-          <View style={styles.avatarGlow}>
-            <Avatar uri={photoURL} name={displayName ?? undefined} size={88} />
-          </View>
+          {/* Green ring on the free tier, the premium colour sweep on a paid
+              one. The verified tick no longer rides on the photo — it sits
+              BESIDE THE NAME below (Facebook style).
+
+              The pencil lives on the lower-right rim for EVERY tier again: with
+              the tick off the photo there is nothing to dodge, so the pro-only
+              step-up was removed. */}
+          <ProfileAvatar uri={photoURL} name={displayName} size={88} pro={pro} />
           <Pressable
             onPress={onEditPress}
             style={({ pressed }) => [styles.pencilBadge, pressed && styles.pressedSoft]}
             hitSlop={8}
             accessibilityLabel="Edit profile"
           >
-            <Ionicons name="pencil" size={14} color="#1D4ED8" />
+            {/* The lucide "Pencil" glyph (user-requested), drawn inline with SVG —
+                identical path data to lucide-react's Pencil, no new dependency. */}
+            <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                stroke="#1D4ED8"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Path
+                d="m15 5 4 4"
+                stroke="#1D4ED8"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
           </Pressable>
         </View>
 
-        <Text variant="h3" weight="bold" style={styles.name} numberOfLines={1}>
-          {displayName ?? ''}
-        </Text>
+        <NameWithTick
+          name={displayName ?? ''}
+          pro={pro}
+          variant="h3"
+          weight="bold"
+          // The spacing belongs on the ROW, not the text — putting it on the
+          // text dropped the name below the tick and broke their alignment.
+          containerStyle={styles.name}
+          style={styles.nameText}
+        />
 
         {subcourseName ? (
           <View style={styles.subcoursePill}>
@@ -180,27 +215,32 @@ export function ProfileHeader({
         pointerEvents={collapsed ? 'auto' : 'none'}
       >
         <View style={styles.collapsedRow}>
-          {/* Same green glow, scaled down — the ring must stay visible once the
-              header shrinks, not just at rest. */}
-          <View style={styles.collapsedAvatarGlow}>
-            <Avatar uri={photoURL} name={displayName ?? undefined} size={30} />
-          </View>
-          <Text variant="bodySmall" weight="semiBold" style={styles.collapsedName} numberOfLines={1}>
-            {displayName ?? ''}
-          </Text>
+          {/* Same ring, scaled down — whichever one the account earns has to
+              survive the collapse, not just be visible at rest. */}
+          <ProfileAvatar uri={photoURL} name={displayName} size={30} pro={pro} />
+          {/* THE NAME IS THE LOWEST-PRIORITY element in this row: it shrinks and
+              ellipsises from its TAIL first ("Loksewa Solution Ad…"). The Edit
+              Profile button and the toggles always keep their full size — the
+              flex:1 spacer between name and controls is what the name gives up. */}
+          <NameWithTick
+            name={displayName ?? ''}
+            pro={pro}
+            variant="bodySmall"
+            weight="semiBold"
+            style={styles.collapsedName}
+          />
 
-          {/* Sits in its own flex:1 cell so the button lands in the middle of
-              whatever space is left over, on any screen width. */}
-          <View style={styles.collapsedCenterCell}>
-            <Pressable
-              onPress={onEditPress}
-              style={({ pressed }) => [styles.collapsedEditButton, pressed && styles.pressedSoft]}
-            >
-              <Text variant="caption" weight="bold" style={styles.collapsedEditText} numberOfLines={1}>
-                Edit Profile
-              </Text>
-            </Pressable>
-          </View>
+          {/* The Edit Profile button never shrinks — flexShrink: 0 — and the
+              theme/language controls after it are fixed-size, so a long name is
+              the only thing that ever gets truncated. */}
+          <Pressable
+            onPress={onEditPress}
+            style={({ pressed }) => [styles.collapsedEditButton, pressed && styles.pressedSoft]}
+          >
+            <Text variant="caption" weight="bold" style={styles.collapsedEditText} numberOfLines={1}>
+              Edit Profile
+            </Text>
+          </Pressable>
 
           {/* Same order once collapsed: theme toggle, then language. */}
           <ThemeToggleButton isDark={isDark} onToggle={onToggleTheme} size={32} />
@@ -253,20 +293,11 @@ const styles = StyleSheet.create({
   },
   languageText: { color: '#FFF', letterSpacing: 0.5 },
 
-  avatarBlock: { marginTop: 10 },
-  avatarGlow: {
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderColor: GLOW_GREEN,
-    backgroundColor: 'rgba(34,197,94,0.22)',
-    // Soft green halo — iOS uses shadow*, Android needs elevation.
-    shadowColor: GLOW_GREEN,
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 12,
-  },
+  avatarBlock: { marginTop: 12 },
+  // The edit pencil: lower-right for EVERY tier. It used to step to the top rim
+  // on premium accounts purely to dodge the tick that lived on the photo — with
+  // the tick moved beside the name, there is nothing to dodge and both tiers
+  // share the natural corner.
   pencilBadge: {
     position: 'absolute',
     right: -2,
@@ -283,7 +314,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-  name: { color: '#FFF', marginTop: 10, textAlign: 'center', alignSelf: 'stretch' },
+  name: { marginTop: 10, alignItems: 'center' },
+  nameText: { color: '#FFF' },
   subcoursePill: {
     marginTop: 8,
     backgroundColor: 'rgba(255,255,255,0.22)',
@@ -318,22 +350,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  collapsedAvatarGlow: {
-    padding: 2,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: GLOW_GREEN,
-    backgroundColor: 'rgba(34,197,94,0.22)',
-    shadowColor: GLOW_GREEN,
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
-  // flexShrink + a width cap let a long name give up space before anything
-  // overflows, which is what keeps this row fitting on narrow devices.
-  collapsedName: { color: '#FFF', flexShrink: 1, maxWidth: '34%' },
-  collapsedCenterCell: { flex: 1, alignItems: 'center' },
+  // flexShrink: 0 — the Edit Profile label must never truncate; the name is
+  // the element that yields.
   collapsedEditButton: {
     flexShrink: 0,
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -341,9 +359,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   collapsedEditText: { color: '#FFF' },
+  // flexShrink (from NameWithTick's text) lets a long name give up space before
+  // anything overflows, so the name uses ALL the room left beside the avatar —
+  // no arbitrary width cap shortening it to "Loks..." when space is free.
+  // The name is the shrinking element: flexShrink on its text (from
+  // NameWithTick) plus NO flex on its row means avatar, button and toggles take
+  // their space first, and the name ellipsises from its tail only when the
+  // leftovers genuinely run out.
+  collapsedName: { color: '#FFF', flexShrink: 1 },
   collapsedLanguagePill: {
     flexShrink: 0,
     backgroundColor: 'rgba(255,255,255,0.22)',

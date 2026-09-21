@@ -3,7 +3,7 @@
 // "open original" link back to Gorkhapatra for attribution, and tapping any image
 // opens the shared full-screen viewer.
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,15 +11,26 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { fetchGorkhapatraPost, type GorkhapatraPost } from '@/src/core/firebase/services/content';
+import { openExternalUrl } from '@/src/core/services/externalLink';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { GorkhapatraBlocks } from '@/src/components/gorkhapatra/GorkhapatraBlocks';
 import { ImageViewer } from '@/src/components/media/ImageViewer';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 
 const ACCENT = '#7C3AED';
+
+/** Flattens the article's text blocks into a plain-text preview/snapshot. */
+function articleText(item: GorkhapatraPost): string {
+  return (item.blocks ?? [])
+    .filter((block) => block.type !== 'image' && block.text?.trim())
+    .map((block) => block.text!.trim())
+    .join('\n\n');
+}
 
 function formatDate(value: GorkhapatraPost['publishedAt']): string {
   if (!value) return '';
@@ -46,11 +57,12 @@ export default function GorkhapatraDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={item?.title ?? t('gorkhapatra.title')} />
-      <PageLoaderOverlay visible={post.loading} label={t('gorkhapatra.loading')} />
 
-      {post.error ? (
+      {!post.settled ? (
+        <Preloading tinted={false} label={t('gorkhapatra.loading')} hint={t('loadHints.gorkhapatra')} />
+      ) : post.error ? (
         <DataNotFound onRetry={post.refetch} />
-      ) : !item && !post.loading ? (
+      ) : !item ? (
         <EmptyState icon="reader-outline" title={t('gorkhapatra.notFound')} />
       ) : item ? (
         <ScrollView
@@ -80,6 +92,34 @@ export default function GorkhapatraDetailScreen() {
                 <Text variant="caption" weight="semiBold" style={{ color: ACCENT }}>{t('gorkhapatra.questionSet')}</Text>
               </View>
             ) : null}
+
+            <View style={{ flex: 1 }} />
+            <BookmarkButton
+              context="article"
+              kind="read"
+              refId={item.id}
+              title={item.title}
+              preview={articleText(item).slice(0, 220)}
+              sourceLabel={`${t('gorkhapatra.title')}${item.category ? ` · ${item.category}` : ''}`}
+              size={20}
+              payload={{
+                body: articleText(item),
+                meta: [{ label: t('gorkhapatra.title'), value: item.dateLabel || formatDate(item.publishedAt) }],
+              }}
+            />
+            <ReportButton
+              size={20}
+              target={() => ({
+                source: 'article',
+                targetType: 'content',
+                id: item.id,
+                contextLabel: t('gorkhapatra.title'),
+                title: item.title,
+                body: articleText(item).slice(0, 600),
+                meta: [{ label: t('gorkhapatra.title'), value: item.dateLabel || formatDate(item.publishedAt) }],
+                categoryGroup: 'content',
+              })}
+            />
           </View>
 
           <Text variant="h2" weight="bold" style={styles.title}>{item.title}</Text>
@@ -91,7 +131,7 @@ export default function GorkhapatraDetailScreen() {
           {/* Attribution + open-original link */}
           {item.sourceUrl ? (
             <Pressable
-              onPress={() => void Linking.openURL(item.sourceUrl)}
+              onPress={() => void openExternalUrl(item.sourceUrl)}
               style={({ pressed }) => [styles.sourceRow, { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.85 : 1 }]}
             >
               <Ionicons name="open-outline" size={17} color={colors.primary} />

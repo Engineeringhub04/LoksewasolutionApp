@@ -7,15 +7,16 @@ import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
-import { showToast } from '@/src/core/store/toastStore';
 import { fetchPracticeQuestionSet, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
 import { fetchLearningProgress, saveLearningProgress, type LearningProgress } from '@/src/core/firebase/services/learningProgress';
 import { fetchMyContentPurchases } from '@/src/core/firebase/services/contentPurchases';
 import { Text } from '@/src/components/misc/Text';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 
 function valueOf(value: string | string[] | undefined, fallback = ''): string {
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
@@ -84,6 +85,8 @@ export default function PracticeModeScreen() {
   const subjectId = valueOf(params.subjectId);
   const chapterId = valueOf(params.chapterId);
   const unitId = valueOf(params.unitId) || null;
+  const subjectName = valueOf(params.subjectName);
+  const chapterName = valueOf(params.chapterName);
   const premiumContent = valueOf(params.subjectPro) === 'true' || valueOf(params.chapterPro) === 'true';
   const profilePremium = isActivePremium(profile);
   const premium = profilePremium || hasSpecificAccess;
@@ -119,6 +122,8 @@ export default function PracticeModeScreen() {
             subjectId,
             unitId,
             chapterId,
+            courseId,
+            subcourseId,
             attemptedQuestionIds: [],
             correctQuestionIds: [],
             totalQuestions: practiceQuestions.length,
@@ -141,6 +146,8 @@ export default function PracticeModeScreen() {
           subjectId,
           unitId,
           chapterId,
+          courseId,
+          subcourseId,
           dailyDate: today,
           dailyQuestionIds: [],
           dailyAttemptedQuestionIds: [],
@@ -188,6 +195,8 @@ export default function PracticeModeScreen() {
       subjectId,
       unitId,
       chapterId,
+      courseId,
+      subcourseId,
       attemptedQuestionIds: next.attemptedQuestionIds,
       correctQuestionIds: next.correctQuestionIds,
       completed: next.completed,
@@ -301,7 +310,7 @@ export default function PracticeModeScreen() {
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <Stack.Screen options={{ gestureEnabled: false }} />
         {modeHeader}
-        <PageLoaderOverlay visible label={t('common.loading')} />
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
       </View>
     );
   }
@@ -361,8 +370,39 @@ export default function PracticeModeScreen() {
         <View style={styles.questionMetaRow}>
           <View style={[styles.questionBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>Question {current + 1}</Text></View>
           <View style={styles.metaActions}>
-            <Pressable onPress={() => showToast(t('learningModes.bookmarkComingSoon'), 'info')} style={styles.actionIcon} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={22} color={colors.primary} /></Pressable>
-            <Pressable onPress={() => showToast(t('learningModes.reportComingSoon'), 'info')} style={styles.actionIcon} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={22} color={colors.error} /></Pressable>
+            <BookmarkButton
+              context="practice"
+              kind="question"
+              refId={`${chapterId}:${currentQuestion.id}`}
+              title={bilingual(currentQuestion.text, currentQuestion.textNe)}
+              preview={bilingual(currentQuestion.explanation, currentQuestion.explanationNe)}
+              sourceLabel={[subjectName || t('learningModes.practiceTitle'), chapterName || t('subjects.chaptersPage.chapter')].filter(Boolean).join(' · ')}
+              courseId={courseId}
+              subcourseId={subcourseId}
+              payload={{
+                question: bilingual(currentQuestion.text, currentQuestion.textNe),
+                options: currentQuestion.options,
+                answerIndex: currentQuestion.correctIndex,
+                explanation: bilingual(currentQuestion.explanation, currentQuestion.explanationNe),
+                meta: chapterName ? [{ label: t('bookmarks.chapterLabel'), value: chapterName }] : undefined,
+              }}
+              size={22}
+              style={styles.actionIcon}
+            />
+            <ReportButton
+              size={22}
+              style={styles.actionIcon}
+              target={() => ({
+                source: 'question',
+                targetType: 'question',
+                id: currentQuestion.id,
+                contextLabel: `${t('learningModes.practiceTitle')} · ${chapterName || t('subjects.chaptersPage.chapter')}`,
+                title: bilingual(currentQuestion.text, currentQuestion.textNe),
+                options: currentQuestion.options,
+                answerIndex: currentQuestion.correctIndex,
+                meta: subjectName ? [{ label: t('bookmarks.subjectLabel'), value: subjectName }] : undefined,
+              })}
+            />
           </View>
         </View>
 

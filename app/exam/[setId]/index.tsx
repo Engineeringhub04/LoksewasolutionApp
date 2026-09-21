@@ -7,8 +7,10 @@ import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
+import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -25,7 +27,7 @@ import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 const PASS = '#16A34A';
@@ -40,16 +42,22 @@ function formatDuration(seconds: number): string {
 export default function ExamDetailsScreen() {
   const { setId } = useLocalSearchParams<{ setId: string }>();
   const { colors, radius, spacing } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const courseInfo = useProfileStore((s) => s.courseInfo);
   const [now] = useState(() => Date.now());
 
-  const examSet = useAsyncData(() => (setId ? fetchExamSet(setId) : Promise.resolve(null)), [setId]);
+  const examSet = useAsyncData(() => (setId ? fetchExamSet(setId) : Promise.resolve(null)), [setId], {
+    // Held back until there is a real setId, so `settled` can only become true
+    // after an actual read — see the ranking screen for the full explanation.
+    enabled: !!setId,
+  });
   const attempts = useAsyncData(
     () => (user && setId ? fetchAttemptsForSet(user.uid, setId) : Promise.resolve<ExamAttempt[]>([])),
-    [user?.uid, setId]
+    [user?.uid, setId],
+    { enabled: !!setId }
   );
 
   const set = examSet.data;
@@ -57,6 +65,10 @@ export default function ExamDetailsScreen() {
   const unlockAt = set ? resultsUnlockAt(set) : null;
 
   const loading = examSet.loading || attempts.loading;
+  // Header stays; the body is replaced by the glow-ring until BOTH reads land
+  // once. `settled`, not `loading`: returning from a summary screen re-fires
+  // `loading`, and the page must stay up while it refreshes.
+  const ready = examSet.settled && attempts.settled;
   const refreshing = examSet.refreshing || attempts.refreshing;
 
   // Coming back from the summary/review screens must show the new attempt
@@ -80,7 +92,7 @@ export default function ExamDetailsScreen() {
     );
   };
 
-  if (examSet.error || (!loading && !set)) {
+  if (examSet.error || (examSet.settled && !set)) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SubpageHeader title="Exam Details" />
@@ -93,6 +105,9 @@ export default function ExamDetailsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title="Exam Details" />
 
+      {!ready ? (
+        <Preloading tinted={false} label="Loading Exam Details…" hint={t("loadHints.exam")} />
+      ) : (
       <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }}
         refreshControl={
@@ -242,8 +257,7 @@ export default function ExamDetailsScreen() {
           </>
         ) : null}
       </ScrollView>
-
-      <PageLoaderOverlay visible={loading} label="Loading Exam Details…" />
+      )}
     </View>
   );
 }

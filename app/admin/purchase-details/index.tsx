@@ -11,7 +11,7 @@ import { fetchAllContentPurchases, type ContentPurchaseRecord } from '@/src/core
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 const TRACKS = ['all', 'exam', 'content'] as const;
 type Track = (typeof TRACKS)[number];
@@ -26,7 +26,7 @@ export default function AdminPurchaseDetailsScreen() {
   const router = useRouter();
   const [track, setTrack] = useState<Track>('all');
 
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
+  const { data, loading, settled, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     const [examRecords, contentRecords] = await Promise.all([fetchAllExamPurchases(), fetchAllContentPurchases()]);
     const allRecords: ({ kind: 'exam'; record: ExamPurchaseRecord } | { kind: 'content'; record: ContentPurchaseRecord })[] = [
       ...examRecords.map((record) => ({ kind: 'exam' as const, record })),
@@ -42,6 +42,14 @@ export default function AdminPurchaseDetailsScreen() {
   return (
     <>
       <SubpageScrollScreen title={t('subscription.purchaseRequestControl')} refreshing={refreshing} onRefresh={refresh}>
+        {/* The intro banner and track filter sit on top of the request list and
+            are part of the page's data view, so the whole body waits behind the
+            loader together instead of the cards popping in early. */}
+        {!settled ? (
+          <View style={{ flex: 1 }}>
+            <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} />
+          </View>
+        ) : (
         <View style={{ gap: spacing.md }}>
           <View style={[styles.intro, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30`, borderRadius: radius.lg, padding: spacing.md }]}>
             <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} />
@@ -62,7 +70,7 @@ export default function AdminPurchaseDetailsScreen() {
             })}
           </View>
 
-          {loading ? null : error ? (
+          {error ? (
             <DataNotFound onRetry={refetch} />
           ) : visibleRequests.length === 0 ? (
             <View style={[styles.empty, { borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg }]}>
@@ -79,8 +87,8 @@ export default function AdminPurchaseDetailsScreen() {
             </View>
           )}
         </View>
+        )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading || refreshing} label={t('subscription.loading')} />
     </>
   );
 }

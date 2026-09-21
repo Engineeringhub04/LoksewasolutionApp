@@ -5,13 +5,14 @@
     "owner": "mrchettry",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "loksewasolutionapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.loksewasolutionnp.hub",
+      "icon": "./assets/images/logo-ios-1024.png",
       "associatedDomains": [
         "applinks:kbr.com.np",
         "applinks:loksewa-solution-app.firebaseapp.com"
@@ -26,6 +27,7 @@
     },
     "android": {
       "package": "com.loksewasolutionnp.hub",
+      "icon": "./assets/images/logo-android-512.png",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -49,8 +51,8 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0B1330",
-        "foregroundImage": "./assets/images/logo.png"
+        "backgroundColor": "#000030",
+        "foregroundImage": "./assets/images/logo-android-512-safe.png"
       },
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
@@ -61,19 +63,19 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo_nobg.png",
-          "imageWidth": 240,
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#061A73",
+          "backgroundColor": "#000030",
           "dark": {
-            "backgroundColor": "#061A73"
+            "backgroundColor": "#000030"
           }
         }
       ],
@@ -100,8 +102,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo_nobg.png",
-          "color": "#061A73"
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#DE6E00"
         }
       ]
     ],

@@ -14,6 +14,12 @@ export interface LearningProgress {
   subjectId: string;
   unitId: string | null;
   chapterId: string;
+  /**
+   * Empty string on records written before course scoping existed. The main
+   * leaderboard treats those as belonging to the user's current subcourse.
+   */
+  courseId: string;
+  subcourseId: string;
   attemptedQuestionIds: string[];
   correctQuestionIds: string[];
   selectedAnswerIndexes: Record<string, number>;
@@ -70,6 +76,8 @@ function learningProgressFromDocument(
     subjectId: normalizedSubjectId,
     unitId: typeof document.unitId === 'string' ? canonicalUnitId(document.unitId) : null,
     chapterId: normalizedChapterId,
+    courseId: typeof document.courseId === 'string' ? document.courseId : '',
+    subcourseId: typeof document.subcourseId === 'string' ? document.subcourseId : '',
     attemptedQuestionIds: Array.isArray(document.attemptedQuestionIds)
       ? document.attemptedQuestionIds.filter((value): value is string => typeof value === 'string')
       : [],
@@ -168,6 +176,13 @@ export async function saveLearningProgress(
     subjectId: string;
     unitId?: string | null;
     chapterId: string;
+    /**
+     * Course scoping for the main leaderboard, which ranks users per subcourse.
+     * Optional so existing callers keep compiling, and only written when supplied
+     * — a merge write with `undefined` would otherwise blank an existing value.
+     */
+    courseId?: string;
+    subcourseId?: string;
     attemptedQuestionIds?: string[];
     correctQuestionIds?: string[];
     selectedAnswerIndexes?: Record<string, number>;
@@ -191,6 +206,8 @@ export async function saveLearningProgress(
       subjectId: normalizedSubjectId,
       unitId: normalizedUnitId,
       chapterId: normalizedChapterId,
+      ...(input.courseId ? { courseId: input.courseId } : {}),
+      ...(input.subcourseId ? { subcourseId: input.subcourseId } : {}),
       attemptedQuestionIds: input.attemptedQuestionIds ?? [],
       correctQuestionIds: input.correctQuestionIds ?? [],
       ...(input.selectedAnswerIndexes !== undefined ? { selectedAnswerIndexes: input.selectedAnswerIndexes } : {}),

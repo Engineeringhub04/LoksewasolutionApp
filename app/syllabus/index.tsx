@@ -7,13 +7,14 @@
 // Data is real: fetchSyllabusList(courseId) reads app_syllabusdata filtered by
 // the enrolled course. No seeding here — that was a Phase 1 admin utility and
 // has been removed.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useProfileStore } from '@/src/core/store/profileStore';
@@ -24,8 +25,8 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function SyllabusScreen() {
   const { colors, spacing } = useTheme();
@@ -43,6 +44,7 @@ export default function SyllabusScreen() {
     loading,
     refreshing,
     error,
+    settled,
     refetch,
     refresh,
   } = useAsyncData<SyllabusData[]>(
@@ -50,6 +52,19 @@ export default function SyllabusScreen() {
     [courseId],
     { enabled: !!courseId },
   );
+
+  // First-load gate for the body swap. A user with no enrolled course has no
+  // fetch to wait for, so their body shows instantly; a course user waits for
+  // the first syllabus fetch to settle, and pull-to-refresh never re-hides it.
+  const [firstLoadDone, setFirstLoadDone] = useState(!courseId);
+  useEffect(() => {
+    if (!courseId) {
+      setFirstLoadDone(true);
+      return;
+    }
+    if (settled) setFirstLoadDone(true);
+  }, [courseId, settled]);
+  const bodyReady = !courseId || firstLoadDone;
 
   useRefreshOnFocus(refresh);
 
@@ -173,10 +188,10 @@ export default function SyllabusScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('syllabus.title')} />
 
-      {/* Body wrapper — the loader below is absolute-filled to THIS view rather
-          than the screen, so the header stays visible while loading and the
-          spinner centres in the content area beneath it. */}
       <View style={{ flex: 1 }}>
+        {!bodyReady ? (
+          <Preloading tinted={false} label="Loading Syllabus..." hint={t("loadHints.syllabus")} />
+        ) : (
         <ScrollView
           contentContainerStyle={{
             padding: spacing.screenPadding,
@@ -224,12 +239,7 @@ export default function SyllabusScreen() {
           {renderBody()}
         </View>
         </ScrollView>
-
-        <PageLoaderOverlay
-          visible={loading && !syllabusList && !!courseId}
-          opaque
-          label="Loading Syllabus..."
-        />
+        )}
       </View>
     </View>
   );

@@ -1,7 +1,13 @@
-// Premium text input with an animated floating label. The label rests centered
-// as a placeholder, then floats up and shrinks INSIDE the field on focus/value.
-// No background "notch" chip behind the label — it sits cleanly within the
-// bordered field, anchored to the left edge as it scales.
+// Premium text input with an animated floating label. The label rests where the
+// first line of text will be — acting as the placeholder — then floats up and
+// shrinks to sit just under the top border on focus/value.
+//
+// Single-line and multiline now behave IDENTICALLY. Multiline used to keep the
+// label permanently floated and drew a surface-coloured chip behind it so the
+// border wouldn't strike through the text; that chip read as a little card stuck
+// to the field, and a label that never moves is not a floating label — it's a
+// heading. Both are gone: the label always starts as a placeholder and always
+// floats with a transparent background, anchored to the field's left edge.
 import React, { useState } from 'react';
 import { View, TextInput, Pressable, type TextInputProps, type StyleProp, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -67,7 +73,7 @@ export function FloatingLabelField({
   const hasError = !!errorText;
   const hasValue = !!value && value.length > 0;
 
-  const focusAnim = useSharedValue(hasValue || multiline ? 1 : 0);
+  const focusAnim = useSharedValue(hasValue ? 1 : 0);
   // Separate, slightly slower value purely for the border/label colour wash —
   // keeping colour and position on the same clock made the border feel like
   // it "snapped" the instant a finger left the field. Driving it independently
@@ -76,16 +82,17 @@ export function FloatingLabelField({
   const colorAnim = useSharedValue(focused ? 1 : 0);
 
   React.useEffect(() => {
-    focusAnim.value = withTiming(focused || hasValue || multiline ? 1 : 0, { duration: 200, easing: EASING });
+    focusAnim.value = withTiming(focused || hasValue ? 1 : 0, { duration: 200, easing: EASING });
     colorAnim.value = withTiming(focused ? 1 : 0, { duration: 240, easing: EASING });
-  }, [focused, hasValue, multiline, focusAnim, colorAnim]);
+  }, [focused, hasValue, focusAnim, colorAnim]);
 
-  // Single-line: float the label up and shrink it, but keep it INSIDE the field
-  // (anchored to the left edge via transformOrigin so it doesn't drift right).
-  // Multiline: keep the original offset that sits the label on the top border.
+  // Float the label up and shrink it, keeping it INSIDE the field and anchored
+  // to the left edge (via transformOrigin) so it doesn't drift right as it
+  // scales. Multiline travels slightly further because its resting position is
+  // the top of a tall box rather than the vertical centre of a short one.
   const labelStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(focusAnim.value, [0, 1], [0, multiline ? -22 : -18], Extrapolation.CLAMP) },
+      { translateY: interpolate(focusAnim.value, [0, 1], [0, multiline ? -20 : -18], Extrapolation.CLAMP) },
       { scale: interpolate(focusAnim.value, [0, 1], [1, 0.82], Extrapolation.CLAMP) },
     ],
   }));
@@ -124,15 +131,17 @@ export function FloatingLabelField({
         ) : null}
 
         <View style={{ flex: 1, justifyContent: multiline ? 'flex-start' : 'center' }}>
-          {/* Floating label. Single-line: spans the field height, centres itself
-             to line up with the text, then floats up + shrinks INSIDE the border
-             with no background chip. Multiline: pinned to the top border with a
-             surface-coloured notch (unchanged from the original). */}
+          {/* Floating label. Rests on the first text line so it reads as the
+             placeholder, then floats up + shrinks INSIDE the border. No
+             background chip in either mode — the field's own top padding is what
+             keeps the border clear of the label. */}
           <Animated.View
             pointerEvents="none"
             style={[
               { position: 'absolute', left: 0 },
-              multiline ? { top: -14 } : { top: 0, bottom: 0, justifyContent: 'center', transformOrigin: 'left center' },
+              multiline
+                ? { top: 0, transformOrigin: 'left top' }
+                : { top: 0, bottom: 0, justifyContent: 'center', transformOrigin: 'left center' },
               labelStyle,
             ]}
           >
@@ -140,12 +149,6 @@ export function FloatingLabelField({
               style={[
                 { fontSize: typography.bodyLarge.fontSize, fontWeight: typography.bodyLarge.fontWeight },
                 labelColorStyle,
-                multiline
-                  ? {
-                      backgroundColor: focused || hasValue ? inputColors.surface : 'transparent',
-                      paddingHorizontal: focused || hasValue ? 2 : 0,
-                    }
-                  : null,
               ]}
             >
               {label}

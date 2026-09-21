@@ -17,8 +17,8 @@ import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/ser
 import { fetchSubjectLearningStats } from '@/src/core/firebase/services/learningProgress';
 import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
+import { Preloading } from '@/src/components/Preloading';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { SubjectCardColored } from '@/src/components/home/SubjectCardColored';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
@@ -156,7 +156,9 @@ export default function SubjectListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('subjects.title')} actions={headerActions} />
-      {pageContentReady ? <ScrollView
+      {!pageContentReady ? (
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
+      ) : <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={subjectData.refreshing} onRefresh={subjectData.refresh} />}
       >
@@ -212,12 +214,7 @@ export default function SubjectListScreen() {
             ))}
           </View>
         )}
-      </ScrollView> : null}
-
-      <PageLoaderOverlay
-        visible={!pageContentReady}
-        label={t('common.loading')}
-      />
+      </ScrollView>}
 
       <PremiumGateDialog
         visible={!!premiumSubject}

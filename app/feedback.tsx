@@ -1,4 +1,10 @@
 // Profile → Support → Feedback.
+//
+// UI only — submitFeedback, the rating guard and the offline block are
+// unchanged. The rating card now answers back: the stars take the tone of the
+// score you picked and the label sits in a pill instead of a bare line of
+// primary-coloured text. The label row keeps its height at every rating,
+// including zero, so tapping a star never nudges the form below it.
 import React, { useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,18 +18,30 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
+import { HeroBand, SectionCard, StatusPill, QuotePanel, useTones, type Tone } from '@/src/components/premium';
 
 const RATING_LABELS = ['', 'Very poor', 'Poor', 'Okay', 'Good', 'Excellent'];
 
+function ratingTone(rating: number): Tone {
+  if (rating >= 4) return 'success';
+  if (rating === 3) return 'warning';
+  if (rating > 0) return 'danger';
+  return 'neutral';
+}
+
 export default function FeedbackScreen() {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const { isOffline } = useNetworkStatus();
+  const tones = useTones();
 
   const [rating, setRating] = useState(0);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  const tone = ratingTone(rating);
+  const star = tones[tone];
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -44,60 +62,65 @@ export default function FeedbackScreen() {
 
   return (
     <SubpageScrollScreen title={t('profile.feedback')}>
-      <View style={[styles.hero, { backgroundColor: `${colors.primary}14`, borderRadius: radius.lg, padding: spacing.md }]}>
-        <Ionicons name="heart" size={26} color={colors.primary} />
-        <Text variant="bodySmall" secondary style={{ flex: 1 }}>
-          Your feedback directly shapes what we build next. Thank you for taking a moment.
-        </Text>
-      </View>
+      <HeroBand
+        icon="heart"
+        title={t('profile.feedback')}
+        subtitle="Your feedback directly shapes what we build next. Thank you for taking a moment."
+        tone="danger"
+      />
 
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
-        <Text variant="bodyLarge" weight="bold">{t('feedback.ratingQuestion')}</Text>
+      <SectionCard icon="star-outline" title={t('feedback.ratingQuestion')} tone={rating > 0 ? tone : 'primary'}>
         <View style={styles.starRow}>
-          {[1, 2, 3, 4, 5].map((star) => (
+          {[1, 2, 3, 4, 5].map((value) => (
             <Pressable
-              key={star}
-              onPress={() => setRating(star)}
-              hitSlop={6}
-              accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`}
+              key={value}
+              onPress={() => setRating(value)}
+              hitSlop={8}
+              accessibilityLabel={`${value} star${value > 1 ? 's' : ''}`}
+              style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.88 : 1 }] }]}
             >
               <Ionicons
-                name={star <= rating ? 'star' : 'star-outline'}
-                size={34}
-                color={star <= rating ? colors.accent : colors.textDisabled}
+                name={value <= rating ? 'star' : 'star-outline'}
+                size={36}
+                color={value <= rating ? star.solid : colors.textDisabled}
               />
             </Pressable>
           ))}
         </View>
-        {rating > 0 ? (
-          <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary, textAlign: 'center' }}>
-            {RATING_LABELS[rating]}
-          </Text>
-        ) : null}
-      </View>
+        {/* Fixed-height slot: the pill replaces a hint rather than appearing
+            from nothing, so the card never changes size as you tap. */}
+        <View style={styles.labelSlot}>
+          {rating > 0 ? (
+            <StatusPill label={RATING_LABELS[rating]} tone={tone} icon="sparkles" />
+          ) : (
+            <Text variant="bodySmall" secondary>Tap a star to rate</Text>
+          )}
+        </View>
+      </SectionCard>
 
       {isOffline ? (
-        <Text variant="bodySmall" style={{ color: colors.warning }}>{t('help.offlineBlocked')}</Text>
+        <QuotePanel tone="warning" icon="cloud-offline-outline" caption={t('common.offline')}>
+          <Text variant="bodySmall">{t('help.offlineBlocked')}</Text>
+        </QuotePanel>
       ) : (
-        <>
+        <SectionCard icon="create-outline" title={t('feedback.messageLabel')} subtitle={t('feedback.messageHelper')} tone="info">
           <TextField
-            label={t('feedback.messageLabel')}
             value={message}
             onChangeText={setMessage}
             multiline
             numberOfLines={5}
             style={{ minHeight: 130, textAlignVertical: 'top' }}
-            helperText={t('feedback.messageHelper')}
           />
-          <Button label={t('common.submit')} onPress={handleSubmit} loading={sending} disabled={rating === 0 || sending} />
-        </>
+          <View style={{ marginTop: spacing.md }}>
+            <Button label={t('common.submit')} onPress={handleSubmit} loading={sending} disabled={rating === 0 || sending} />
+          </View>
+        </SectionCard>
       )}
     </SubpageScrollScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  card: { borderWidth: StyleSheet.hairlineWidth, gap: 10 },
-  starRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginVertical: 4 },
+  starRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginVertical: 4 },
+  labelSlot: { minHeight: 30, alignItems: 'center', justifyContent: 'center' },
 });

@@ -22,7 +22,7 @@ import {
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { PremiumGateDialog } from '@/src/components/feedback/PremiumGateDialog';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Button } from '@/src/components/buttons/Button';
@@ -141,6 +141,9 @@ export default function SubjectChaptersScreen() {
         onBackPress={() => router.back()}
         actions={headerActions}
       />
+      {!chapterData.settled ? (
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
+      ) : (
       <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<AppRefreshControl refreshing={chapterData.refreshing} onRefresh={chapterData.refresh} />}
@@ -245,8 +248,7 @@ export default function SubjectChaptersScreen() {
           </>
         ) : null}
       </ScrollView>
-
-      <PageLoaderOverlay visible={chapterData.loading} label={t('common.loading')} />
+      )}
 
       <PremiumGateDialog
         visible={!!premiumChapter}

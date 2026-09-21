@@ -13,9 +13,9 @@
 //   stats: { testsTaken, streak, rank, points },
 //   createdAt, updatedAt
 //
-// `stats` is written as zeroes for now — the real values need attempt
-// aggregation that doesn't exist yet, so the UI shows 0 rather than inventing
-// numbers. Wiring it up later only means updating this one file.
+// `stats` holds the four headline numbers shown under the Profile header. They
+// are NOT computed here — see `writeUserStats` at the bottom of this file for
+// who fills them in and why they live on the user document at all.
 import { getDocument, setDocument, deleteDocument, serverTimestamp } from '@/src/core/firebase/firestoreRest';
 import { Collections } from '@/src/core/firebase/collections';
 
@@ -124,6 +124,11 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
     });
   }
 
+  // Seed the baseline every writer composes its partial update against. This is
+  // the read that makes `writeUserStats` free — see its comment block below.
+  const stats = toStats(doc.stats);
+  statsBaseline.set(uid, stats);
+
   return {
     uid,
     name,
@@ -139,7 +144,7 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
         : ((doc.photoURL as string | undefined) ? 'manual' : 'none'),
     courseId: (doc.courseId as string | undefined) ?? null,
     subcourseId: (doc.subcourseId as string | undefined) ?? null,
-    stats: toStats(doc.stats),
+    stats,
     isAdmin: doc.role === 'admin',
     isPremium: doc.isPremium === true,
     premiumPlanName: (doc.premiumPlanName as string | undefined) ?? null,
@@ -188,6 +193,106 @@ export async function ensureUserStats(uid: string): Promise<void> {
   const doc = await getDocument(userPath(uid));
   if (doc?.stats) return;
   await setDocument(userPath(uid), { stats: EMPTY_STATS, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// ---------- keeping `stats` honest ----------
+//
+// The four numbers are produced by jobs that already have them in hand, so this
+// costs no extra reads anywhere:
+//
+//   points, testsTaken, streak → recordAnalyticsSnapshot(), which runs on every
+//                                published score and has just computed all three
+//   rank                       → the Leaderboard screen, which has the sorted
+//                                board in memory and therefore knows the position
+//
+// They are mirrored here rather than read live because the alternatives are
+// expensive: the streak lives inside a 180-day analytics document, and a rank
+// means reading the whole board — up to 300 documents — every time the Profile
+// tab is opened. Mirroring turns both into fields of a document the app already
+// loads at start.
+//
+// IMPORTANT: `stats` is a MAP, and the REST client derives updateMask.fieldPaths
+// from the top-level keys it is handed, so a merge write containing `stats`
+// REPLACES the whole map. Every write therefore has to send all four numbers,
+// which means knowing the ones it is not changing — hence the baseline cache
+// below, seeded by the profile read the app already performs at launch.
+
+const statsBaseline = new Map<string, UserStats>();
+
+/** Last known stats map for a user, or null when none has been read yet. */
+export function peekUserStats(uid: string): UserStats | null {
+  return statsBaseline.get(uid) ?? null;
+}
+
+/** Drops the cached baseline. Call with no argument on sign-out. */
+export function forgetUserStats(uid?: string): void {
+  if (uid) statsBaseline.delete(uid);
+  else statsBaseline.clear();
+}
+
+function sameStats(a: UserStats, b: UserStats): boolean {
+  return (
+    a.testsTaken === b.testsTaken &&
+    a.streak === b.streak &&
+    a.rank === b.rank &&
+    a.points === b.points
+  );
+}
+
+/** A supplied number wins; anything absent or nonsensical keeps the old value. */
+function pickStat(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : fallback;
+}
+
+/**
+ * Merges real numbers into users/{uid}.stats and returns the resulting map.
+ *
+ * Never throws — every caller is a background job finishing work whose result
+ * the user has already seen, so a failed mirror must stay invisible. Returns
+ * null only when it could not write, so callers can tell "unchanged" (a map)
+ * from "did not happen" (null).
+ *
+ * A write is skipped entirely when nothing moved. These jobs fire on every
+ * publish and every Leaderboard open, and most of the time the numbers are
+ * identical to what is already stored.
+ */
+export async function writeUserStats(
+  uid: string,
+  patch: Partial<UserStats>,
+): Promise<UserStats | null> {
+  if (!uid) return null;
+  try {
+    let baseline = statsBaseline.get(uid);
+    if (!baseline) {
+      // Only reached when a writer runs before any profile load, which the
+      // launch sequence normally prevents. One read, once, per session.
+      const doc = await getDocument(userPath(uid)).catch(() => null);
+      baseline = toStats(doc?.stats);
+    }
+
+    const next: UserStats = {
+      testsTaken: pickStat(patch.testsTaken, baseline.testsTaken),
+      streak: pickStat(patch.streak, baseline.streak),
+      rank: pickStat(patch.rank, baseline.rank),
+      points: pickStat(patch.points, baseline.points),
+    };
+
+    // Remember the baseline even when we are about to skip, so the one-off read
+    // above happens at most once per session.
+    statsBaseline.set(uid, baseline);
+    if (sameStats(next, baseline)) return next;
+
+    await setDocument(userPath(uid), { stats: next, updatedAt: serverTimestamp() }, { merge: true });
+    // Promoted only after the write lands. Caching it up front would make a
+    // failed write look identical to a successful one, and every later call
+    // would then skip itself as "unchanged" — the numbers would never recover.
+    statsBaseline.set(uid, next);
+    return next;
+  } catch {
+    return null;
+  }
 }
 
 /** 'YYYY-MM-DD' -> a human-friendly label; returns null for missing/invalid input. */

@@ -28,7 +28,8 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Text } from '@/src/components/misc/Text';
-import { Avatar } from '@/src/components/misc/Avatar';
+import { ProfileAvatar } from '@/src/components/profile/ProfileAvatar';
+import { NameWithTick } from '@/src/components/misc/NameWithTick';
 import { PulsingBadge } from '@/src/components/misc/PulsingBadge';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { CourseInfoCard } from '@/src/components/home/CourseInfoCard';
@@ -46,11 +47,11 @@ function greeting(): string {
 const COLLAPSE_DISTANCE = 150;
 
 /**
- * Avatar glow colour — the SAME green ring the Profile header uses, in both the
- * expanded and collapsed state. The avatar is the same person in both tabs, so
- * it must not be dressed differently depending on which one you are looking at.
+ * The avatar is the same person in both tabs, so it must not be dressed
+ * differently depending on which one you are looking at. Both rings — the free
+ * green one and the premium sweep — live in ProfileAvatar, which Home and
+ * Profile share; there is nothing left to keep in sync by hand.
  */
-const GLOW_GREEN = '#22C55E';
 
 // Height (excluding safe-area inset) of the header in its expanded/collapsed
 // states — exported so the Home screen can reserve exactly this much space
@@ -69,6 +70,11 @@ interface HomeHeaderProps {
   scrollY: SharedValue<number>;
   displayName: string | null;
   photoURL: string | null | undefined;
+  /**
+   * Premium entitlement is active right now — pass `hasActivePremium(profile)`.
+   * Only decorates the avatar; nothing here is gated on it.
+   */
+  pro?: boolean;
   notificationCount: number;
   isDark: boolean;
   onToggleTheme: () => void;
@@ -83,6 +89,7 @@ export function HomeHeader({
   scrollY,
   displayName,
   photoURL,
+  pro = false,
   notificationCount,
   isDark,
   onToggleTheme,
@@ -151,12 +158,14 @@ export function HomeHeader({
       >
         <View style={styles.topRow}>
           <Pressable onPress={onProfilePress} style={styles.profileRow}>
-            <View style={styles.avatarGlow}>
-              <Avatar uri={photoURL} name={displayName ?? undefined} size={44} />
-            </View>
+            {/* Premium members wear the colour ring here and on Profile, and
+                nowhere else — a ring is a personal decoration, not a rank. The
+                verified tick sits BESIDE THE NAME now (Facebook style), not on
+                the photo. */}
+            <ProfileAvatar uri={photoURL} name={displayName} size={44} pro={pro} />
             <View style={{ gap: 1 }}>
               <Text variant="bodySmall" style={styles.greeting}>{greeting()},</Text>
-              <Text variant="bodyLarge" weight="bold" style={styles.name} numberOfLines={1}>{firstName}</Text>
+              <NameWithTick name={firstName} pro={pro} variant="bodyLarge" weight="bold" style={styles.name} />
             </View>
           </Pressable>
 
@@ -189,8 +198,8 @@ export function HomeHeader({
         pointerEvents={collapsed ? 'auto' : 'none'}
       >
         <View style={styles.collapsedRow}>
-          <Pressable onPress={onProfilePress} style={styles.collapsedAvatarGlow}>
-            <Avatar uri={photoURL} name={displayName ?? undefined} size={30} />
+          <Pressable onPress={onProfilePress} accessibilityLabel="Open profile">
+            <ProfileAvatar uri={photoURL} name={displayName} size={30} pro={pro} />
           </Pressable>
 
           <Pressable onPress={() => router.push('/search')} style={styles.collapsedSearchIcon} accessibilityLabel="Search">
@@ -244,20 +253,6 @@ const styles = StyleSheet.create({
   },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  // Same ring as ProfileHeader: solid green border, translucent green fill, and a
-  // soft halo (shadow* on iOS, elevation on Android).
-  avatarGlow: {
-    padding: 3,
-    borderRadius: 999,
-    borderWidth: 2.5,
-    borderColor: GLOW_GREEN,
-    backgroundColor: 'rgba(34,197,94,0.22)',
-    shadowColor: GLOW_GREEN,
-    shadowOpacity: 0.9,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 10,
-  },
   greeting: { color: 'rgba(255,255,255,0.8)' },
   name: { color: '#FFF', fontSize: 17 },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -287,19 +282,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  // The ring must survive the collapse, just scaled down — same as Profile.
-  collapsedAvatarGlow: {
-    padding: 2,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: GLOW_GREEN,
-    backgroundColor: 'rgba(34,197,94,0.22)',
-    shadowColor: GLOW_GREEN,
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
   collapsedSearchIcon: {
     width: 32,
     height: 32,

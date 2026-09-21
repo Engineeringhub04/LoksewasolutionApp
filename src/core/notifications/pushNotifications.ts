@@ -198,13 +198,30 @@ export function hasRegistered(): boolean {
   return registered;
 }
 
+/**
+ * The `data` object an Expo push carries, reduced to the two fields this app
+ * actually acts on.
+ *
+ * Almost every push is an inbox item: it has a `deepLink` and no `type`, and
+ * tapping it opens a screen. A `type` marks the exception — a control message
+ * that exists to make the app DO something rather than to be read. Keeping both
+ * on one object means a listener can tell those apart without re-parsing the
+ * raw notification.
+ */
+export interface PushPayload {
+  /** In-app route to open on tap. Null on control messages. */
+  deepLink: string | null;
+  /** Control-message kind, e.g. 'session-evicted'. Null on ordinary pushes. */
+  type: string | null;
+}
+
 export interface NotificationListeners {
   /** Fired when a notification is tapped (foreground, background, or cold start). */
-  onResponse: (deepLink: string | null) => void;
+  onResponse: (payload: PushPayload) => void;
   /** Fired when a push ARRIVES while the app is foregrounded (not tapped). Used to
    *  bump the Home bell in real time, since Firestore here is REST-only (no
    *  onSnapshot) and nothing else would update the count until a manual refresh. */
-  onReceived?: () => void;
+  onReceived?: (payload: PushPayload) => void;
 }
 
 /**
@@ -215,24 +232,32 @@ export interface NotificationListeners {
  * lands on the same screen as tapping the inbox row.
  */
 export function attachNotificationListeners({ onResponse, onReceived }: NotificationListeners): () => void {
-  const extractDeepLink = (response: Notifications.NotificationResponse | null): string | null => {
-    const data = response?.notification.request.content.data as { deepLink?: unknown } | undefined;
-    return typeof data?.deepLink === 'string' ? data.deepLink : null;
+  const readPayload = (data: unknown): PushPayload => {
+    const fields = (data ?? {}) as { deepLink?: unknown; type?: unknown };
+    return {
+      deepLink: typeof fields.deepLink === 'string' ? fields.deepLink : null,
+      type: typeof fields.type === 'string' ? fields.type : null,
+    };
   };
 
+  const fromResponse = (response: Notifications.NotificationResponse | null): PushPayload =>
+    readPayload(response?.notification.request.content.data);
+
   const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-    onResponse(extractDeepLink(response));
+    onResponse(fromResponse(response));
   });
 
   // Foreground arrival (push received, NOT tapped) → bump the bell live.
   const receivedSub = onReceived
-    ? Notifications.addNotificationReceivedListener(() => onReceived())
+    ? Notifications.addNotificationReceivedListener((notification) => {
+        onReceived(readPayload(notification.request.content.data));
+      })
     : null;
 
   // Cold start: the app was launched by tapping a notification.
   void Notifications.getLastNotificationResponseAsync().then((response) => {
-    const link = extractDeepLink(response);
-    if (link) onResponse(link);
+    if (!response) return;
+    onResponse(fromResponse(response));
   });
 
   return () => {

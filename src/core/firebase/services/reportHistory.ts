@@ -8,11 +8,30 @@ import {
 import { Collections } from '@/src/core/firebase/collections';
 import { getCurrentUser } from '@/src/core/firebase/session';
 import { fetchUserProfile } from '@/src/core/firebase/services/profile';
+import { notifyAdminsOfReport } from '@/src/core/messaging/adminAlerts';
+import { notifyReporterOfReview } from '@/src/core/services/reportNotifier';
+import type { ReportReviewNotifyResult } from '@/src/core/services/reportNotifier';
 import type { FirestoreTimestamp } from '@/src/core/firebase/firestoreRest';
 
-export type ReportSource = 'question' | 'discussion' | 'comment';
+/**
+ * Where the report came from. This started as question/discussion/comment only;
+ * it now covers every screen that shows a report icon, because the Report History
+ * page groups by exactly this value. Adding a member here needs NO rule change —
+ * `app_report_history` is not schema-locked.
+ */
+export type ReportSource =
+  | 'question'
+  | 'discussion'
+  | 'comment'
+  | 'app'
+  | 'read'
+  | 'article'
+  | 'other';
 export type ReportStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
-export type ReportTargetType = 'question' | 'post' | 'comment' | 'reply';
+export type ReportTargetType = 'question' | 'post' | 'comment' | 'reply' | 'app' | 'content';
+
+const REPORT_SOURCES: ReportSource[] = ['question', 'discussion', 'comment', 'app', 'read', 'article', 'other'];
+const REPORT_TARGET_TYPES: ReportTargetType[] = ['question', 'post', 'comment', 'reply', 'app', 'content'];
 
 export interface AdminReportResponse {
   id: string;
@@ -34,6 +53,8 @@ export interface ReportHistoryRecord {
   targetId: string;
   targetTitle: string | null;
   targetPreview: string | null;
+  /** Human-readable origin, e.g. "Exam · Set 3" or "GK · Practice Mode". */
+  contextLabel: string | null;
   targetAuthorName: string | null;
   targetAuthorPhoto: string | null;
   reason: string;
@@ -51,6 +72,7 @@ export interface CreateReportHistoryInput {
   targetId: string;
   targetTitle?: string | null;
   targetPreview?: string | null;
+  contextLabel?: string | null;
   targetAuthorName?: string | null;
   targetAuthorPhoto?: string | null;
   reason: string;
@@ -98,11 +120,12 @@ function parseRecord(doc: Record<string, unknown>): ReportHistoryRecord {
     reporterPhoto: stringOrNull(doc.reporterPhoto),
     reporterCourseId: stringOrNull(doc.reporterCourseId),
     reporterSubcourseId: stringOrNull(doc.reporterSubcourseId),
-    source: doc.source === 'discussion' || doc.source === 'comment' ? doc.source : 'question',
-    targetType: doc.targetType === 'post' || doc.targetType === 'comment' || doc.targetType === 'reply' ? doc.targetType : 'question',
+    source: REPORT_SOURCES.includes(doc.source as ReportSource) ? (doc.source as ReportSource) : 'question',
+    targetType: REPORT_TARGET_TYPES.includes(doc.targetType as ReportTargetType) ? (doc.targetType as ReportTargetType) : 'question',
     targetId: stringOrNull(doc.targetId) ?? '',
     targetTitle: stringOrNull(doc.targetTitle),
     targetPreview: stringOrNull(doc.targetPreview),
+    contextLabel: stringOrNull(doc.contextLabel),
     targetAuthorName: stringOrNull(doc.targetAuthorName),
     targetAuthorPhoto: stringOrNull(doc.targetAuthorPhoto),
     reason: stringOrNull(doc.reason) ?? 'other',
@@ -122,15 +145,20 @@ function newestFirst(records: ReportHistoryRecord[]): ReportHistoryRecord[] {
 /**
  * Saves a private report-history copy. The caller should submit the same report
  * to the existing Google Form separately so Apps Script can notify Discord.
+ *
+ * It also rings every admin device. That lives HERE rather than in each of the
+ * four submit helpers (submitProblemReport, submitContextReport,
+ * submitQuestionReport, reportContent) so a new report path can never forget it.
  */
 export async function createReportHistory(input: CreateReportHistoryInput): Promise<string> {
   const user = await getCurrentUser();
   if (!user) throw new Error('AUTH_REQUIRED');
   const profile = await fetchUserProfile(user.uid).catch(() => null);
+  const reporterName = profile?.name || user.displayName || 'Anonymous';
 
   const { id } = await createDocument(Collections.reportHistory, {
     reporterId: user.uid,
-    reporterName: profile?.name || user.displayName || 'Anonymous',
+    reporterName,
     reporterEmail: profile?.email ?? user.email,
     reporterPhoto: profile?.photoURL ?? user.photoURL,
     reporterCourseId: profile?.courseId ?? null,
@@ -140,6 +168,7 @@ export async function createReportHistory(input: CreateReportHistoryInput): Prom
     targetId: input.targetId,
     targetTitle: input.targetTitle ?? null,
     targetPreview: input.targetPreview ?? null,
+    contextLabel: input.contextLabel ?? null,
     targetAuthorName: input.targetAuthorName ?? null,
     targetAuthorPhoto: input.targetAuthorPhoto ?? null,
     reason: input.reason,
@@ -150,6 +179,19 @@ export async function createReportHistory(input: CreateReportHistoryInput): Prom
     createdAt: serverTimestamp(),
     reviewedAt: null,
   });
+
+  // Deliberately NOT awaited: the report is already saved, and an Apps Script
+  // cold start can take seconds. The user should not wait on it, and a relay
+  // outage must not turn a saved report into a visible failure.
+  void notifyAdminsOfReport({
+    reportId: id,
+    reporterName,
+    contextLabel: input.contextLabel ?? null,
+    reason: input.reason,
+    targetTitle: input.targetTitle ?? null,
+    description: input.description ?? null,
+  });
+
   return id;
 }
 
@@ -166,12 +208,22 @@ export async function fetchAllReportHistory(): Promise<ReportHistoryRecord[]> {
   return newestFirst(docs.map(parseRecord));
 }
 
-/** Updates only moderation fields; Firestore rules restrict this write to admins. */
+/**
+ * Updates only moderation fields; Firestore rules restrict this write to admins.
+ *
+ * It then notifies the reporter — inbox row plus tray push. That notification used
+ * to exist only in the admin WEBSITE, which is why resolving a report from inside
+ * the app looked like it did nothing.
+ *
+ * The delivery result comes BACK to the caller instead of being swallowed, so the
+ * screen can say what actually happened ("notified" vs "saved, no device") rather
+ * than claiming success it cannot verify. Delivery never fails the status write.
+ */
 export async function updateReportHistoryReview(
   id: string,
   status: Exclude<ReportStatus, 'pending'>,
   adminMessage: string | null,
-): Promise<void> {
+): Promise<ReportReviewNotifyResult> {
   const current = await fetchReportHistory(id);
   const message = adminMessage?.trim() || '';
   const nextResponses = message ? [
@@ -189,6 +241,22 @@ export async function updateReportHistoryReview(
     adminResponses: nextResponses,
     reviewedAt: serverTimestamp(),
   });
+
+  if (!current?.reporterId) {
+    return { inboxId: null, pushOk: 0, pushFailed: 0, errors: ['REPORTER_UNKNOWN'], noDevice: true };
+  }
+
+  return notifyReporterOfReview(
+    {
+      reportId: id,
+      reporterId: current.reporterId,
+      reporterName: current.reporterName,
+      targetTitle: current.targetTitle,
+      contextLabel: current.contextLabel,
+    },
+    status,
+    message || null,
+  );
 }
 
 export async function fetchReportHistory(id: string): Promise<ReportHistoryRecord | null> {

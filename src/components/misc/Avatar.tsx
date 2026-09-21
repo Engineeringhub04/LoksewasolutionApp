@@ -1,3 +1,10 @@
+// The app's one avatar primitive: a photo when there is one, initials when
+// there is not.
+//
+// NOTE: the premium verified tick NO LONGER lives on the photo. It moved to the
+// display name (Facebook style — "Kishan Raut ✔") via the shared NameWithTick
+// component. The `pro` and `tickBorderColor` props are kept for API
+// compatibility (call sites still pass them) but are no-ops here.
 import React from 'react';
 import { View, Image } from 'react-native';
 import { useTheme } from '@/src/core/theme';
@@ -7,6 +14,10 @@ export interface AvatarProps {
   uri?: string | null;
   name?: string;
   size?: number;
+  /** Deprecated: the tick now renders beside the name (NameWithTick). Kept so existing call sites keep compiling. */
+  pro?: boolean;
+  /** Deprecated: unused since the tick left the photo. */
+  tickBorderColor?: string;
 }
 
 function initialsFor(name?: string) {
@@ -19,10 +30,10 @@ function initialsFor(name?: string) {
 
 export function Avatar({ uri, name, size = 44 }: AvatarProps) {
   const { colors } = useTheme();
-  if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
-  }
-  return (
+
+  const face = uri ? (
+    <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+  ) : (
     <View
       style={{
         width: size,
@@ -52,4 +63,7 @@ export function Avatar({ uri, name, size = 44 }: AvatarProps) {
       </Text>
     </View>
   );
+
+  // The tick no longer lives on the photo — see NameWithTick beside the name.
+  return face;
 }

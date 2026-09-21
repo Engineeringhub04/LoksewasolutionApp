@@ -3,6 +3,7 @@ import { fetchDevelopers, type Developer } from '@/src/core/firebase/services/de
 import { fetchInbox, type AppNotification } from '@/src/core/firebase/services/notifications';
 import { fetchSubjectDetails, type SubjectDetail } from '@/src/core/firebase/services/subjectDetails';
 import { fetchQotdDay, type QotdDay } from '@/src/core/firebase/services/qotd';
+import { fetchNotices, type Notice } from '@/src/core/firebase/services/notices';
 
 export interface HomeDataSnapshot {
   banners: HomeBanner[];
@@ -10,12 +11,20 @@ export interface HomeDataSnapshot {
   notifications: AppNotification[];
   subjectDetails: SubjectDetail[];
   qotdDay: QotdDay | null;
+  /** Firestore-backed Recent Notices (subcourse-filtered by this snapshot's key). */
+  notices: Notice[];
 }
 
 export interface HomeDataKey {
   uid: string | null;
   courseId: string;
   subcourseId: string;
+  /**
+   * Admins get incoming reports in their inbox too, so the bell badge counted on
+   * launch has to know. Optional and defaulting to false — a caller that omits it
+   * simply gets the normal-user inbox.
+   */
+  isAdmin?: boolean;
 }
 
 let cachedKey: string | null = null;
@@ -28,21 +37,27 @@ let inFlight: Promise<HomeDataSnapshot> | null = null;
 let sessionGeneration = 0;
 
 function keyOf(key: HomeDataKey): string {
-  return `${key.uid ?? 'guest'}:${key.courseId}:${key.subcourseId}`;
+  // isAdmin is part of the key because it changes WHAT the inbox contains. The
+  // flag is normalised so an omitted and an explicit `false` share one cache
+  // entry rather than fetching the same data twice.
+  return `${key.uid ?? 'guest'}:${key.courseId}:${key.subcourseId}:${key.isAdmin ? 'admin' : 'user'}`;
 }
 
 async function fetchSnapshot(key: HomeDataKey, force = false): Promise<HomeDataSnapshot> {
-  const [banners, developers, notifications, subjectDetails, qotdDay] = await Promise.all([
+  const [banners, developers, notifications, subjectDetails, qotdDay, notices] = await Promise.all([
     fetchHomeBanners(),
     fetchDevelopers(),
-    key.uid ? fetchInbox(key.uid) : Promise.resolve([]),
+    key.uid ? fetchInbox(key.uid, undefined, undefined, { isAdmin: key.isAdmin }) : Promise.resolve([]),
     fetchSubjectDetails(key.courseId, key.subcourseId, { force }),
     key.uid
       ? fetchQotdDay(key.uid, key.courseId, key.subcourseId).catch(() => null)
       : Promise.resolve(null),
+    // Notices are public (guests see the broadcast ones too), so no uid gate.
+    // The three-tier cache means this joins the snapshot for free on warm opens.
+    fetchNotices({ subcourseId: key.subcourseId || null, force }).catch(() => [] as Notice[]),
   ]);
 
-  return { banners, developers, notifications, subjectDetails, qotdDay };
+  return { banners, developers, notifications, subjectDetails, qotdDay, notices };
 }
 
 export function getCachedHomeData(key: HomeDataKey): HomeDataSnapshot | null {

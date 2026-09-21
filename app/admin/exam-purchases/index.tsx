@@ -9,7 +9,7 @@ import { fetchAllExamPurchases, type ExamPurchaseRecord, type ExamPurchaseStatus
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 type Filter = 'all' | ExamPurchaseStatus;
 
@@ -18,14 +18,14 @@ export default function AdminExamPurchasesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(fetchAllExamPurchases, []);
+  const { data, loading, settled, refreshing, error, refetch, refresh } = useAsyncData(fetchAllExamPurchases, []);
   const records = useMemo(() => data ?? [], [data]);
   const filtered = useMemo(() => filter === 'all' ? records : records.filter((record) => record.status === filter), [filter, records]);
 
   return (
     <>
       <SubpageScrollScreen title={t('subscription.examPurchaseReview')} refreshing={refreshing} onRefresh={refresh}>
-        {loading ? null : error ? <DataNotFound onRetry={refetch} /> : (
+        {!settled ? <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} /> : error ? <DataNotFound onRetry={refetch} /> : (
           <>
             <View style={styles.tabsRow}>
               <Chip label={t('subscription.allRequests')} active={filter === 'all'} color={colors.primary} onPress={() => setFilter('all')} />
@@ -42,7 +42,6 @@ export default function AdminExamPurchasesScreen() {
           </>
         )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading || refreshing} label={t('subscription.loading')} />
     </>
   );
 }

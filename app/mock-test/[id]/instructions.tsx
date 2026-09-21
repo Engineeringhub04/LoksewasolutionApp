@@ -11,7 +11,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { Card } from '@/src/components/cards/Card';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { Preloading } from '@/src/components/Preloading';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 export default function MockTestInstructionsScreen() {
@@ -19,15 +19,13 @@ export default function MockTestInstructionsScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { data: exam, loading, error, refreshing, refetch, refresh } = useAsyncData(() => fetchMockTest(id), [id]);
+  const { data: exam, loading, settled, error, refreshing, refetch, refresh } = useAsyncData(() => fetchMockTest(id), [id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('mockTest.instructions')} />
-      {loading ? (
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={24} width="70%" /><Skeleton height={80} />
-        </View>
+      {!settled ? (
+        <Preloading tinted={false} label={t('mockTest.instructions')} hint={t('loadHints.mockTest')} />
       ) : error || !exam ? (
         <ErrorState onRetry={refetch} />
       ) : (

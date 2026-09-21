@@ -43,7 +43,9 @@ export const Collections = {
   // Current Affairs collections were removed on 2026-09-13 along with the
   // feature's screens and service. Re-add them here if the feature is rebuilt.
   gorkhapatra: 'gorkhapatra',
-  notices: 'notices',
+  // Notice board — `app_` prefix per the 2026-09 convention (migrated from the
+  // legacy unprefixed `notices` collection).
+  notices: 'app_notices',
   discussions: 'discussions',
   comments: (discussionId: string) => `discussions/${discussionId}/comments`,
   replies: (discussionId: string, commentId: string) => `discussions/${discussionId}/comments/${commentId}/replies`,
@@ -148,4 +150,82 @@ export const Collections = {
   // instead of a field on the user doc because the user-doc update rule pins the
   // owner-writable key set and does not include a tokens field.
   userPushTokens: (uid: string) => `users/${uid}/push_tokens`,
+
+  // ===== Single-device login =====
+  /**
+   * One account = one device. A single document (id `active`) names the device
+   * that currently holds the account; a new device overwrites it and the
+   * displaced device signs itself out on its next foreground check.
+   *
+   * A subcollection rather than a field on the user doc for the same reason as
+   * push_tokens above: the owner-writable key set on `users/{uid}` is pinned by
+   * the rules and adding to it would loosen a rule that already works.
+   */
+  userSession: (uid: string) => `users/${uid}/session`,
+  /** The one session document id. Anything else is rejected by the rules. */
+  activeSessionId: 'active',
+
+  // ===== Main Leaderboard =====
+  /**
+   * Private per-user aggregate, one document per enrolled subcourse. Holds the
+   * full source-by-source breakdown (QOTD, exams, daily tests, practice, read,
+   * theory, GK/PM, constitution...) that produced the score.
+   */
+  mainLeaderboard: (uid: string) => `users/${uid}/app_mainleaderboard`,
+  /**
+   * Public mirror of the above — ONE row per user per subcourse, which is what
+   * the leaderboard screen actually queries. It exists because the private
+   * subcollection above is owner-read-only and Firestore cannot query across
+   * per-user subcollections; same reason app_exam_rankings exists.
+   *
+   * Document id is `${uid}__${subcourseId}` so republishing overwrites in place
+   * instead of piling up a new row per refresh.
+   */
+  mainLeaderboardPublic: 'app_main_leaderboard',
+  /**
+   * Foreground time and activity counters — the "app focus" signal. Kept out of
+   * the user document because that doc's update rule pins an owner-writable key
+   * set, and out of the leaderboard doc because it is written far more often.
+   */
+  appUsage: (uid: string) => `users/${uid}/app_usage`,
+  /**
+   * Progress for everything that previously persisted nothing (read mode, theory
+   * mode, GK, PM, constitution, past questions). One document per activity,
+   * id `${source}__${refId}`, so all of them share a single collection and a
+   * single security rule instead of six.
+   */
+  activityProgress: (uid: string) => `users/${uid}/app_activity_progress`,
+
+  // ===== Analytics =====
+  /**
+   * Private per-user analytics, one document per enrolled subcourse. Owner-only
+   * with NO public mirror — unlike the leaderboard, this screen shows a user
+   * only their own data, so nothing here is ever queried across users.
+   *
+   * Holds the current breakdown plus a `days` map of up to 180 daily snapshots
+   * of the CUMULATIVE totals. Every other progress collection in this app is
+   * cumulative and carries no per-day record, so a trend chart is impossible to
+   * reconstruct from them; storing cumulative snapshots and differencing
+   * consecutive days is what makes per-day effort, minutes and activity
+   * recoverable at all. See services/analyticsSnapshot.
+   */
+  analytics: (uid: string) => `users/${uid}/app_analytics`,
+
+  // ===== Content totals (coverage denominator) =====
+  /**
+   * ONE document per subcourse holding how much content the app contains — the
+   * denominator behind the profile progress ring. The ring measures COVERAGE
+   * ("how much of this subcourse have you actually worked through"), which is
+   * impossible to compute on the client any other way: Firestore's REST API
+   * exposes no count aggregation here, most question banks are arrays nested
+   * inside parent documents, and scanning six catalog collections on every score
+   * publish would cost hundreds of reads per user per day.
+   *
+   * The admin site maintains it atomically — every content create/edit/delete
+   * ships an `increment()` transform for this document inside the very same
+   * commit as the content write, so the counters cannot drift from a partial
+   * write, and a "Recompute totals" action re-derives exact values if they ever
+   * do. Reading it costs the app exactly one document.
+   */
+  contentTotals: 'app_content_totals',
 } as const;

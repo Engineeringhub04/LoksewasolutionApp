@@ -1,16 +1,17 @@
 // "About Developer" card — premium gradient design with a bordered avatar,
 // verified badge, name, short description, and a pill-shaped View button.
 import React from 'react';
-import { View, Pressable, Linking, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Text } from '@/src/components/misc/Text';
+import { openExternalUrl } from '@/src/core/services/externalLink';
 import type { Developer } from '@/src/core/firebase/services/developer';
 
 export function DeveloperCard({ developer }: { developer: Developer }) {
   const handleView = () => {
-    if (developer.viewUrl) Linking.openURL(developer.viewUrl).catch(() => {});
+    if (developer.viewUrl) void openExternalUrl(developer.viewUrl);
   };
 
   return (

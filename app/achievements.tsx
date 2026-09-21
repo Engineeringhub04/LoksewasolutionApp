@@ -13,7 +13,7 @@ import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { Card } from '@/src/components/cards/Card';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { BottomSheet } from '@/src/components/feedback/BottomSheet';
 
 export default function AchievementsScreen() {
@@ -22,7 +22,7 @@ export default function AchievementsScreen() {
   const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState<AchievementStatus | null>(null);
 
-  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(async () => {
+  const { data, loading, error, settled, refreshing, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
     return fetchAchievements(user.uid);
   }, [user?.uid]);
@@ -33,8 +33,9 @@ export default function AchievementsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('achievements.title')} showThemeToggle />
-      <PageLoaderOverlay visible={loading || refreshing} label="Loading Achievements..." />
-      {loading ? null : error ? (
+      {!settled ? (
+        <Preloading tinted={false} label="Loading Achievements..." hint={t("loadHints.achievements")} />
+      ) : error ? (
         <DataNotFound onRetry={refetch} />
       ) : (
         <FlatList

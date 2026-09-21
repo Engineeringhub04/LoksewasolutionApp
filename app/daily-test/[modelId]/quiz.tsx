@@ -37,6 +37,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
+import { useTranslation } from '@/src/core/i18n';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -87,6 +90,7 @@ interface QuizBootData {
 export default function DailyTestQuizScreen() {
   const { modelId } = useLocalSearchParams<{ modelId: string }>();
   const { colors, radius, spacing, effective, setMode } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -510,6 +514,45 @@ export default function DailyTestQuizScreen() {
                 {formatClock(secondsLeft)}
               </Text>
             </Animated.View>
+
+            {/* Daily-test questions carry no id of their own, so the index inside
+                the model is what identifies them. */}
+            {question ? (
+              <View style={styles.metaActions}>
+                <BookmarkButton
+                  context="daily-test"
+                  kind="question"
+                  refId={`${model.id}:${current}`}
+                  title={question.question}
+                  preview={question.explanation}
+                  sourceLabel={`${t('bookmarks.ctx.daily-test')} · ${model.name}`}
+                  courseId={courseInfo?.courseId ?? null}
+                  subcourseId={courseInfo?.subcourseId ?? null}
+                  size={20}
+                  payload={{
+                    question: question.question,
+                    options: question.options,
+                    answerIndex: question.correctIndex,
+                    explanation: question.explanation,
+                    meta: [{ label: t('bookmarks.ctx.daily-test'), value: model.name }],
+                  }}
+                />
+                <ReportButton
+                  size={20}
+                  target={() => ({
+                    source: 'question',
+                    targetType: 'question',
+                    id: `${model.id}:${current}`,
+                    contextLabel: `${t('bookmarks.ctx.daily-test')} · ${model.name}`,
+                    title: question.question,
+                    options: question.options,
+                    answerIndex: question.correctIndex,
+                    meta: [{ label: t('bookmarks.ctx.daily-test'), value: model.name }],
+                    categoryGroup: 'question',
+                  })}
+                />
+              </View>
+            ) : null}
           </View>
 
           {question?.category ? (
@@ -691,6 +734,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  metaActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   metaPill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -241,6 +241,145 @@ export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+// ===================== Plan feature catalogue =====================
+//
+// The Subscription Details page renders a FEATURE MATRIX: every feature the app
+// actually ships, marked included/excluded on each plan card. That needs two
+// different things, and confusing them is what made the old page thin:
+//
+//   1. The CATALOGUE (below) — the full, ordered, grouped list of everything the
+//      app offers. It is a client constant because it is UI structure: grouping,
+//      ordering and the Nepali wording are presentation, not data.
+//   2. The plan's OWN `features: string[]` in Firestore — the source of truth for
+//      what a given plan includes. A feature is "included" iff its id appears in
+//      that array. Nothing is inferred from the billing cycle at render time, so
+//      an admin can hand-edit a plan in Firestore and the page follows.
+//
+// THE CATALOGUE NEVER WRITES. A one-shot admin seed used to push these ids into
+// the plan documents; it has been run, so it and its button are gone. Firestore
+// now holds the truth on its own. ADDING A FEATURE IS THEREFORE TWO STEPS: add
+// it here (so it is ordered, grouped and translated) AND add its exact id to the
+// `features` array of every plan that should include it. Doing only the first
+// makes it render as excluded on every card — which is a correct read of the
+// data, not a bug.
+//
+// IDENTITY: a feature's `id` IS the exact string stored in Firestore. Changing an
+// id is a data migration, not a rename — the old string would simply stop
+// matching and the feature would render as excluded on every plan.
+//
+// BILINGUAL: Firestore holds only the English id. The Nepali label lives here and
+// is looked up at render time, which keeps the app bilingual without translating
+// database content or doubling every plan document.
+
+export type PlanCycleKey = 'free' | 'monthly' | 'yearly';
+
+export interface PlanFeature {
+  /** EXACT string stored on the plan document. This is the feature's identity. */
+  id: string;
+  /** Nepali label, shown when the app language is Nepali. */
+  ne: string;
+  /**
+   * REFERENCE ONLY — the tier this feature was designed for. Nothing reads this
+   * at render time; inclusion is decided solely by the plan document's own
+   * `features` array in Firestore. It is kept because it records the intended
+   * shape of the three tiers, which is what you want in front of you when you
+   * add a feature and have to decide which plans get its id.
+   */
+  cycles: PlanCycleKey[];
+}
+
+export interface PlanFeatureGroup {
+  key: string;
+  /** Ionicons glyph name — kept as a plain string so this service stays UI-free. */
+  icon: string;
+  titleEn: string;
+  titleNe: string;
+  features: PlanFeature[];
+}
+
+const ALL: PlanCycleKey[] = ['free', 'monthly', 'yearly'];
+const PAID: PlanCycleKey[] = ['monthly', 'yearly'];
+const YEARLY_ONLY: PlanCycleKey[] = ['yearly'];
+
+/**
+ * Everything the app ships today, grouped the way a person would shop for it.
+ * Each entry maps to a screen or capability that exists right now — this is a
+ * capability inventory, not marketing copy.
+ */
+export const PLAN_FEATURE_GROUPS: PlanFeatureGroup[] = [
+  {
+    key: 'learning',
+    icon: 'library-outline',
+    titleEn: 'Learning & Content',
+    titleNe: 'अध्ययन तथा सामग्री',
+    features: [
+      { id: 'All subjects, units & chapters', ne: 'सबै विषय, एकाइ र अध्याय', cycles: ALL },
+      { id: 'Syllabus & study notes library', ne: 'पाठ्यक्रम तथा नोट्स संग्रह', cycles: ALL },
+      { id: 'Constitution & legal reference', ne: 'संविधान तथा कानुनी सन्दर्भ', cycles: ALL },
+      { id: 'Gorkhapatra daily edition', ne: 'गोरखापत्र दैनिक संस्करण', cycles: ALL },
+      { id: 'Notices & exam updates', ne: 'सूचना तथा परीक्षा अपडेट', cycles: ALL },
+      { id: 'Downloadable PDF materials', ne: 'डाउनलोड गर्न मिल्ने PDF सामग्री', cycles: PAID },
+    ],
+  },
+  {
+    key: 'practice',
+    icon: 'document-text-outline',
+    titleEn: 'Practice & Exams',
+    titleNe: 'अभ्यास तथा परीक्षा',
+    features: [
+      { id: 'Daily practice questions', ne: 'दैनिक अभ्यास प्रश्नहरू', cycles: ALL },
+      { id: 'Question of the Day', ne: 'आजको प्रश्न', cycles: ALL },
+      { id: 'Daily Test full access', ne: 'दैनिक परीक्षामा पूर्ण पहुँच', cycles: PAID },
+      { id: 'Unlimited mock exams & model sets', ne: 'असीमित मक परीक्षा तथा मोडेल सेट', cycles: PAID },
+      { id: 'Past year question papers', ne: 'विगत वर्षका प्रश्नपत्रहरू', cycles: PAID },
+      { id: 'Instant results with answer review', ne: 'तत्काल नतिजा र उत्तर समीक्षा', cycles: PAID },
+      { id: 'Theory answer submission & review', ne: 'सैद्धान्तिक उत्तर पेस तथा समीक्षा', cycles: PAID },
+    ],
+  },
+  {
+    key: 'progress',
+    icon: 'stats-chart-outline',
+    titleEn: 'Progress & Analytics',
+    titleNe: 'प्रगति तथा विश्लेषण',
+    features: [
+      { id: 'Bookmarks & reading history', ne: 'बुकमार्क तथा पढाइ इतिहास', cycles: ALL },
+      { id: 'Leaderboard & exam rankings', ne: 'लिडरबोर्ड तथा परीक्षा र्‍यांकिङ', cycles: ALL },
+      { id: 'Performance analytics & charts', ne: 'प्रदर्शन विश्लेषण तथा चार्टहरू', cycles: PAID },
+      { id: 'Exam history & progress report', ne: 'परीक्षा इतिहास तथा प्रगति प्रतिवेदन', cycles: PAID },
+      { id: 'Streaks, milestones & coverage', ne: 'स्ट्रिक, माइलस्टोन तथा कभरेज', cycles: PAID },
+      { id: 'Strength & weakness insights', ne: 'बलियो तथा कमजोर पक्षको विश्लेषण', cycles: YEARLY_ONLY },
+    ],
+  },
+  {
+    key: 'community',
+    icon: 'people-outline',
+    titleEn: 'Community & Support',
+    titleNe: 'समुदाय तथा सहयोग',
+    features: [
+      { id: 'Discussion community access', ne: 'छलफल समुदायमा पहुँच', cycles: ALL },
+      { id: 'Ask questions & post answers', ne: 'प्रश्न सोध्ने तथा उत्तर दिने', cycles: ALL },
+      { id: 'Verified premium badge & ring', ne: 'भेरिफाइड प्रिमियम ब्याज तथा रिङ', cycles: PAID },
+      { id: 'Priority support', ne: 'प्राथमिकता सहयोग', cycles: YEARLY_ONLY },
+      { id: 'Early access to new features', ne: 'नयाँ फिचरमा अग्रिम पहुँच', cycles: YEARLY_ONLY },
+    ],
+  },
+];
+
+/** Flat catalogue, in group order — handy for lookups and counts. */
+export const ALL_PLAN_FEATURES: PlanFeature[] = PLAN_FEATURE_GROUPS.flatMap((group) => group.features);
+
+const FEATURE_BY_ID = new Map(ALL_PLAN_FEATURES.map((feature) => [feature.id, feature]));
+
+/**
+ * Nepali label for a stored feature string. Falls back to the stored string
+ * itself, so a hand-written feature an admin typed into Firestore still renders
+ * (in whatever language they typed it) instead of disappearing.
+ */
+export function planFeatureLabel(id: string, language: string): string {
+  if (language !== 'ne') return id;
+  return FEATURE_BY_ID.get(id)?.ne ?? id;
+}
+
 // ===================== User's own subscription =====================
 
 /** Fetches the current user's most relevant subscription record (active, else latest by submission). */

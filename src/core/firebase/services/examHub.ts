@@ -95,6 +95,14 @@ export interface ExamRule {
 export interface ExamAttempt {
   id: string;
   examSetId: string;
+  /**
+   * Course scoping for the main leaderboard, which ranks per subcourse. Empty on
+   * attempts saved before this existed — the aggregator treats those as belonging
+   * to the user's current subcourse, which is true for all but the rare user who
+   * has since switched course.
+   */
+  courseId: string;
+  subcourseId: string;
   attemptNumber: number;
   /** Percentage after negative marking, 0..100. */
   score: number;
@@ -117,6 +125,14 @@ export interface RankingRow {
   uid: string;
   name: string;
   photoURL: string | null;
+  /**
+   * This person was a premium member when the attempt was saved — which is what
+   * puts the verified tick beside their name on the ranking list.
+   *
+   * Stored on the row rather than looked up, because a ranking renders other
+   * people and nobody may read another user's profile document.
+   */
+  isPro: boolean;
   score: number;
   timeTakenSeconds: number;
   createdAt: FirestoreTimestamp | null;
@@ -471,6 +487,8 @@ export async function fetchExamAttempts(uid: string): Promise<Record<string, Exa
     const attempt: ExamAttempt = {
       id: str(d.id),
       examSetId: str(d.examSetId),
+      courseId: str(d.courseId),
+      subcourseId: str(d.subcourseId),
       attemptNumber: num(d.attemptNumber, 1),
       score: num(d.score),
       totalQuestions: num(d.totalQuestions),
@@ -510,7 +528,7 @@ export async function fetchAttemptsForSet(uid: string, examSetId: string): Promi
 export async function saveExamAttempt(
   uid: string,
   attempt: Omit<ExamAttempt, 'id' | 'createdAt'>,
-  identity: { name: string; photoURL: string | null }
+  identity: { name: string; photoURL: string | null; isPro: boolean }
 ): Promise<string> {
   const { id } = await createDocument(Collections.examAttempts(uid), {
     ...attempt,
@@ -519,9 +537,14 @@ export async function saveExamAttempt(
 
   await createDocument(Collections.examRankings, {
     examSetId: attempt.examSetId,
+    courseId: attempt.courseId,
+    subcourseId: attempt.subcourseId,
     uid,
     name: identity.name || 'Anonymous',
     photoURL: identity.photoURL,
+    // Stored so other users' devices can draw the verified tick without reading
+    // this person's profile — which the rules would not allow.
+    isPro: identity.isPro,
     score: attempt.score,
     timeTakenSeconds: attempt.timeTakenSeconds,
     createdAt: serverTimestamp(),
@@ -546,6 +569,9 @@ export async function fetchExamRanking(examSetId: string): Promise<RankingRow[]>
       uid: str(d.uid),
       name: str(d.name, 'Anonymous'),
       photoURL: typeof d.photoURL === 'string' && d.photoURL ? d.photoURL : null,
+      // Absent on attempts saved before the badge existed, so anything that is
+      // not an explicit true reads as a free account.
+      isPro: d.isPro === true,
       score: num(d.score),
       timeTakenSeconds: num(d.timeTakenSeconds),
       createdAt: (d.createdAt as FirestoreTimestamp | undefined) ?? null,

@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { Text } from '@/src/components/misc/Text';
 import { getAdditionalFeaturePracticeProgress, loadAdditionalFeatureQuestionBank, saveAdditionalFeaturePracticeProgress, type AdditionalFeatureId, type AdditionalFeaturePracticeProgress, type AdditionalFeatureQuestion } from '@/src/core/services/additionalFeatures';
+import { recordActivityProgress } from '@/src/core/services/activityProgress';
+import { recordAppActivity } from '@/src/core/services/appUsage';
+import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
 import { showToast } from '@/src/core/store/toastStore';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
@@ -91,7 +97,72 @@ function difficultyColor(difficulty: string, colors: ReturnType<typeof useTheme>
   return colors.warning;
 }
 
-function QuestionHeader({ question, index, colors }: { question: AdditionalFeatureQuestion; index: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+/**
+ * Everything the bookmark/report icons need, resolved once per track and then
+ * handed to every question on the screen. Threading a single object keeps the
+ * child components (ReadQuestion / PracticeQuestion) from having to know about
+ * course info or i18n.
+ */
+type QuestionActionContext = {
+  /** Read Mode and Practice Mode are separate bookmark buckets. */
+  context: 'read' | 'practice';
+  topicId: string;
+  topicTitle: string;
+  /** Badge on the bookmarks card, e.g. "GK · Read Mode". */
+  sourceLabel: string;
+  /** Localised name of the track, used as a meta row in the report popup. */
+  modeLabel: string;
+  courseId: string | null;
+  subcourseId: string | null;
+  actionStyle: StyleProp<ViewStyle>;
+  size: number;
+};
+
+function QuestionActions({ question, context }: { question: AdditionalFeatureQuestion; context: QuestionActionContext }) {
+  const { t } = useTranslation();
+  const options = question.options.map((option) => option.text);
+  const answerIndex = correctIndex(question);
+  const refId = `${context.topicId}:${question.questionId}`;
+  const meta = [
+    { label: t('bookmarks.chapterLabel'), value: context.topicTitle },
+    { label: t('bookmarks.modeLabel'), value: context.modeLabel },
+  ];
+
+  return (
+    <>
+      <BookmarkButton
+        context={context.context}
+        kind="question"
+        refId={refId}
+        title={question.question}
+        preview={question.explanation}
+        sourceLabel={context.sourceLabel}
+        courseId={context.courseId}
+        subcourseId={context.subcourseId}
+        size={context.size}
+        style={context.actionStyle}
+        payload={{ question: question.question, options, answerIndex, explanation: question.explanation, meta }}
+      />
+      <ReportButton
+        size={context.size}
+        style={context.actionStyle}
+        target={() => ({
+          source: 'question',
+          targetType: 'question',
+          id: refId,
+          contextLabel: `${context.sourceLabel} · ${context.topicTitle}`,
+          title: question.question,
+          options,
+          answerIndex,
+          meta,
+          categoryGroup: 'question',
+        })}
+      />
+    </>
+  );
+}
+
+function QuestionHeader({ question, index, colors, action }: { question: AdditionalFeatureQuestion; index: number; colors: ReturnType<typeof useTheme>['colors']; action: QuestionActionContext }) {
   const difficulty = question.difficulty ? `${question.difficulty[0].toUpperCase()}${question.difficulty.slice(1)}` : 'Question';
   const color = difficultyColor(question.difficulty, colors);
   return (
@@ -99,8 +170,7 @@ function QuestionHeader({ question, index, colors }: { question: AdditionalFeatu
       <View style={[styles.numberBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>Qn. {index + 1}</Text></View>
       <View style={[styles.difficultyBadge, { backgroundColor: `${color}18` }]}><Text variant="caption" weight="bold" style={{ color }}>{difficulty}</Text></View>
       <View style={{ flex: 1 }} />
-      <Pressable onPress={() => showToast('Bookmark will be available soon.', 'info')} style={styles.smallAction} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={21} color={colors.primary} /></Pressable>
-      <Pressable onPress={() => showToast('Report will be available soon.', 'info')} style={styles.smallAction} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={21} color={colors.error} /></Pressable>
+      <QuestionActions question={question} context={action} />
     </View>
   );
 }
@@ -108,8 +178,10 @@ function QuestionHeader({ question, index, colors }: { question: AdditionalFeatu
 export default function AdditionalFeatureTopicScreen() {
   const params = useLocalSearchParams<{ featureId?: string; topicId?: string; topicTitleEn?: string; topicTitleNp?: string; questionBankId?: string }>();
   const { colors, spacing, radius } = useTheme();
-  const { language } = useTranslation();
+  const { t, language } = useTranslation();
   const insets = useSafeAreaInsets();
+  const user = useAuthStore((state) => state.user);
+  const courseInfo = useProfileStore((state) => state.courseInfo);
   const featureId = valueOf(params.featureId) as AdditionalFeatureId;
   const topicId = valueOf(params.topicId);
   const topicTitleEn = valueOf(params.topicTitleEn, topicId);
@@ -181,6 +253,34 @@ export default function AdditionalFeatureTopicScreen() {
     leavePractice: 'Leave practice',
     progressSaved: 'Saved to phone cache',
     retry: 'Try again',
+  };
+
+  // ===== Bookmark / report wiring =====
+  // Read Mode and Practice Mode show the same questions but are separate
+  // bookmark buckets (and separate report contexts), so each track gets its own
+  // object. Built once per render rather than per question.
+  const featureLabel = featureId === 'pm' ? 'PM' : 'GK';
+  const baseAction = {
+    topicId,
+    topicTitle,
+    courseId: courseInfo?.courseId ?? null,
+    subcourseId: courseInfo?.subcourseId ?? null,
+  };
+  const readAction: QuestionActionContext = {
+    ...baseAction,
+    context: 'read',
+    sourceLabel: `${featureLabel} · ${labels.read}`,
+    modeLabel: labels.read,
+    actionStyle: styles.smallAction,
+    size: 21,
+  };
+  const practiceAction: QuestionActionContext = {
+    ...baseAction,
+    context: 'practice',
+    sourceLabel: `${featureLabel} · ${labels.practice}`,
+    modeLabel: labels.practice,
+    actionStyle: styles.actionIcon,
+    size: 22,
   };
 
   const load = useCallback(async () => {
@@ -255,6 +355,71 @@ export default function AdditionalFeatureTopicScreen() {
     setProgress(next);
     void saveAdditionalFeaturePracticeProgress(next);
   };
+
+  // ===== Main-leaderboard progress mirror =====
+  // The local record `persist` writes is wiped every calendar day and isn't even
+  // keyed by uid, so on its own it can never add up to a lifetime score. This
+  // mirrors it to Firestore ONCE on unmount — recordActivityProgress unions
+  // question ids, so each day's fresh local arrays accumulate there rather than
+  // overwriting. Writing here instead of inside `persist` also keeps it to one
+  // write per visit rather than one per answer.
+  //
+  // Course scoping comes from the profile store because this route carries only
+  // featureId/topicId — there are no course params to read.
+  const mirrorRef = useRef({
+    uid: '',
+    courseId: '',
+    subcourseId: '',
+    source: 'gk' as 'gk' | 'pm',
+    topicId: '',
+    attempted: [] as string[],
+    correct: [] as string[],
+    total: 0,
+  });
+  const openedAtRef = useRef(Date.now());
+  const viewedRef = useRef<Set<string>>(new Set());
+
+  mirrorRef.current = {
+    uid: user?.uid ?? '',
+    courseId: courseInfo?.courseId ?? '',
+    subcourseId: courseInfo?.subcourseId ?? '',
+    source: featureId === 'pm' ? 'pm' : 'gk',
+    topicId,
+    attempted: progress?.attemptedQuestionIds ?? [],
+    correct: progress?.correctQuestionIds ?? [],
+    total: questions.length,
+  };
+
+  useEffect(() => {
+    openedAtRef.current = Date.now();
+    return () => {
+      const snapshot = mirrorRef.current;
+      const viewed = Array.from(viewedRef.current);
+      const seconds = Math.round((Date.now() - openedAtRef.current) / 1000);
+      if (!snapshot.uid || !snapshot.topicId || !snapshot.subcourseId) return;
+      // Opened nothing, answered nothing, barely stayed — not a real session.
+      if (snapshot.attempted.length === 0 && viewed.length === 0 && seconds < 5) return;
+
+      void recordActivityProgress(snapshot.uid, {
+        source: snapshot.source,
+        refId: snapshot.topicId,
+        courseId: snapshot.courseId,
+        subcourseId: snapshot.subcourseId,
+        attemptedQuestionIds: snapshot.attempted,
+        correctQuestionIds: snapshot.correct,
+        viewedItemIds: viewed,
+        totalItems: snapshot.total,
+        secondsSpent: seconds,
+        countVisit: true,
+        completed: snapshot.total > 0 && snapshot.attempted.length >= snapshot.total,
+      });
+      if (snapshot.attempted.length > 0 || viewed.length > 0) void recordAppActivity(snapshot.uid);
+    };
+  }, []);
+
+  const markViewed = useCallback((questionId: string) => {
+    viewedRef.current.add(questionId);
+  }, []);
 
   const smoothScrollTo = (targetY: number) => {
     if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
@@ -360,7 +525,7 @@ export default function AdditionalFeatureTopicScreen() {
   );
 
   if (loading) {
-    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<PageLoaderOverlay visible label={language === 'ne' ? 'प्रश्नहरू लोड हुँदैछन्...' : 'Loading questions...'} /></View>;
+    return <View style={[styles.screen, { backgroundColor: colors.background }]}><Stack.Screen options={{ gestureEnabled: false }} />{modeHeader}<Preloading tinted={false} label={language === 'ne' ? 'प्रश्नहरू लोड हुँदैछन्...' : 'Loading questions...'} hint={t('loadHints.quiz')} /></View>;
   }
 
   if (loadError) {
@@ -388,9 +553,9 @@ export default function AdditionalFeatureTopicScreen() {
           <View style={[styles.sectionHeader, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
             <View style={[styles.sectionIcon, { backgroundColor: `${colors.primary}15` }]}><Ionicons name="bookmark" size={22} color={colors.primary} /></View>
             <View style={styles.sectionTitle}><Text variant="h3" weight="semiBold" style={{ lineHeight: 23 }}>{labels.important}</Text><Text variant="caption" secondary>{topicTitle}</Text></View>
-            <Pressable onPress={() => setExpanded(allExpanded ? {} : Object.fromEntries(questions.map((question) => [question.questionId, true])))} style={styles.expandButton}><Ionicons name={allExpanded ? 'chevron-up-outline' : 'chevron-down-outline'} size={19} color={colors.primary} /><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{allExpanded ? labels.hideAnswer : labels.showAnswer}</Text></Pressable>
+            <Pressable onPress={() => { if (!allExpanded) questions.forEach((question) => markViewed(question.questionId)); setExpanded(allExpanded ? {} : Object.fromEntries(questions.map((question) => [question.questionId, true]))); }} style={styles.expandButton}><Ionicons name={allExpanded ? 'chevron-up-outline' : 'chevron-down-outline'} size={19} color={colors.primary} /><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{allExpanded ? labels.hideAnswer : labels.showAnswer}</Text></Pressable>
           </View>
-          {questions.map((question, index) => <ReadQuestion key={question.questionId} question={question} index={index} isOpen={expanded[question.questionId] === true} onToggle={() => setExpanded((previous) => ({ ...previous, [question.questionId]: !previous[question.questionId] }))} labels={labels} colors={colors} spacing={spacing} radius={radius} />)}
+          {questions.map((question, index) => <ReadQuestion key={question.questionId} question={question} index={index} action={readAction} isOpen={expanded[question.questionId] === true} onToggle={() => { if (expanded[question.questionId] !== true) markViewed(question.questionId); setExpanded((previous) => ({ ...previous, [question.questionId]: !previous[question.questionId] })); }} labels={labels} colors={colors} spacing={spacing} radius={radius} />)}
         </ScrollView>
       ) : (
         <ScrollView ref={scrollRef} onScroll={(event) => { scrollYRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }} showsVerticalScrollIndicator={false}>
@@ -398,8 +563,8 @@ export default function AdditionalFeatureTopicScreen() {
             <View style={{ flex: 1 }}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{labels.todayPractice}: {dailyUsed}/{dailyLimit}</Text><Text variant="caption" secondary>{labels.dailyReset}</Text></View>
             <Ionicons name="speedometer-outline" size={22} color={colors.primary} />
           </View>
-          <View style={styles.questionMetaRow}><View style={[styles.questionBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{labels.question} {current + 1}</Text></View><View style={styles.metaActions}><Pressable onPress={() => showToast('Bookmark will be available soon.', 'info')} style={styles.actionIcon} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={22} color={colors.primary} /></Pressable><Pressable onPress={() => showToast('Report will be available soon.', 'info')} style={styles.actionIcon} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={22} color={colors.error} /></Pressable></View></View>
-          <PracticeQuestion question={currentQuestion} index={current} total={activeQuestions.length} selected={selected} attempted={currentAttempted} correct={currentCorrect} labels={labels} colors={colors} spacing={spacing} radius={radius} explanationY={explanationY} onSelect={selectPracticeOption} onPrevious={() => setCurrent((value) => Math.max(0, value - 1))} onNext={handlePracticeNext} nextDisabled={!currentAttempted && dailyUsed >= dailyLimit} />
+          <View style={styles.questionMetaRow}><View style={[styles.questionBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>{labels.question} {current + 1}</Text></View><View style={styles.metaActions}>{currentQuestion ? <QuestionActions question={currentQuestion} context={practiceAction} /> : null}</View></View>
+          <PracticeQuestion question={currentQuestion} index={current} total={activeQuestions.length} action={practiceAction} selected={selected} attempted={currentAttempted} correct={currentCorrect} labels={labels} colors={colors} spacing={spacing} radius={radius} explanationY={explanationY} onSelect={selectPracticeOption} onPrevious={() => setCurrent((value) => Math.max(0, value - 1))} onNext={handlePracticeNext} nextDisabled={!currentAttempted && dailyUsed >= dailyLimit} />
         </ScrollView>
       )}
 
@@ -413,18 +578,18 @@ type ThemeColors = ReturnType<typeof useTheme>['colors'];
 type ThemeSpacing = ReturnType<typeof useTheme>['spacing'];
 type ThemeRadius = ReturnType<typeof useTheme>['radius'];
 
-function ReadQuestion({ question, index, isOpen, onToggle, labels, colors, spacing, radius }: { question: AdditionalFeatureQuestion; index: number; isOpen: boolean; onToggle: () => void; labels: ModeLabels; colors: ThemeColors; spacing: ThemeSpacing; radius: ThemeRadius }) {
-  return <View style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}><QuestionHeader question={question} index={index} colors={colors} /><Text variant="h3" weight="semiBold" style={{ lineHeight: 24, fontSize: 18 }}>{question.question}</Text><Pressable onPress={onToggle} style={styles.answerToggle}><Ionicons name={isOpen ? 'chevron-up-circle-outline' : 'chevron-down-circle-outline'} size={24} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{isOpen ? labels.hideAnswer : labels.showAnswer}</Text></Pressable>{isOpen ? <AnswerDetails question={question} labels={labels} colors={colors} spacing={spacing} radius={radius} /> : null}</View>;
+function ReadQuestion({ question, index, action, isOpen, onToggle, labels, colors, spacing, radius }: { question: AdditionalFeatureQuestion; index: number; action: QuestionActionContext; isOpen: boolean; onToggle: () => void; labels: ModeLabels; colors: ThemeColors; spacing: ThemeSpacing; radius: ThemeRadius }) {
+  return <View style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}><QuestionHeader question={question} index={index} colors={colors} action={action} /><Text variant="h3" weight="semiBold" style={{ lineHeight: 24, fontSize: 18 }}>{question.question}</Text><Pressable onPress={onToggle} style={styles.answerToggle}><Ionicons name={isOpen ? 'chevron-up-circle-outline' : 'chevron-down-circle-outline'} size={24} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{isOpen ? labels.hideAnswer : labels.showAnswer}</Text></Pressable>{isOpen ? <AnswerDetails question={question} labels={labels} colors={colors} spacing={spacing} radius={radius} /> : null}</View>;
 }
 
 function AnswerDetails({ question, labels, colors, spacing, radius }: { question: AdditionalFeatureQuestion; labels: ModeLabels; colors: ThemeColors; spacing: ThemeSpacing; radius: ThemeRadius }) {
   return <View style={{ gap: spacing.sm }}>{question.options.map((option, optionIndex) => { const correct = optionIndex === correctIndex(question); return <View key={option.id || optionIndex} style={[styles.readOption, { backgroundColor: correct ? `${colors.success}12` : colors.surface, borderColor: correct ? `${colors.success}80` : colors.border, borderRadius: radius.md }]}><View style={[styles.optionBullet, { borderColor: correct ? colors.success : colors.border, backgroundColor: correct ? colors.success : 'transparent' }]}><Text variant="caption" weight="bold" style={{ color: correct ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="bodySmall" style={{ flex: 1, lineHeight: 19, fontSize: 14 }}>{option.text}</Text>{correct ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null}</View>; })}<View style={[styles.explanationCard, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}55`, borderRadius: radius.md }]}><View style={styles.explanationTitle}><Ionicons name="bulb-outline" size={22} color={colors.warning} /><Text variant="bodyLarge" weight="bold" style={{ color: colors.warning }}>{labels.explanation}</Text></View><Text variant="bodySmall" style={{ lineHeight: 20, fontSize: 14 }}>{question.explanation}</Text></View></View>;
 }
 
-function PracticeQuestion({ question, index, total, selected, attempted, correct, labels, colors, spacing, radius, explanationY, onSelect, onPrevious, onNext, nextDisabled }: { question: AdditionalFeatureQuestion | undefined; index: number; total: number; selected?: number; attempted: boolean; correct: boolean; labels: ModeLabels; colors: ThemeColors; spacing: ThemeSpacing; radius: ThemeRadius; explanationY: { current: number }; onSelect: (optionIndex: number) => void; onPrevious: () => void; onNext: () => void; nextDisabled: boolean }) {
+function PracticeQuestion({ question, index, total, action, selected, attempted, correct, labels, colors, spacing, radius, explanationY, onSelect, onPrevious, onNext, nextDisabled }: { question: AdditionalFeatureQuestion | undefined; index: number; total: number; action: QuestionActionContext; selected?: number; attempted: boolean; correct: boolean; labels: ModeLabels; colors: ThemeColors; spacing: ThemeSpacing; radius: ThemeRadius; explanationY: { current: number }; onSelect: (optionIndex: number) => void; onPrevious: () => void; onNext: () => void; nextDisabled: boolean }) {
   if (!question) return null;
   const answer = correctIndex(question);
-  return <View><View style={[styles.practiceProgress, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{labels.question.toUpperCase()} {index + 1} OF {total}</Text><View style={[styles.progressTrack, { backgroundColor: colors.border }]}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${((index + 1) / total) * 100}%` }]} /></View></View><View style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.md }]}><QuestionHeader question={question} index={index} colors={colors} /><Text variant="h2" weight="semiBold" style={{ lineHeight: 27, fontSize: 20 }}>{question.question}</Text><View style={[styles.difficulty, { backgroundColor: question.difficulty === 'easy' ? `${colors.success}18` : question.difficulty === 'medium' ? `${colors.warning}20` : `${colors.error}18` }]}><Text variant="caption" weight="bold" style={{ color: question.difficulty === 'easy' ? colors.success : question.difficulty === 'medium' ? colors.warning : colors.error }}>{question.difficulty.toUpperCase()}</Text></View></View><View style={{ gap: spacing.sm, marginTop: spacing.md }}>{question.options.map((option, optionIndex) => { const isSelected = selected === optionIndex; const isCorrect = optionIndex === answer; const background = attempted && isCorrect ? `${colors.success}16` : attempted && isSelected && !isCorrect ? `${colors.error}16` : colors.surface; const border = attempted && isCorrect ? colors.success : attempted && isSelected && !isCorrect ? colors.error : isSelected ? colors.primary : colors.border; return <Pressable key={option.id || optionIndex} onPress={() => onSelect(optionIndex)} disabled={attempted || nextDisabled} style={[styles.option, { backgroundColor: background, borderColor: border, borderRadius: radius.md }]}><View style={[styles.optionLetter, { borderColor: border, backgroundColor: isSelected || (attempted && isCorrect) ? border : 'transparent' }]}><Text variant="bodySmall" weight="bold" style={{ color: isSelected || (attempted && isCorrect) ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="body" style={{ flex: 1, lineHeight: 20, fontSize: 15 }}>{option.text}</Text>{attempted && isCorrect ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : attempted && isSelected ? <Ionicons name="close-circle" size={22} color={colors.error} /> : null}</Pressable>; })}</View>{attempted ? <View onLayout={(event) => { explanationY.current = event.nativeEvent.layout.y; }} style={[styles.explanationCard, { backgroundColor: correct ? `${colors.success}10` : `${colors.error}09`, borderColor: correct ? `${colors.success}65` : `${colors.error}65`, borderRadius: radius.lg, marginTop: spacing.md }]}><View style={styles.explanationHeader}><View style={[styles.resultIcon, { backgroundColor: correct ? colors.success : colors.error }]}><Ionicons name={correct ? 'checkmark' : 'close'} size={22} color="#FFF" /></View><View style={{ flex: 1, gap: 3 }}><Text variant="h3" weight="semiBold" style={{ color: correct ? colors.success : colors.error }}>{correct ? labels.correct : labels.incorrect}</Text><Text variant="caption" secondary>{correct ? 'Answer recorded' : 'Please review the correct answer below'}</Text></View></View><View style={[styles.resultDivider, { backgroundColor: correct ? `${colors.success}35` : `${colors.error}35` }]} />{selected !== undefined ? <Text variant="bodySmall" weight="semiBold" style={{ color: correct ? colors.success : colors.error }}>{labels.answer}: {String.fromCharCode(65 + selected)}</Text> : null}{!correct ? <Text variant="bodySmall" weight="semiBold" style={{ color: colors.success }}>{labels.correct}: {String.fromCharCode(65 + answer)}</Text> : null}<Text variant="bodySmall" weight="bold">{labels.explanation}</Text><Text variant="body" style={{ color: colors.textSecondary, lineHeight: 21, fontSize: 15 }}>{question.explanation}</Text></View> : null}<View style={styles.practiceFooter}><Pressable onPress={onPrevious} disabled={index === 0} style={[styles.bottomButton, { borderColor: colors.border, borderRadius: radius.md, opacity: index === 0 ? 0.45 : 1 }]}><Ionicons name="arrow-back" size={19} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{labels.previous}</Text></Pressable><Pressable disabled={nextDisabled} onPress={onNext} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md, opacity: nextDisabled ? 0.45 : 1 }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLastLabel(index, total, labels)}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable></View></View>;
+  return <View><View style={[styles.practiceProgress, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}><Text variant="caption" weight="bold" style={{ color: colors.primary }}>{labels.question.toUpperCase()} {index + 1} OF {total}</Text><View style={[styles.progressTrack, { backgroundColor: colors.border }]}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${((index + 1) / total) * 100}%` }]} /></View></View><View style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.md }]}><QuestionHeader question={question} index={index} colors={colors} action={action} /><Text variant="h2" weight="semiBold" style={{ lineHeight: 27, fontSize: 20 }}>{question.question}</Text><View style={[styles.difficulty, { backgroundColor: question.difficulty === 'easy' ? `${colors.success}18` : question.difficulty === 'medium' ? `${colors.warning}20` : `${colors.error}18` }]}><Text variant="caption" weight="bold" style={{ color: question.difficulty === 'easy' ? colors.success : question.difficulty === 'medium' ? colors.warning : colors.error }}>{question.difficulty.toUpperCase()}</Text></View></View><View style={{ gap: spacing.sm, marginTop: spacing.md }}>{question.options.map((option, optionIndex) => { const isSelected = selected === optionIndex; const isCorrect = optionIndex === answer; const background = attempted && isCorrect ? `${colors.success}16` : attempted && isSelected && !isCorrect ? `${colors.error}16` : colors.surface; const border = attempted && isCorrect ? colors.success : attempted && isSelected && !isCorrect ? colors.error : isSelected ? colors.primary : colors.border; return <Pressable key={option.id || optionIndex} onPress={() => onSelect(optionIndex)} disabled={attempted || nextDisabled} style={[styles.option, { backgroundColor: background, borderColor: border, borderRadius: radius.md }]}><View style={[styles.optionLetter, { borderColor: border, backgroundColor: isSelected || (attempted && isCorrect) ? border : 'transparent' }]}><Text variant="bodySmall" weight="bold" style={{ color: isSelected || (attempted && isCorrect) ? '#FFF' : colors.textSecondary }}>{String.fromCharCode(65 + optionIndex)}</Text></View><Text variant="body" style={{ flex: 1, lineHeight: 20, fontSize: 15 }}>{option.text}</Text>{attempted && isCorrect ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : attempted && isSelected ? <Ionicons name="close-circle" size={22} color={colors.error} /> : null}</Pressable>; })}</View>{attempted ? <View onLayout={(event) => { explanationY.current = event.nativeEvent.layout.y; }} style={[styles.explanationCard, { backgroundColor: correct ? `${colors.success}10` : `${colors.error}09`, borderColor: correct ? `${colors.success}65` : `${colors.error}65`, borderRadius: radius.lg, marginTop: spacing.md }]}><View style={styles.explanationHeader}><View style={[styles.resultIcon, { backgroundColor: correct ? colors.success : colors.error }]}><Ionicons name={correct ? 'checkmark' : 'close'} size={22} color="#FFF" /></View><View style={{ flex: 1, gap: 3 }}><Text variant="h3" weight="semiBold" style={{ color: correct ? colors.success : colors.error }}>{correct ? labels.correct : labels.incorrect}</Text><Text variant="caption" secondary>{correct ? 'Answer recorded' : 'Please review the correct answer below'}</Text></View></View><View style={[styles.resultDivider, { backgroundColor: correct ? `${colors.success}35` : `${colors.error}35` }]} />{selected !== undefined ? <Text variant="bodySmall" weight="semiBold" style={{ color: correct ? colors.success : colors.error }}>{labels.answer}: {String.fromCharCode(65 + selected)}</Text> : null}{!correct ? <Text variant="bodySmall" weight="semiBold" style={{ color: colors.success }}>{labels.correct}: {String.fromCharCode(65 + answer)}</Text> : null}<Text variant="bodySmall" weight="bold">{labels.explanation}</Text><Text variant="body" style={{ color: colors.textSecondary, lineHeight: 21, fontSize: 15 }}>{question.explanation}</Text></View> : null}<View style={styles.practiceFooter}><Pressable onPress={onPrevious} disabled={index === 0} style={[styles.bottomButton, { borderColor: colors.border, borderRadius: radius.md, opacity: index === 0 ? 0.45 : 1 }]}><Ionicons name="arrow-back" size={19} color={colors.primary} /><Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{labels.previous}</Text></Pressable><Pressable disabled={nextDisabled} onPress={onNext} style={[styles.nextButton, { backgroundColor: colors.primary, borderRadius: radius.md, opacity: nextDisabled ? 0.45 : 1 }]}><Text variant="bodySmall" weight="bold" style={styles.nextButtonLabel}>{isLastLabel(index, total, labels)}</Text><Ionicons name="arrow-forward" size={19} color="#FFF" /></Pressable></View></View>;
 }
 
 function isLastLabel(index: number, total: number, labels: ModeLabels): string {

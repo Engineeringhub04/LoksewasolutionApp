@@ -3,7 +3,7 @@
 // a natively-rendered detail screen (not a webview). Newest first, with
 // cursor-based "load more" pagination on publishedAt.
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -15,12 +15,13 @@ import {
   GORKHAPATRA_PAGE_SIZE,
   type GorkhapatraPost,
 } from '@/src/core/firebase/services/content';
+import { openExternalUrl } from '@/src/core/services/externalLink';
 import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { GorkhapatraCard } from '@/src/components/gorkhapatra/GorkhapatraCard';
 
 const ACCENT = '#7C3AED';
@@ -95,9 +96,10 @@ export default function GorkhapatraScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('gorkhapatra.title')} actions={headerActions} />
-      <PageLoaderOverlay visible={page1.loading} label={t('gorkhapatra.loading')} />
 
-      {page1.error && !page1.data ? (
+      {!page1.settled ? (
+        <Preloading tinted={false} label={t('gorkhapatra.loading')} hint={t('loadHints.gorkhapatra')} />
+      ) : page1.error && !page1.data ? (
         <DataNotFound onRetry={page1.refetch} />
       ) : (
         <ScrollView
@@ -128,7 +130,7 @@ export default function GorkhapatraScreen() {
                     variant="bodySmall"
                     weight="bold"
                     color={ACCENT}
-                    onPress={() => void Linking.openURL(OFFICIAL_URL)}
+                    onPress={() => void openExternalUrl(OFFICIAL_URL)}
                   >
                     {t('gorkhapatra.title')}
                   </Text>

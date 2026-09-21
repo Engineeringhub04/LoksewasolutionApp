@@ -13,7 +13,8 @@ import { View, ScrollView, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -26,6 +27,7 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DailyTestHistoryCard } from '@/src/components/dailyTest/DailyTestHistoryCard';
+import { Preloading } from '@/src/components/Preloading';
 
 /** Same fallback the card uses, so the summary strip and the cards agree. */
 function isPassed(activity: DailyTestActivity): boolean {
@@ -40,12 +42,16 @@ export default function DailyTestHistoryScreen() {
   const router = useRouter();
   const uid = useAuthStore((s) => s.user?.uid) ?? null;
   const [activities, setActivities] = useState<DailyTestActivity[]>([]);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void getRecentDailyTestActivities(uid).then((list) => {
-        if (active) setActivities(list);
+        if (active) {
+          setActivities(list);
+          setHasLoadedOnce(true);
+        }
       });
       return () => {
         active = false;
@@ -84,7 +90,9 @@ export default function DailyTestHistoryScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('dailyTest.historyTitle')} />
 
-      {activities.length === 0 ? (
+      {!hasLoadedOnce ? (
+        <Preloading tinted={false} label={t('dailyTest.loading')} hint={t('loadHints.dailyTest')} />
+      ) : activities.length === 0 ? (
         <EmptyState
           icon="time-outline"
           title={t('dailyTest.historySectionTitle')}

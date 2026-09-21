@@ -14,13 +14,13 @@ import { Card } from '@/src/components/cards/Card';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function KeepNotesScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadNotes(), []);
+  const { data, loading, error, settled, refreshing, refetch, refresh } = useAsyncData(() => loadNotes(), []);
 
   // Returning to this screen must show current data without a manual pull.
   useRefreshOnFocus(refresh);
@@ -28,8 +28,9 @@ export default function KeepNotesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('keepNotes.title')} showThemeToggle />
-      <PageLoaderOverlay visible={loading || refreshing} label="Loading Notes..." />
-      {loading ? null : error ? (
+      {!settled ? (
+        <Preloading tinted={false} label="Loading Notes..." hint={t("loadHints.notes")} />
+      ) : error ? (
         <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('keepNotes.empty')} />

@@ -5,8 +5,16 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: 'slide_from_right',
+        // 'fade' + 260ms — same reference-project transition as the root
+        // app/_layout.tsx (see the long note there for the white-flash caveat,
+        // which the OS-level root paint already handles).
+        animation: 'fade',
+        animationDuration: 260,
         animationTypeForReplace: 'push',
+        // The screen behind a push keeps re-rendering otherwise — stores, timers
+        // and Reanimated loops all stay live and compete with the slide for the
+        // JS thread.
+        freezeOnBlur: true,
       }}
     >
       <Stack.Screen name="login" />

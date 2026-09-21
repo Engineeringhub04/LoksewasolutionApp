@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated as RNAnimated, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
@@ -10,6 +11,7 @@ import { SearchBar } from '@/src/components/inputs/SearchBar';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { Preloading } from '@/src/components/Preloading';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import {
   fetchConstitutionIndex,
@@ -18,6 +20,7 @@ import {
   type ConstitutionFileEntry,
   type ConstitutionLanguage,
 } from '@/src/core/services/constitution';
+import { useTranslation } from '@/src/core/i18n';
 import { constitutionLabels } from '@/src/core/i18n/constitution';
 import { constitutionFontFamily, useConstitutionFonts } from '@/src/core/constitution/fonts';
 import { showToast } from '@/src/core/store/toastStore';
@@ -151,14 +154,11 @@ export default function ConstitutionIndexScreen() {
     </View>
   );
 
-  if (!fontsLoaded || (constitution.loading && !index)) {
+  if (!fontsLoaded || !constitution.settled) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <SubpageHeader title={labels.title} rightSlot={rightSlot} />
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text variant="bodySmall" weight="semiBold" secondary style={styles.stateText}>संविधान सामग्री तयार हुँदैछ...</Text>
-        </View>
+        <Preloading tinted={false} label="संविधान सामग्री तयार हुँदैछ..." hint={language === 'np' ? 'संविधान सामग्री ल्याउँदै' : 'Fetching the constitution content'} />
       </View>
     );
   }
@@ -267,8 +267,7 @@ const styles = StyleSheet.create({
   orderBadge: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   partCopy: { flex: 1, marginHorizontal: 12, gap: 3 },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 34 },
-  stateText: { marginTop: 12 },
-  stateTitle: { marginTop: 14, textAlign: 'center' },
+  stateText: { marginTop: 12 },  stateTitle: { marginTop: 14, textAlign: 'center' },
   stateDescription: { textAlign: 'center', marginTop: 8, marginBottom: 18, lineHeight: 20 },
   emptyCard: { borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingVertical: 34, paddingHorizontal: 24 },
   emptyText: { textAlign: 'center', marginTop: 5 },

@@ -20,7 +20,8 @@ import { View, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -43,7 +44,7 @@ import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DailyTestModelMiniCard } from '@/src/components/dailyTest/DailyTestModelMiniCard';
 import { DailyTestRulesDialog } from '@/src/components/dailyTest/DailyTestRulesDialog';
 import type { DailyTestCardSlot } from '@/src/components/dailyTest/DailyTestModelCard';
@@ -72,7 +73,7 @@ export default function DailyTestAllModelsScreen() {
 
   const [rulesModel, setRulesModel] = useState<DailyTestModel | null>(null);
 
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData<AllModelsData>(
+  const { data, loading, settled, refreshing, error, refetch, refresh } = useAsyncData<AllModelsData>(
     async () => {
       if (!subcourseId) return { models: [], results: {} };
       const models = await fetchDailyTestModels(subcourseId);
@@ -267,6 +268,9 @@ export default function DailyTestAllModelsScreen() {
       <TopAppBar title={t('dailyTest.allModelsTitle')} />
 
       <View style={{ flex: 1 }}>
+        {!settled ? (
+          <Preloading tinted={false} label={t('dailyTest.loading')} hint={t('loadHints.dailyTest')} />
+        ) : (
         <ScrollView
           contentContainerStyle={{
             padding: spacing.screenPadding,
@@ -308,8 +312,7 @@ export default function DailyTestAllModelsScreen() {
 
           {renderBody()}
         </ScrollView>
-
-        <PageLoaderOverlay visible={loading && !data} opaque label={t('dailyTest.loading')} />
+        )}
       </View>
 
       <DailyTestRulesDialog

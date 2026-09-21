@@ -24,6 +24,12 @@ interface SubpageScrollScreenProps {
   onRefresh?: () => void | Promise<void>;
   /** Pinned below the scroll area (e.g. a Save button). */
   footer?: React.ReactNode;
+  /**
+   * Extra header button(s), rendered to the LEFT of the theme toggle. Use this
+   * for any page-specific action — it ADDS to the header instead of replacing
+   * the toggle, so no screen loses theme switching to gain a button.
+   */
+  headerActions?: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
@@ -34,6 +40,7 @@ export function SubpageScrollScreen({
   refreshing,
   onRefresh,
   footer,
+  headerActions,
   contentContainerStyle,
 }: SubpageScrollScreenProps) {
   const { colors, spacing } = useTheme();
@@ -57,7 +64,7 @@ export function SubpageScrollScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title={title} onBackPress={onBackPress} />
+      <SubpageHeader title={title} onBackPress={onBackPress} headerActions={headerActions} />
       {/* Without this, the on-screen keyboard covered the submit button on every
           form built on this scaffold (Contact us, Feedback, Report Question).
           iOS needs 'padding'; on Android 'height' works with the default
@@ -70,7 +77,11 @@ export function SubpageScrollScreen({
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
-            { padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2, gap: spacing.md },
+            // flexGrow lets a single flex:1 child (the full-body loading state)
+            // stretch to the viewport, so the glow-ring centres in the space
+            // below the header instead of hugging the top edge. Normal content
+            // is unaffected: flexGrow only absorbs empty space.
+            { flexGrow: 1, padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2, gap: spacing.md },
             contentContainerStyle,
           ]}
           refreshControl={<AppRefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}

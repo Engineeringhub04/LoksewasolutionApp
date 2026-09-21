@@ -39,7 +39,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -69,7 +70,7 @@ import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DailyTestCarousel } from '@/src/components/dailyTest/DailyTestCarousel';
 import {
   DailyTestModelCard,
@@ -137,7 +138,7 @@ export default function DailyTestScreen() {
   // The model whose rules popup is open. Non-null == popup visible.
   const [rulesModel, setRulesModel] = useState<DailyTestModel | null>(null);
 
-  const { data, loading, refreshing, error, refetch, refresh } =
+  const { data, loading, refreshing, error, settled, refetch, refresh } =
     useAsyncData<DailyTestLandingData>(
       async () => {
         if (!subcourseId) return { models: [], results: {}, recentResults: [] };
@@ -158,6 +159,18 @@ export default function DailyTestScreen() {
       [subcourseId, user?.uid],
       { enabled: !!subcourseId },
     );
+
+  // First-load gate for the body swap. No subcourse = nothing to fetch, so the
+  // body shows instantly; pull-to-refresh never re-hides settled content.
+  const [firstLoadDone, setFirstLoadDone] = useState(!subcourseId);
+  useEffect(() => {
+    if (!subcourseId) {
+      setFirstLoadDone(true);
+      return;
+    }
+    if (settled) setFirstLoadDone(true);
+  }, [subcourseId, settled]);
+  const bodyReady = !subcourseId || firstLoadDone;
 
   // The calendar day, watched. When midnight passes (or the app returns from the
   // background on a new day) the slides below rebuild from the new key, and a
@@ -494,6 +507,9 @@ export default function DailyTestScreen() {
       {/* Body wrapper — the loader below is absolute-filled to THIS view, so the
           header above stays visible and the spinner centres in the body only. */}
       <View style={{ flex: 1 }}>
+        {!bodyReady ? (
+          <Preloading tinted={false} label={t('dailyTest.loading')} hint={t('loadHints.dailyTest')} />
+        ) : (
         <ScrollView
           contentContainerStyle={{
             padding: spacing.screenPadding,
@@ -541,8 +557,7 @@ export default function DailyTestScreen() {
             {renderBody()}
           </View>
         </ScrollView>
-
-        <PageLoaderOverlay visible={loading && !data} opaque label={t('dailyTest.loading')} />
+        )}
       </View>
 
       <DailyTestRulesDialog

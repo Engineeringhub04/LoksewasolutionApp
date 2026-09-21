@@ -10,14 +10,14 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function ExamPurchasePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
-  const { data: exam, loading, error, refetch } = useAsyncData(
+  const { data: exam, loading, settled, error, refetch } = useAsyncData(
     () => (id ? fetchExamSet(id) : Promise.resolve(null)),
     [id]
   );
@@ -25,7 +25,11 @@ export default function ExamPurchasePage() {
   return (
     <>
       <SubpageScrollScreen title={loading ? t('subscription.loading') : exam?.title ?? t('subscription.examPurchase')}>
-      {loading ? null : error || !exam ? (
+      {!settled ? (
+        <View style={{ flex: 1 }}>
+          <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} />
+        </View>
+      ) : error || !exam ? (
         <DataNotFound onRetry={refetch} />
       ) : (
         <View style={{ gap: spacing.md }}>
@@ -61,7 +65,6 @@ export default function ExamPurchasePage() {
         </View>
       )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading} label={t('subscription.loading')} />
     </>
   );
 }

@@ -20,6 +20,15 @@ export interface AppNotification {
   imageUrl?: string | null;
   source?: NotificationSource;
   updatedNotice?: boolean;
+  /**
+   * True for rows an admin sees only because they are an admin — today the
+   * derived report feed below. Set in memory when the row is built; it is NEVER
+   * stored, because these rows have no document of their own to store it on.
+   *
+   * The notifications screen uses it to split the inbox into "what I received as
+   * a user" and "what arrived for me to act on".
+   */
+  adminOnly?: boolean;
 }
 
 function notificationsPath(uid: string): string {
@@ -28,6 +37,8 @@ function notificationsPath(uid: string): string {
 
 const GLOBAL_COLLECTION = 'app_global_notification';
 const GLOBAL_PREFIX = 'global:';
+/** Keeps derived report rows from ever colliding with a real document id. */
+const ADMIN_REPORT_PREFIX = 'adminreport:';
 
 function globalReadKey(uid: string): string {
   return `loksewa:globalNotificationReadIds:${uid}`;
@@ -96,12 +107,78 @@ export async function fetchGlobalNotifications(uid: string, max?: number): Promi
   });
 }
 
-export async function fetchInbox(uid: string, _displayName?: string, max?: number): Promise<AppNotification[]> {
-  const [personal, global] = await Promise.all([
+/**
+ * Incoming reports, as inbox rows — ADMINS ONLY.
+ *
+ * These are DERIVED from app_report_history rather than written as real
+ * notification documents. A normal user's phone cannot write into an admin's
+ * notification subcollection (rules: `create: if isAdmin()`), and it cannot even
+ * discover who the admins are — so a fan-out write at report time is impossible.
+ * Reading the report collection instead needs no new rule, no extra write, and
+ * can never fall out of sync with the actual queue.
+ *
+ * Read state is local (AsyncStorage), shared with global rows, which is why these
+ * are tagged `source: 'global'`: the notifications screen already routes that
+ * source to addGlobalReadId instead of a Firestore write.
+ */
+export async function fetchAdminReportNotifications(uid: string, max = 30): Promise<AppNotification[]> {
+  const [rows, readIds] = await Promise.all([
+    // Every report document is written with createdAt, so ordering on the server
+    // is safe here (unlike the legacy notification rows above).
+    runQuery(Collections.reportHistory, {
+      orderBy: [{ field: 'createdAt', direction: 'desc' }],
+      limit: max,
+    }),
+    getGlobalReadIds(uid),
+  ]);
+
+  return rows.map((row) => {
+    const id = `${ADMIN_REPORT_PREFIX}${String(row.id)}`;
+    const reporter = String(row.reporterName || 'A user').trim() || 'A user';
+    const context = String(row.contextLabel || '').trim();
+    const reason = String(row.reason || '').trim();
+    const target = String(row.targetTitle || '').trim();
+    const status = String(row.status || 'pending');
+
+    const parts = [`${reporter} reported${reason ? `: ${reason}` : ' an issue'}.`];
+    if (target) parts.push(`On: ${target}`);
+    // Says so plainly when it has already been handled, so a resolved report in
+    // the list does not look like something still waiting for the admin.
+    if (status !== 'pending') parts.push(`(${status})`);
+
+    return {
+      id,
+      icon: 'flag',
+      title: context ? `New report · ${context}` : 'New report received',
+      preview: parts.join(' '),
+      read: readIds.has(id),
+      createdAt: (row.createdAt as FirestoreTimestamp) ?? null,
+      deepLink: `/admin/report-history/${String(row.id)}`,
+      category: 'New Report',
+      imageUrl: null,
+      source: 'global',
+      updatedNotice: false,
+      adminOnly: true,
+    } satisfies AppNotification;
+  });
+}
+
+export async function fetchInbox(
+  uid: string,
+  _displayName?: string,
+  max?: number,
+  options?: { isAdmin?: boolean },
+): Promise<AppNotification[]> {
+  const [personal, global, adminReports] = await Promise.all([
     fetchNotifications(uid, max),
     fetchGlobalNotifications(uid, max).catch(() => [] as AppNotification[]),
+    // Skipped entirely for normal users: the rules would reject an unscoped read
+    // of app_report_history, so asking would cost a round trip to be denied.
+    options?.isAdmin
+      ? fetchAdminReportNotifications(uid, max).catch(() => [] as AppNotification[])
+      : Promise.resolve([] as AppNotification[]),
   ]);
-  const merged = [...personal, ...global]
+  const merged = [...personal, ...global, ...adminReports]
     .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
   return max ? merged.slice(0, max) : merged;
 }
@@ -122,6 +199,10 @@ export function categoryIcon(category?: string): keyof typeof Ionicons.glyphMap 
   const value = (category || '').toLowerCase();
   if (value.includes('course') || value.includes('class')) return 'school-outline';
   if (value.includes('mcq') || value.includes('test') || value.includes('exam')) return 'clipboard-outline';
+  // Must come BEFORE the 'update' branch: report-review notifications are
+  // categorised "Report Update", which would otherwise match 'update' and show
+  // the app-download glyph instead of a flag.
+  if (value.includes('report')) return 'flag-outline';
   if (value.includes('update') || value.includes('version')) return 'cloud-download-outline';
   if (value.includes('problem') || value.includes('maintenance')) return 'construct-outline';
   if (value.includes('result') || value.includes('achievement')) return 'trophy-outline';

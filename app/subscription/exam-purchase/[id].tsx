@@ -20,6 +20,7 @@ import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function ExamPurchaseRequestDetailScreen() {
   const { id, source } = useLocalSearchParams<{ id: string; source?: string }>();
@@ -33,7 +34,7 @@ export default function ExamPurchaseRequestDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const { data: record, loading, error, refetch } = useAsyncData(async () => {
+  const { data: record, loading, settled, error, refetch } = useAsyncData(async () => {
     if (!id) return null;
     return fetchExamPurchaseById(id);
   }, [id]);
@@ -110,7 +111,11 @@ export default function ExamPurchaseRequestDetailScreen() {
   return (
     <>
       <SubpageScrollScreen title={record?.examTitle || t('subscription.examDetails')} onBackPress={handleBack}>
-        {loading ? null : error || !record ? (
+        {!settled ? (
+          <View style={{ flex: 1 }}>
+            <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} />
+          </View>
+        ) : error || !record ? (
           <DataNotFound onRetry={refetch} />
         ) : (
           <>
@@ -167,7 +172,7 @@ export default function ExamPurchaseRequestDetailScreen() {
           </>
         )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading || saving} label={t('subscription.loading')} />
+      <PageLoaderOverlay visible={saving} label={t('subscription.loading')} />
     </>
   );
 }

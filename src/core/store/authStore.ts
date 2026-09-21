@@ -6,6 +6,7 @@ import { clearHomeDataCache } from '@/src/core/services/homePrefetch';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useQotdStore } from '@/src/core/store/qotdStore';
 import { useNotificationStore } from '@/src/core/store/notificationStore';
+import { useBookmarkStore } from '@/src/core/store/bookmarkStore';
 
 interface AuthState {
   user: AppUser | null;
@@ -28,6 +29,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       // the signed-out state) never inherits the previous user's unread count.
       useNotificationStore.getState().reset();
       useQotdStore.getState().reset();
+      // Bookmarks are per-user too: the saved-icon state and the 15-per-sub-course
+      // count must not leak from one account into the next.
+      useBookmarkStore.getState().clear();
     }
     set({ user, initializing: false });
   },

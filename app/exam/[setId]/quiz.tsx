@@ -14,7 +14,8 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { FadeIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
@@ -25,12 +26,16 @@ import {
   saveExamAttempt,
   scoreAttempt,
 } from '@/src/core/firebase/services/examHub';
+import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { useTranslation } from '@/src/core/i18n';
 
 /** -1 means "not answered" everywhere in this flow. */
 const UNANSWERED = -1;
@@ -47,6 +52,7 @@ export default function QuizScreen() {
   const { colors, radius, spacing, effective, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
   const courseInfo = useProfileStore((s) => s.courseInfo);
@@ -96,6 +102,8 @@ export default function QuizScreen() {
           user.uid,
           {
             examSetId: set.id,
+            courseId: courseInfo?.courseId ?? '',
+            subcourseId: courseInfo?.subcourseId ?? '',
             attemptNumber: previous.length + 1,
             score: breakdown.percent,
             totalQuestions: set.questions.length,
@@ -109,6 +117,9 @@ export default function QuizScreen() {
           {
             name: profile?.name || user.displayName || 'Anonymous',
             photoURL: profile?.photoURL ?? user.photoURL ?? null,
+            // Saved onto the ranking row so every other candidate's device can
+            // draw this user's verified tick without reading their profile.
+            isPro: hasActivePremium(profile),
           }
         );
       } catch {
@@ -131,7 +142,7 @@ export default function QuizScreen() {
         },
       } as never);
     },
-    [examSet.data, user, answers, profile, router]
+    [examSet.data, user, answers, profile, courseInfo, router]
   );
 
   // Countdown. Starts only after the rules sheet is dismissed, so reading the
@@ -284,6 +295,45 @@ export default function QuizScreen() {
                   {formatClock(secondsLeft ?? set.durationMinutes * 60)}
                 </Text>
               </View>
+
+              {/* Save / report the question being attempted. Exam questions carry
+                  no id of their own, so the index inside the set is the ref. */}
+              {question ? (
+                <View style={styles.metaActions}>
+                  <BookmarkButton
+                    context="exam"
+                    kind="question"
+                    refId={`${set.id}:${current}`}
+                    title={question.question}
+                    preview={question.explanation}
+                    sourceLabel={`${t('bookmarks.ctx.exam')} · ${set.title}`}
+                    courseId={courseInfo?.courseId ?? null}
+                    subcourseId={courseInfo?.subcourseId ?? null}
+                    size={20}
+                    payload={{
+                      question: question.question,
+                      options: question.options,
+                      answerIndex: question.correctIndex,
+                      explanation: question.explanation,
+                      meta: [{ label: t('bookmarks.ctx.exam'), value: set.title }],
+                    }}
+                  />
+                  <ReportButton
+                    size={20}
+                    target={() => ({
+                      source: 'question',
+                      targetType: 'question',
+                      id: `${set.id}:${current}`,
+                      contextLabel: `${t('bookmarks.ctx.exam')} · ${set.title}`,
+                      title: question.question,
+                      options: question.options,
+                      answerIndex: question.correctIndex,
+                      meta: [{ label: t('bookmarks.ctx.exam'), value: set.title }],
+                      categoryGroup: 'question',
+                    })}
+                  />
+                </View>
+              ) : null}
             </View>
 
             <Animated.View key={current} entering={FadeIn.duration(180)} style={{ gap: spacing.md }}>
@@ -423,6 +473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   questionMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  metaActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   metaPill: {
     flexDirection: 'row',
     alignItems: 'center',

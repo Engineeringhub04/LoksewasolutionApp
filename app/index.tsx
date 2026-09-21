@@ -17,6 +17,8 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useSettingsStore } from '@/src/core/store/settingsStore';
 import { getRemoteImageUrls } from '@/src/core/firebase/services/onboarding';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
+import { markEvictionNotice, verifyDeviceSession } from '@/src/core/firebase/services/deviceSession';
+import { logout } from '@/src/core/firebase/auth';
 import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 import { useProfileStore } from '@/src/core/store/profileStore';
 
@@ -185,8 +187,37 @@ export default function SplashScreen() {
       // block on some Android devices unrelated to any real version mismatch.
       const configPromise = fetchRemoteConfig();
       let homeReady: Promise<unknown> = Promise.resolve();
+      // Set when this phone has lost the account to another device. It changes
+      // where we land AND who owns the routing decision, so it is tracked here
+      // rather than inferred from `user` (which logout() invalidates below).
+      let evicted = false;
 
       if (user) {
+        // One account = one device, asked FIRST — before anything is warmed.
+        //
+        // This is the cold-start half of the mechanism: the takeover happened
+        // while this app was closed, so there was nobody to show a dialog to. We
+        // find out here, sign out here, and land on login with the explanation
+        // parked in storage for the login screen to print.
+        //
+        // Doing it before the prefetch is not just tidiness: warming Home costs a
+        // dozen reads, and spending them on a session that will not survive the
+        // next three seconds is pure waste.
+        const session = await verifyDeviceSession(user.uid);
+        if (session.verdict === 'evicted') {
+          evicted = true;
+          // Claim the routing decision now. logout() empties the auth store,
+          // which re-runs this effect with `user` null — without the flag that
+          // re-run would race this one to the router and win with /onboarding.
+          routedRef.current = true;
+          // AsyncStorage because the notice has to survive both the sign-out
+          // (which wipes every in-memory store) and the navigation after it.
+          await markEvictionNotice(session.deviceName);
+          await logout().catch(() => undefined);
+        }
+      }
+
+      if (user && !evicted) {
         // Root layout also warms Profile. profileStore shares any in-flight request,
         // so this does not create duplicate profile/course reads during launch.
         await useProfileStore.getState().load(user.uid);
@@ -202,20 +233,35 @@ export default function SplashScreen() {
           uid: user.uid,
           courseId,
           subcourseId,
+          isAdmin: profileState.profile?.isAdmin === true,
         }).catch(() => undefined);
       }
 
       const [config] = await Promise.all([configPromise, homeReady]);
       const remaining = MIN_SPLASH_MS - (Date.now() - startedAt);
+      // Waited out even on the eviction path, so a displaced phone still gets the
+      // ordinary three-second launch instead of snapping to a login screen the
+      // user did not ask for.
       if (remaining > 0) await sleep(remaining);
-      if (routedRef.current) return;
-      routedRef.current = true;
+      if (!evicted) {
+        if (routedRef.current) return;
+        routedRef.current = true;
+      }
 
       // Hide native splash exactly once, after decision is made. The fade is off
       // in app.json so this is a sharp cut, not a cross-fade.
-      await NativeSplashScreen.hideAsync();
+      //
+      // Guarded because a failure here must not cost the user their navigation.
+      // expo-splash-screen rejects if the splash is no longer registered against
+      // the current view controller (iOS), and an unhandled rejection at this
+      // point would abandon `decide()` halfway — leaving the app parked on the
+      // splash screen forever instead of merely skipping a cosmetic step.
+      await NativeSplashScreen.hideAsync().catch(() => undefined);
 
       if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
+      // Ahead of the connectivity gate on purpose: the sign-out already happened,
+      // so there is no session left to send anywhere else.
+      if (evicted) { router.replace('/(auth)/login'); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
       if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
       if (user) { router.replace('/(tabs)'); return; }
@@ -224,13 +270,13 @@ export default function SplashScreen() {
     void decide();
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
-  // The logo art is landscape (~1.31:1), NOT square. The PNG is now tightly
-  // trimmed (no baked-in transparent padding), so we size it by width and derive
-  // height from the real aspect. The box hugs the art — no dead space below the
-  // mark, so the app name sits right under it instead of being pushed away.
-  const LOGO_ASPECT = 375 / 287; // trimmed asset ratio (≈1.31)
-  const logoWidth = Math.min(width * 0.64, 300);
-  const logoHeight = logoWidth / LOGO_ASPECT;
+  // The brand mark is now the app icon itself — a square (1:1) deep-navy tile
+  // with the amber "LS". Render it as a rounded SQUARE (squircle, ≈22.4% corner)
+  // so it reads exactly like the launcher icon; never a circle. The radius needs
+  // an overflow-hidden wrapper because NativeImage can ignore borderRadius under
+  // some resize paths on Android.
+  const logoSize = Math.min(width * 0.44, 188);
+  const logoRadius = Math.round(logoSize * 0.2237);
   return (
     <LinearGradient colors={['#061A73', '#062C91', '#03145C']} style={styles.container}>
       <SplashDecorations />
@@ -238,13 +284,15 @@ export default function SplashScreen() {
       <SplashGlow />
 
       <View style={styles.brandContent}>
-        <NativeImage
-          source={AppConfig.identity.splashAsset}
-          style={{ width: logoWidth, height: logoHeight }}
-          resizeMode="contain"
-          resizeMethod="resize"
-          fadeDuration={0}
-        />
+        <View style={[styles.logoTile, { width: logoSize, height: logoSize, borderRadius: logoRadius }]}>
+          <NativeImage
+            source={AppConfig.identity.splashAsset}
+            style={{ width: logoSize, height: logoSize }}
+            resizeMode="cover"
+            resizeMethod="resize"
+            fadeDuration={0}
+          />
+        </View>
         <Text variant="h1" weight="bold" style={styles.appName}>Loksewa Solution</Text>
         <Text variant="body" style={styles.tagline}>Prepare Today. Lead Tomorrow.</Text>
         <ActivityIndicator size="small" color="#D8E7FF" style={styles.spinner} />
@@ -273,6 +321,17 @@ const styles = StyleSheet.create({
   dots: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 },
   radialGlow: { position: 'absolute', width: '126%', height: '56%', top: '18%', left: '-13%' },
   brandContent: { position: 'absolute', top: '30%', width: '100%', alignItems: 'center', paddingHorizontal: 18 },
+  logoTile: {
+    overflow: 'hidden',
+    backgroundColor: '#000030',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
   appName: { marginTop: 20, color: '#FFFFFF', letterSpacing: 0.2, textAlign: 'center' },
   tagline: { marginTop: 9, color: '#F0F6FF', fontWeight: '600', textAlign: 'center' },
   spinner: { marginTop: 22 },

@@ -7,6 +7,7 @@ import { setSession, clearSession, updateSessionUser, getValidIdToken, getCurren
 import { getDocument, setDocument, serverTimestamp } from './firestoreRest';
 import { Collections } from './collections';
 import { removeTokenForUser } from '@/src/core/notifications/pushNotifications';
+import { holdDeviceSessionClaim, releaseDeviceSession, resetDeviceSessionCache } from './services/deviceSession';
 
 const IDENTITY_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
 
@@ -74,6 +75,17 @@ function toAppUser(res: IdentityAuthResponse): AppUser {
 
 async function storeSession(res: IdentityAuthResponse, override?: Partial<AppUser>): Promise<AppUser> {
   const user = { ...toAppUser(res), ...override };
+  // Mute the single-device guard BEFORE the session lands. setSession() notifies
+  // its listeners synchronously, and one of those listeners is the guard in the
+  // root layout — so the instant this line runs, the guard reads the claim
+  // document, sees the OTHER phone still named in it (true: the takeover has not
+  // been offered yet) and signs this brand-new session straight back out. That is
+  // what made a second-device login look like an empty demo account.
+  //
+  // The hold expires on its own after a couple of minutes, and every sign-in path
+  // funnels through here, so login, signup and Google are all covered by this one
+  // line. Whoever resolves the check — the login screen — ends the hold.
+  holdDeviceSessionClaim();
   await setSession({ idToken: res.idToken, refreshToken: res.refreshToken, expiresInSeconds: Number(res.expiresIn), user });
   return user;
 }
@@ -126,7 +138,13 @@ export async function logout(): Promise<void> {
     } catch {
       /* best-effort — never block logout on token cleanup */
     }
+    // Same window, same reasoning: dropping this device's single-device claim
+    // needs the owner's idToken, and a deliberate sign-out should leave the
+    // account free for the next login instead of making it fight a takeover
+    // dialog against a phone nobody is using any more.
+    await releaseDeviceSession(uid);
   }
+  resetDeviceSessionCache();
   await signOutNativeGoogleIfAvailable();
   await clearSession();
 }
@@ -175,7 +193,9 @@ export async function deleteCurrentAccount(): Promise<void> {
     } catch {
       /* best-effort */
     }
+    await releaseDeviceSession(uid);
   }
+  resetDeviceSessionCache();
   await identityRequest('delete', { idToken });
   await clearSession();
 }

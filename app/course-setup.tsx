@@ -8,7 +8,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
+import { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { driftEnter } from '@/src/core/nav/driftEnter';
 import { fetchCourses, fetchSubcourses, saveUserCourseSetup, fetchUserCourseInfo, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
@@ -186,7 +188,10 @@ export default function CourseSetupScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Animated.View
+      entering={driftEnter}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {/* Blue Curved Header */}
       <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
@@ -337,7 +342,7 @@ export default function CourseSetupScreen() {
           {saving ? <ActivityIndicator color="#FFF" /> : <Text variant="body" weight="bold" style={styles.saveButtonText}>{isUpdateMode ? 'Update Course' : 'Save Course'}</Text>}
         </Pressable>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 

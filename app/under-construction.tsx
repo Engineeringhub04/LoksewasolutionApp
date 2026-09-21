@@ -9,7 +9,7 @@
 // i18n. The copy used to be hardcoded English, so the Nepali toggle did nothing
 // on this screen; the "Go Back" action also moved off a pinned bottom bar and
 // into the card, since the header already carries a back arrow.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -29,7 +29,38 @@ import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 
-const PROGRESS_PERCENT = 50;
+// Progress shown on the bar. Derived from the page name instead of being a
+// single hardcoded number, so the four features that share this screen don't all
+// claim the same completion — and any page added in future automatically gets
+// its own value with no code change here.
+//
+// 11 buckets of 5 points across 20–70%. The ceiling stops well short of 100 on
+// purpose: a bar sitting at 90%+ reads as "ships next week" and turns into a
+// promise. The step is 5 so the numbers look deliberate (35, 50, 60) rather than
+// randomly precise, and so two pages can never land 1–2 points apart, which
+// would look identical on the bar anyway.
+const PROGRESS_MIN = 20;
+const PROGRESS_STEP = 5;
+const PROGRESS_BUCKETS = 11;
+
+/**
+ * FNV-1a over the (trimmed, lowercased) page name. Chosen because it's stable
+ * across app launches and platforms — the same feature must never show 35% one
+ * day and 60% the next, which is what Math.random or a time-seeded value would
+ * do. Current values: Current Affairs 35, Nepal Details 55, Upcoming Exam 50,
+ * Others 60.
+ */
+function progressForPage(page: string): number {
+  let hash = 0x811c9dc5;
+  const key = page.trim().toLowerCase();
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    // imul keeps the 32-bit overflow behaviour FNV-1a expects; a plain * would
+    // lose precision past 2^53 and make the result platform-dependent.
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return PROGRESS_MIN + (hash % PROGRESS_BUCKETS) * PROGRESS_STEP;
+}
 
 export default function UnderConstructionScreen() {
   const { colors, spacing, radius, elevation, gradients, effective } = useTheme();
@@ -38,6 +69,7 @@ export default function UnderConstructionScreen() {
   const params = useLocalSearchParams<{ page?: string }>();
   const pageName = params.page ?? 'This Feature';
   const isDark = effective === 'dark';
+  const progressPercent = useMemo(() => progressForPage(pageName), [pageName]);
 
   const [refreshing, setRefreshing] = useState(false);
   const progress = useSharedValue(0);
@@ -45,8 +77,8 @@ export default function UnderConstructionScreen() {
 
   const playProgressAnimation = useCallback(() => {
     progress.value = 0;
-    progress.value = withTiming(PROGRESS_PERCENT, { duration: 1200, easing: Easing.out(Easing.cubic) });
-  }, [progress]);
+    progress.value = withTiming(progressPercent, { duration: 1200, easing: Easing.out(Easing.cubic) });
+  }, [progress, progressPercent]);
 
   // Animate on first mount...
   useEffect(() => {
@@ -133,7 +165,7 @@ export default function UnderConstructionScreen() {
               </Animated.View>
             </View>
             <Text variant="caption" secondary style={styles.progressLabel}>
-              {t('underConstruction.progress', { percent: PROGRESS_PERCENT })}
+              {t('underConstruction.progress', { percent: progressPercent })}
             </Text>
           </View>
 

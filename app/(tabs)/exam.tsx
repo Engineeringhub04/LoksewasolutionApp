@@ -12,7 +12,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -43,6 +44,7 @@ import { AdminAnswerDesk } from '@/src/components/exam/AdminAnswerDesk';
 import { ExamRulesSheet } from '@/src/components/exam/ExamRulesSheet';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import { Preloading } from '@/src/components/Preloading';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
@@ -52,7 +54,7 @@ const TICK_MS = 1000;
 
 export default function ExamScreen() {
   const { colors, spacing, radius } = useTheme();
-  const { language } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
@@ -104,7 +106,16 @@ export default function ExamScreen() {
       subcourseId && sectionId
         ? fetchExamSets({ subcourseId, sectionId, provinceId })
         : Promise.resolve([]),
-    [subcourseId, sectionId, provinceId]
+    [subcourseId, sectionId, provinceId],
+    {
+      // Without this the hook fired on the very first render — before sections
+      // had arrived and picked a default tab — short-circuited to an empty
+      // array, and flipped `settled` true. The body gate then opened on that
+      // bogus emptiness and the user saw one blank frame before the real cards
+      // animated in. Held back until there is a section, `settled` can only
+      // become true after a real read.
+      enabled: !!subcourseId && !!sectionId,
+    }
   );
 
   // Reconcile the device's local "goes live" notifications for the WHOLE
@@ -155,6 +166,13 @@ export default function ExamScreen() {
   const accentColor = activeSection?.color ?? colors.primary;
 
   const loading = provinces.loading || sections.loading || sets.loading || purchases.loading;
+  // The first-fetch gate for the body: every hook that feeds the visible cards
+  // must have settled at least once. `settled`, not `!loading` — a pull-to-refresh
+  // or a tab switch re-fires `loading`, and the finished page must stay up.
+  // `scheduleSets`/`attempts`/`myAnswers` are deliberately NOT in this gate: the
+  // first two are background reconcilers, and an anonymous device skips the
+  // purchases read entirely.
+  const ready = provinces.settled && sections.settled && sets.settled && purchases.settled;
   const refreshing = provinces.refreshing || sections.refreshing || sets.refreshing || attempts.refreshing || myAnswers.refreshing || purchases.refreshing;
   const onRefresh = useCallback(() => {
     // The screen remains mounted while the purchase page is on top. Clear the
@@ -296,7 +314,11 @@ export default function ExamScreen() {
       </LinearGradient>
 
       {/* ===== Cards ===== */}
-      {sets.error || sections.error ? (
+      {!ready ? (
+        // The header and its section chips stay; the body is replaced by the
+        // glow-ring until every feed behind the cards has landed once.
+        <Preloading tinted={false} label="Loading Exams…" hint={t("loadHints.exam")} />
+      ) : sets.error || sections.error ? (
         <DataNotFound
           onRetry={() => {
             sections.refetch();
@@ -348,7 +370,7 @@ export default function ExamScreen() {
             // right here instead of the normal exam-set card list — grading
             // submissions is the only thing an admin needs to do on this board.
             <AdminAnswerDesk />
-          ) : loading ? null : visibleCards.length === 0 ? (
+          ) : visibleCards.length === 0 ? (
             <EmptyState
               icon="calendar-outline"
               title="No exams open right now"
@@ -431,7 +453,7 @@ export default function ExamScreen() {
         </ScrollView>
       )}
 
-      <PageLoaderOverlay visible={loading || purchaseNavigating} label={purchaseNavigating ? 'Loading…' : 'Loading Exams…'} />
+      <PageLoaderOverlay visible={purchaseNavigating} label="Loading…" />
 
       <ExamRulesSheet
         visible={rulesVisible}

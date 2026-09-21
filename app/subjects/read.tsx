@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,12 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
-import { showToast } from '@/src/core/store/toastStore';
 import { fetchReadQuestionSet, type LearningQuestion } from '@/src/core/firebase/services/learningContent';
+import { recordActivityProgress } from '@/src/core/services/activityProgress';
+import { recordAppActivity } from '@/src/core/services/appUsage';
 import { Text } from '@/src/components/misc/Text';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 
 function valueOf(value: string | string[] | undefined, fallback = ''): string {
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
@@ -56,6 +59,7 @@ export default function ReadModeScreen() {
   const chapterId = valueOf(params.chapterId);
   const unitId = valueOf(params.unitId) || null;
   const chapterName = valueOf(params.chapterName);
+  const subjectName = valueOf(params.subjectName);
 
   const load = useCallback(async () => {
     if (!user?.uid || !subjectId || !chapterId) {
@@ -78,6 +82,48 @@ export default function ReadModeScreen() {
     void load();
   }, [load]);
 
+  // ===== Progress tracking =====
+  // Read mode used to persist nothing, so it could never count toward the main
+  // leaderboard. It now records which answers were actually revealed plus the
+  // time spent, written ONCE on unmount rather than on every tap — the user
+  // expands questions rapidly and a write per tap would be pure quota burn.
+  const openedRef = useRef<Set<string>>(new Set());
+  const openedAtRef = useRef(Date.now());
+  const trackingRef = useRef({ courseId, subcourseId, chapterId, uid: user?.uid ?? '' });
+  const totalRef = useRef(0);
+
+  trackingRef.current = { courseId, subcourseId, chapterId, uid: user?.uid ?? '' };
+  totalRef.current = questions.length;
+
+  useEffect(() => {
+    // Re-entering the screen restarts the clock.
+    openedAtRef.current = Date.now();
+    return () => {
+      const { uid, courseId: cid, subcourseId: sid, chapterId: chid } = trackingRef.current;
+      const viewed = Array.from(openedRef.current);
+      const seconds = Math.round((Date.now() - openedAtRef.current) / 1000);
+      // Nothing opened and barely any time on screen — not a real read session.
+      if (!uid || !chid || (viewed.length === 0 && seconds < 5)) return;
+
+      void recordActivityProgress(uid, {
+        source: 'read',
+        refId: chid,
+        courseId: cid,
+        subcourseId: sid,
+        viewedItemIds: viewed,
+        totalItems: totalRef.current,
+        secondsSpent: seconds,
+        countVisit: true,
+        completed: totalRef.current > 0 && viewed.length >= totalRef.current,
+      });
+      if (viewed.length > 0) void recordAppActivity(uid);
+    };
+  }, []);
+
+  const revealQuestion = useCallback((questionId: string) => {
+    openedRef.current.add(questionId);
+  }, []);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (router.canGoBack()) {
@@ -88,7 +134,10 @@ export default function ReadModeScreen() {
     return () => subscription.remove();
   }, []);
 
-  const expandAll = () => setExpanded(Object.fromEntries(questions.map((question) => [question.id, true])));
+  const expandAll = () => {
+    questions.forEach((question) => revealQuestion(question.id));
+    setExpanded(Object.fromEntries(questions.map((question) => [question.id, true])));
+  };
   const collapseAll = () => setExpanded({});
 
   const modeHeader = (
@@ -102,7 +151,7 @@ export default function ReadModeScreen() {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         {modeHeader}
-        <PageLoaderOverlay visible label={t('common.loading')} />
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
       </View>
     );
   }
@@ -145,17 +194,57 @@ export default function ReadModeScreen() {
         {questions.map((question, index) => {
           const isOpen = expanded[question.id] === true;
           const difficultyColor = question.difficulty === 'easy' ? colors.success : question.difficulty === 'medium' ? colors.warning : colors.error;
+          const questionTitle = bilingual(question.text, question.textNe);
+          const explanationText = bilingual(question.explanation, question.explanationNe);
+          const sourceLabel = [subjectName || t('learningModes.readTitle'), chapterName || t('subjects.chaptersPage.chapter')].filter(Boolean).join(' · ');
           return (
             <View key={question.id} style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.questionTopRow}>
                 <View style={[styles.numberBadge, { backgroundColor: `${colors.primary}15` }]}><Text variant="bodySmall" weight="bold" style={{ color: colors.primary }}>Qn. {index + 1}</Text></View>
                 <View style={[styles.difficultyBadge, { backgroundColor: `${difficultyColor}18` }]}><Text variant="caption" weight="bold" style={{ color: difficultyColor }}>{question.difficulty[0].toUpperCase() + question.difficulty.slice(1)}</Text></View>
                 <View style={{ flex: 1 }} />
-                <Pressable onPress={() => showToast(t('learningModes.bookmarkComingSoon'), 'info')} style={styles.smallAction} accessibilityLabel="Bookmark question"><Ionicons name="bookmark-outline" size={21} color={colors.primary} /></Pressable>
-                <Pressable onPress={() => showToast(t('learningModes.reportComingSoon'), 'info')} style={styles.smallAction} accessibilityLabel="Report question"><Ionicons name="flag-outline" size={21} color={colors.error} /></Pressable>
+                <BookmarkButton
+                  context="read"
+                  kind="question"
+                  refId={`${chapterId}:${question.id}`}
+                  title={questionTitle}
+                  preview={explanationText}
+                  sourceLabel={sourceLabel}
+                  courseId={courseId}
+                  subcourseId={subcourseId}
+                  payload={{
+                    question: questionTitle,
+                    options: question.options,
+                    answerIndex: question.correctIndex,
+                    explanation: explanationText,
+                    meta: [
+                      { label: t('learningModes.readTitle'), value: chapterName || t('subjects.chaptersPage.chapter') },
+                    ],
+                  }}
+                  style={styles.smallAction}
+                />
+                <ReportButton
+                  style={styles.smallAction}
+                  target={() => ({
+                    source: 'question',
+                    targetType: 'question',
+                    id: question.id,
+                    contextLabel: `${t('learningModes.readTitle')} · ${chapterName || t('subjects.chaptersPage.chapter')}`,
+                    title: questionTitle,
+                    options: question.options,
+                    answerIndex: question.correctIndex,
+                    meta: subjectName ? [{ label: t('bookmarks.subjectLabel'), value: subjectName }] : undefined,
+                  })}
+                />
               </View>
-              <Text variant="h3" weight="semiBold" style={{ lineHeight: 24, fontSize: 18 }}>{bilingual(question.text, question.textNe)}</Text>
-              <Pressable onPress={() => setExpanded((previous) => ({ ...previous, [question.id]: !isOpen }))} style={styles.answerToggle}>
+              <Text variant="h3" weight="semiBold" style={{ lineHeight: 24, fontSize: 18 }}>{questionTitle}</Text>
+              <Pressable
+                onPress={() => {
+                  if (!isOpen) revealQuestion(question.id);
+                  setExpanded((previous) => ({ ...previous, [question.id]: !isOpen }));
+                }}
+                style={styles.answerToggle}
+              >
                 <Ionicons name={isOpen ? 'chevron-up-circle-outline' : 'chevron-down-circle-outline'} size={24} color={colors.primary} />
                 <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{isOpen ? t('learningModes.collapseAnswer') : t('learningModes.showAnswer')}</Text>
               </Pressable>

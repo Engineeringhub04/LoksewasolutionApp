@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated as RNAnimated, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,10 +8,18 @@ import { Button } from '@/src/components/buttons/Button';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
+import { Preloading } from '@/src/components/Preloading';
 import { fetchConstitutionPart, type ConstitutionContentNode, type ConstitutionLanguage } from '@/src/core/services/constitution';
+import { recordActivityProgress } from '@/src/core/services/activityProgress';
+import { recordAppActivity } from '@/src/core/services/appUsage';
+import { useAuthStore } from '@/src/core/store/authStore';
+import { useProfileStore } from '@/src/core/store/profileStore';
+import { useTranslation } from '@/src/core/i18n';
 import { constitutionLabels } from '@/src/core/i18n/constitution';
 import { constitutionFontFamily, useConstitutionFonts, type ConstitutionFontWeight } from '@/src/core/constitution/fonts';
 import { AppConfig } from '@/src/core/config/appConfig';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 
 function childNodes(node: ConstitutionContentNode): ConstitutionContentNode[] {
   const childKeys: Array<keyof ConstitutionContentNode> = ['children', 'items', 'rows', 'cells', 'content'];
@@ -24,6 +32,25 @@ function childNodes(node: ConstitutionContentNode): ConstitutionContentNode[] {
 
 function nodeText(node: ConstitutionContentNode): string {
   return typeof node.text === 'string' ? node.text.trim() : '';
+}
+
+/**
+ * Flattens the whole node tree into plain text for the bookmark snapshot and the
+ * report body. Walks the same child keys the renderer does, so nothing that is
+ * visible on screen is missed.
+ */
+function flattenNodes(nodes: ConstitutionContentNode[], depth = 0): string {
+  if (depth > 12) return '';
+  const parts: string[] = [];
+  for (const node of nodes) {
+    const title = typeof node.title === 'string' ? node.title.trim() : '';
+    if (title) parts.push(title);
+    const text = nodeText(node);
+    if (text) parts.push(text);
+    const nested = flattenNodes(childNodes(node), depth + 1);
+    if (nested) parts.push(nested);
+  }
+  return parts.join('\n\n');
 }
 
 function numberPrefix(node: ConstitutionContentNode): string {
@@ -146,9 +173,49 @@ export default function ConstitutionDetailScreen() {
     if (!part.data) return [];
     return language === 'np' ? part.data.containnp : part.data.containen;
   }, [language, part.data]);
-  const title = language === 'np' ? part.data?.titleNp ?? labels.title : part.data?.titleEn ?? labels.title;
-  const legalReference = language === 'np' ? part.data?.legalReferenceNp ?? part.data?.sectionType : part.data?.legalReferenceEn ?? part.data?.sectionType;
+  const snapshotText = useMemo(() => flattenNodes(content), [content]);
+  const title = language === 'np' ? part.data?.titleNp ?? labels.title : part.data?.titleEn ?? labels.title;  const legalReference = language === 'np' ? part.data?.legalReferenceNp ?? part.data?.sectionType : part.data?.legalReferenceEn ?? part.data?.sectionType;
   const routeSectionId = sectionId ? decodeURIComponent(sectionId) : '';
+
+  // ===== Main-leaderboard progress mirror =====
+  // Nothing here is scored — there are no questions, only long-form legal text.
+  // So what the leaderboard can honestly credit is that this part was opened and
+  // how long it was read for. Written once on unmount; the dwell threshold is
+  // higher than elsewhere (10s) because constitution parts are long and a quick
+  // bounce through the list is not reading.
+  const user = useAuthStore((state) => state.user);
+  const courseInfo = useProfileStore((state) => state.courseInfo);
+  const readTrackingRef = useRef({ uid: '', courseId: '', subcourseId: '', sectionId: '' });
+  const openedAtRef = useRef(Date.now());
+
+  readTrackingRef.current = {
+    uid: user?.uid ?? '',
+    courseId: courseInfo?.courseId ?? '',
+    subcourseId: courseInfo?.subcourseId ?? '',
+    sectionId: routeSectionId,
+  };
+
+  useEffect(() => {
+    openedAtRef.current = Date.now();
+    return () => {
+      const snapshot = readTrackingRef.current;
+      const seconds = Math.round((Date.now() - openedAtRef.current) / 1000);
+      if (!snapshot.uid || !snapshot.sectionId || !snapshot.subcourseId || seconds < 10) return;
+
+      void recordActivityProgress(snapshot.uid, {
+        source: 'constitution',
+        refId: snapshot.sectionId,
+        courseId: snapshot.courseId,
+        subcourseId: snapshot.subcourseId,
+        viewedItemIds: [snapshot.sectionId],
+        totalItems: 1,
+        secondsSpent: seconds,
+        countVisit: true,
+        completed: true,
+      });
+      void recordAppActivity(snapshot.uid);
+    };
+  }, []);
   const shareUrl = routeSectionId
     ? `${AppConfig.links.website}/constitution/${encodeURIComponent(routeSectionId)}`
     : AppConfig.links.website;
@@ -184,14 +251,11 @@ export default function ConstitutionDetailScreen() {
     </View>
   );
 
-  if (!fontsLoaded || (part.loading && !part.data)) {
+  if (!fontsLoaded || !part.settled) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <SubpageHeader title={labels.title} rightSlot={rightSlot} />
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text variant="bodySmall" weight="semiBold" secondary style={styles.stateText}>{labels.loading}</Text>
-        </View>
+        <Preloading tinted={false} label={labels.loading} hint={language === 'np' ? 'संविधान सामग्री ल्याउँदै' : 'Fetching the constitution content'} />
       </View>
     );
   }
@@ -220,6 +284,36 @@ export default function ConstitutionDetailScreen() {
             {legalReference}
           </Text>
           <Text selectable variant="h2" weight="bold" style={[styles.boldText, constitutionTextStyle(language, 'bold'), { color: colors.textPrimary, marginTop: 5 }]}>{title}</Text>
+          <View style={[styles.readerActions, { borderTopColor: colors.divider }]}>
+            <BookmarkButton
+              context="chapter"
+              kind="read"
+              refId={routeSectionId}
+              title={title}
+              preview={snapshotText.slice(0, 220)}
+              sourceLabel={labels.title}
+              courseId={courseInfo?.courseId ?? null}
+              subcourseId={courseInfo?.subcourseId ?? null}
+              size={21}
+              payload={{
+                body: snapshotText,
+                meta: legalReference ? [{ label: labels.title, value: legalReference }] : undefined,
+              }}
+            />
+            <ReportButton
+              size={21}
+              target={() => ({
+                source: 'read',
+                targetType: 'content',
+                id: routeSectionId,
+                contextLabel: labels.title,
+                title,
+                body: snapshotText.slice(0, 600),
+                meta: legalReference ? [{ label: labels.title, value: legalReference }] : undefined,
+                categoryGroup: 'content',
+              })}
+            />
+          </View>
         </View>
         <View style={styles.readerBody}>
           {content.map((node, index) => <ContentNodeView key={`${node.tag ?? 'node'}-${index}`} node={node} language={language} />)}
@@ -238,6 +332,7 @@ const styles = StyleSheet.create({
   languageButton: { height: 36, minWidth: 42, paddingHorizontal: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
   languageText: { color: '#FFF' },
   readerHeader: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 16 },
+  readerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   readerBody: { gap: 10 },
   headingBlock: { borderLeftWidth: 3, paddingVertical: 6, marginTop: 6 },
   boldText: { fontWeight: '800' },

@@ -14,6 +14,7 @@ import { IconButton } from '@/src/components/buttons/IconButton';
 import { TextField } from '@/src/components/inputs/TextField';
 import { Button } from '@/src/components/buttons/Button';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
+import { Preloading } from '@/src/components/Preloading';
 
 const colorOptions = ['#FFFFFF', '#FEF3C7', '#DBEAFE', '#DCFCE7', '#FCE7F3', '#EDE9FE'];
 
@@ -24,7 +25,7 @@ export default function NoteEditorScreen() {
   const { t } = useTranslation();
   const router = useRouter();
 
-  const { data: notes, refreshing, refresh } = useAsyncData(() => loadNotes(), []);
+  const { data: notes, refreshing, settled, refresh } = useAsyncData(() => loadNotes(), []);
   const existing = notes?.find((n) => n.id === id);
 
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -62,6 +63,9 @@ export default function NoteEditorScreen() {
           !isNew ? <IconButton name="trash-outline" accessibilityLabel={t('common.delete')} onPress={() => setShowDeleteConfirm(true)} /> : undefined
         }
       />
+      {!settled ? (
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
+      ) : (
       <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, flexGrow: 1 }}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -96,6 +100,7 @@ export default function NoteEditorScreen() {
           ))}
         </View>
       </ScrollView>
+      )}
       <View style={{ padding: spacing.screenPadding }}>
         <Button label={t('common.save')} onPress={handleSave} />
       </View>

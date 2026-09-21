@@ -28,7 +28,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { RejectReasonDialog } from '@/src/components/admin/RejectReasonDialog';
 
@@ -38,7 +38,7 @@ export default function AdminSubscriptionDetailScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
 
-  const { data, loading, error, refetch } = useAsyncData(async () => {
+  const { data, loading, settled, error, refetch } = useAsyncData(async () => {
     if (!id) return null;
     const record = await fetchSubscriptionById(id);
     if (!record) return { record: null, plans: [], profile: null, courseInfo: null };
@@ -126,7 +126,9 @@ export default function AdminSubscriptionDetailScreen() {
   return (
     <>
       <SubpageScrollScreen title={t('subscription.adminReviewTitle')}>
-        {loading ? null : error || !record ? (
+        {!settled ? (
+          <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} />
+        ) : error || !record ? (
           <DataNotFound onRetry={refetch} />
         ) : (
           <>
@@ -217,7 +219,6 @@ export default function AdminSubscriptionDetailScreen() {
           </>
         )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading} label={t('subscription.loading')} />
 
       <ConfirmDialog
         visible={showApproveConfirm}

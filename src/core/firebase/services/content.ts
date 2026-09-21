@@ -23,14 +23,6 @@ export interface Topic {
   body: string;
 }
 
-export interface Notice {
-  id: string;
-  title: string;
-  body: string;
-  featuredOnHome: boolean;
-  date: { toDate: () => Date } | null;
-}
-
 /**
  * A single ordered piece of a Gorkhapatra post body, reconstructed natively
  * (NOT an iframe/webview — the user explicitly rejected webview). Images point
@@ -113,12 +105,7 @@ export async function fetchTopic(subjectId: string, chapterId: string, topicId: 
   return (await getDocument(`${Collections.topics(subjectId, chapterId)}/${topicId}`)) as Topic | null;
 }
 
-export async function fetchNotices(max = 20): Promise<Notice[]> {
-  return (await runQuery(Collections.notices, {
-    orderBy: [{ field: 'date', direction: 'desc' }],
-    limit: max,
-  })) as unknown as Notice[];
-}
+// Notices moved to services/notices.ts (Firestore-backed, three-tier cache).
 
 // fetchCurrentAffairs / CurrentAffairItem were removed on 2026-09-13 along with
 // the Current Affairs feature and its `currentAffairs` collection.

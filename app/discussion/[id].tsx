@@ -8,7 +8,7 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { fetchDiscussion, fetchComments, fetchReplies, addComment, addReply, deleteComment, deleteReply, deleteDiscussion, toggleLikeDiscussion, isDiscussionLiked, isCommentLiked, toggleCommentLike, reportContent, type Reply, type Comment } from '@/src/core/firebase/services/discussions';
 import { showToast } from '@/src/core/store/toastStore';
@@ -306,11 +306,14 @@ export default function DiscussionDetailScreen() {
       : [{ label: t('discussion.reportComment'), icon: 'flag-outline', destructive: true, onPress: () => openReport({ type: 'comment', id: reply.id, authorName: reply.authorName, authorPhoto: reply.authorPhoto, preview: reply.body }) }];
   }, [discussion.data, id, isAdmin, menuTarget, t, user?.uid]);
 
-  if (discussion.loading || comments.loading || likesLoading || postLikeLoading || profileLoading) {
+  // First-load gate only: discussion + comments. The like/profile flags below
+  // are MUTATION guards and must never hold the body hostage after load.
+  const hasLoadedOnce = discussion.settled && comments.settled;
+  if (!hasLoadedOnce) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <TopAppBar title={t('discussion.commentsTitle')} actions={<ThemeToggleButton isDark={effective === 'dark'} onToggle={() => setMode(effective === 'dark' ? 'light' : 'dark')} />} />
-        <PageLoaderOverlay visible label={t('discussion.loadingComments')} />
+        <Preloading tinted={false} label={t('discussion.loadingComments')} hint={t('loadHints.discussion')} />
       </View>
     );
   }

@@ -16,6 +16,8 @@ import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { BottomSheet } from '@/src/components/feedback/BottomSheet';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
 import { Spinner } from '@/src/components/feedback/Spinner';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 
 export default function MockTestAttemptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -128,6 +130,40 @@ export default function MockTestAttemptScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.screenPadding, gap: spacing.md, flexGrow: 1 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Text variant="h3" weight="semiBold" style={{ flex: 1 }}>{current?.text}</Text>
+          {current ? (
+            <BookmarkButton
+              context="exam"
+              kind="question"
+              refId={`${id}:${current.id}`}
+              title={current.text}
+              preview={current.explanation}
+              sourceLabel={`${t('bookmarks.ctx.exam')} · ${exam.data.title}`}
+              size={20}
+              payload={{
+                question: current.text,
+                options: current.options,
+                answerIndex: current.correctIndex,
+                explanation: current.explanation,
+                meta: [{ label: t('bookmarks.ctx.exam'), value: exam.data.title }],
+              }}
+            />
+          ) : null}
+          {current ? (
+            <ReportButton
+              size={20}
+              target={() => ({
+                source: 'question',
+                targetType: 'question',
+                id: `${id}:${current.id}`,
+                contextLabel: `${t('bookmarks.ctx.exam')} · ${exam.data?.title ?? ''}`,
+                title: current.text,
+                options: current.options,
+                answerIndex: current.correctIndex,
+                meta: [{ label: t('bookmarks.ctx.exam'), value: exam.data?.title ?? '' }],
+                categoryGroup: 'question',
+              })}
+            />
+          ) : null}
           <IconButton
             name={answers[current?.id ?? '']?.flagged ? 'flag' : 'flag-outline'}
             accessibilityLabel={t('mockTest.flagForReview')}

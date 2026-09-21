@@ -18,7 +18,8 @@ import {
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { useAuthStore } from '@/src/core/store/authStore';
@@ -26,9 +27,12 @@ import { useNetworkStatus } from '@/src/core/hooks/useNetworkStatus';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { updateCurrentUserProfile } from '@/src/core/firebase/auth';
 import { AvatarProgressRing, type UploadState } from '@/src/components/profile/AvatarProgressRing';
+import { ProfileAvatar } from '@/src/components/profile/ProfileAvatar';
+import { NameWithTick } from '@/src/components/misc/NameWithTick';
 import {
   updateUserProfile,
   fullNameOf,
+  hasActivePremium,
   isValidDob,
   maskDobInput,
   type Gender,
@@ -43,6 +47,7 @@ import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { BottomSheet } from '@/src/components/feedback/BottomSheet';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 
 const GENDERS: Gender[] = ['male', 'female', 'other'];
@@ -92,6 +97,11 @@ export default function EditProfileScreen() {
   }, [user?.uid, load]);
 
   const profile = { data: storeProfile, loading: profileLoading, refreshing, refresh: () => { if (user?.uid) void load(user.uid, { refresh: true }); } };
+
+  // Drives the avatar's ring and verified tick, so this screen shows the user
+  // the same identity Home and Profile do. `hasActivePremium` rather than the
+  // raw flag: an expired subscription must stop decorating immediately.
+  const pro = hasActivePremium(storeProfile);
 
   // Seed the form once from whichever source has data (Firestore doc first,
   // then the auth session for brand-new Google sign-ins).
@@ -304,6 +314,12 @@ export default function EditProfileScreen() {
       <SubpageHeader title={t('editProfile.title')} onBackPress={attemptLeave} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {!hydrated || !minLoaderElapsed ? (
+        // First-open state: the glow-ring replaces the form body (header stays),
+        // matching every other page. The old overlay let the previous values
+        // flash behind it before hydration finished.
+        <Preloading tinted={false} label={t('editProfile.loadingProfile')} hint={t('loadHints.profile')} />
+      ) : (
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl, gap: spacing.md }}
@@ -314,16 +330,46 @@ export default function EditProfileScreen() {
         {/* Photo */}
         <Animated.View entering={FadeInDown.duration(320)} style={styles.photoBlock}>
           <Pressable onPress={openPhotoOptions} style={styles.photoPressable}>
-            {/* Ring turns blue while uploading and green on completion. */}
-            <AvatarProgressRing size={96} progress={uploadProgress} state={uploadState}>
-              <Avatar uri={photoURL} name={fullNameOf(firstName, lastName)} size={96} />
-            </AvatarProgressRing>
+            {/*
+              Two rings share this spot and only one is ever drawn.
+
+              At rest it is the IDENTITY ring — green on the free tier, the
+              premium colour sweep on a paid one, with the verified tick on the
+              rim — exactly what Home and Profile show, so the user recognises
+              themselves here. The moment a photo starts uploading it hands over
+              to the PROGRESS ring, which turns blue as bytes go out and green on
+              completion; feedback matters more than decoration while something
+              is in flight, and stacking the two would read as noise.
+
+              They are different thicknesses (7 vs 6), so `photoPressable` is a
+              fixed box and both are centred inside it. Otherwise the avatar
+              would jump by a pixel the instant an upload began.
+            */}
+            {uploadState === 'idle' ? (
+              <ProfileAvatar uri={photoURL} name={fullNameOf(firstName, lastName)} size={96} pro={pro} />
+            ) : (
+              <AvatarProgressRing size={96} progress={uploadProgress} state={uploadState}>
+                <Avatar uri={photoURL} name={fullNameOf(firstName, lastName)} size={96} />
+              </AvatarProgressRing>
+            )}
+            {/* Camera badge moved BELOW the photo — it used to sit on the upper
+                rim only to dodge the tick, which now lives beside the name. */}
             <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
               <Ionicons name="camera" size={16} color="#FFF" />
             </View>
           </Pressable>
-          <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary, marginTop: spacing.sm }}>
-            {t('editProfile.changePhoto')}
+          {/* Live identity preview: the name the user is TYPING, updated in
+              real time, with the verified tick for pro members — so what they
+              see here is exactly what Home and Profile will show after saving. */}
+          <NameWithTick
+            name={fullNameOf(firstName, lastName) || t('editProfile.yourName')}
+            pro={pro}
+            variant="bodyLarge"
+            weight="semiBold"
+            containerStyle={{ marginTop: spacing.xs }}
+          />
+          <Text variant="caption" secondary style={{ marginTop: 2 }}>
+            {t('editProfile.clickPhotoToChange')}
           </Text>
         </Animated.View>
 
@@ -426,6 +472,7 @@ export default function EditProfileScreen() {
           <Text variant="bodySmall" style={{ color: colors.warning }}>{t('editProfile.offlineBlocked')}</Text>
         ) : null}
       </ScrollView>
+      )}
       </KeyboardAvoidingView>
 
       {/* Save — pinned, and inert until something actually changed */}
@@ -438,11 +485,9 @@ export default function EditProfileScreen() {
         />
       </View>
 
-      {/* Centred loader on first open, matching every other page. */}
-      <PageLoaderOverlay
-        visible={!hydrated || !minLoaderElapsed}
-        label={t('editProfile.loadingProfile')}
-      />
+      {/* Action loader only (saving/uploading). The first-open loader is the
+          glow-ring body swap above — the old overlay showed the previous
+          form values behind it before hydration finished. */}
       <PageLoaderOverlay
         visible={saving}
         label={uploadState === 'uploading' ? t('editProfile.uploadingPhoto') : t('editProfile.saving')}
@@ -484,11 +529,15 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   photoBlock: { alignItems: 'center', marginBottom: 4 },
-  photoPressable: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  // Fixed, not shrink-to-fit: the identity ring and the upload progress ring are
+  // different thicknesses, so a self-sizing box would shift the avatar and the
+  // camera badge by a pixel every time an upload starts or finishes. 110 is the
+  // larger of the two (96 + 7 + 7).
+  photoPressable: { position: 'relative', width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
   cameraBadge: {
     position: 'absolute',
+    bottom: -4,
     right: -2,
-    bottom: -2,
     width: 32,
     height: 32,
     borderRadius: 16,

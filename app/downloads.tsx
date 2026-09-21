@@ -16,7 +16,7 @@ import { Button } from '@/src/components/buttons/Button';
 import { Card } from '@/src/components/cards/Card';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 
 const iconFor = { pdf: 'document-text-outline', note: 'create-outline', other: 'file-tray-outline' } as const;
@@ -24,7 +24,7 @@ const iconFor = { pdf: 'document-text-outline', note: 'create-outline', other: '
 export default function DownloadsScreen() {
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
-  const { data, loading, error, refreshing, refetch, refresh } = useAsyncData(() => loadDownloads(), []);
+  const { data, loading, error, settled, refreshing, refetch, refresh } = useAsyncData(() => loadDownloads(), []);
 
   // Returning to this screen must show current data without a manual pull.
   useRefreshOnFocus(refresh);
@@ -48,6 +48,12 @@ export default function DownloadsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title={t('downloads.title')} showThemeToggle />
+      {/* The storage strip counts the fetched downloads, so it hides with the
+          rest of the body until the first load settles. */}
+      {!settled ? (
+        <Preloading tinted={false} label="Loading Downloads..." hint={t("loadHints.downloads")} />
+      ) : (
+      <>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.screenPadding, marginTop: spacing.sm, marginBottom: spacing.sm }}>
         <Text variant="body" secondary>{t('downloads.storageUsed')}: {formatBytes(total)}</Text>
         {items.length > 0 ? (
@@ -55,8 +61,7 @@ export default function DownloadsScreen() {
         ) : null}
       </View>
 
-      <PageLoaderOverlay visible={loading || refreshing} label="Loading Downloads..." />
-      {loading ? null : error ? (
+      {error ? (
         <DataNotFound onRetry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState title={t('downloads.empty')} />
@@ -81,6 +86,8 @@ export default function DownloadsScreen() {
             </Card>
           )}
         />
+      )}
+      </>
       )}
 
       <ConfirmDialog

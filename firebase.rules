@@ -68,9 +68,14 @@ service cloud.firestore {
         allow create: if isOwner(userId);
         allow update, delete: if isAdmin();
       }
+      // Saved bookmarks. `update` is required as well as `create`: the app writes
+      // bookmarks with a merge set on a deterministic document id, so re-saving
+      // an item that already exists arrives as an update, not a create.
+      // Deliberately NOT schema-locked — a bookmark carries a snapshot payload
+      // whose fields differ per content type (question/options/body/meta).
       match /bookmarks/{bookmarkId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId);
+        allow create, update: if isOwner(userId);
         allow delete: if isOwner(userId) || isAdmin();
       }
       match /learning_progress/{progressId} {
@@ -102,6 +107,39 @@ service cloud.firestore {
           request.resource.data.token.size() <= 300 &&
           request.resource.data.platform in ['android', 'ios'] &&
           (request.resource.data.language == null || request.resource.data.language is string);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+      // One account = one device (normal users). Exactly one document is allowed
+      // here — `active` — and its `deviceId` names the phone that currently holds
+      // the account. Logging in on a new phone overwrites it; the displaced phone
+      // reads it on its next foreground, sees an id that is not its own, and
+      // signs itself out. Nothing on the server pushes it out, because there are
+      // no Cloud Functions on this plan: this document IS the mechanism.
+      //
+      // Only the owner may read it, which is why the app has to authenticate
+      // BEFORE it can ask whether the account is already in use somewhere else —
+      // and why declining the takeover has to sign back out again.
+      //
+      // Schema-locked exactly like push_tokens above, and the document id is
+      // pinned so a client cannot scatter extra claims the app would never read.
+      // Admins are exempt in the app and simply never write here.
+      match /session/{sessionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) &&
+          sessionId == 'active' &&
+          request.resource.data.keys().hasOnly([
+            'deviceId', 'deviceName', 'platform', 'osVersion',
+            'appVersion', 'claimedAt', 'lastActiveAt'
+          ]) &&
+          request.resource.data.deviceId is string &&
+          request.resource.data.deviceId.size() > 0 &&
+          request.resource.data.deviceId.size() <= 200 &&
+          request.resource.data.platform in ['android', 'ios'] &&
+          (!request.resource.data.keys().hasAny(['deviceName']) ||
+            request.resource.data.deviceName is string) &&
+          (!request.resource.data.keys().hasAny(['osVersion']) ||
+            request.resource.data.osVersion == null ||
+            request.resource.data.osVersion is string);
         allow delete: if isOwner(userId) || isAdmin();
       }
       match /qotd/{docId} {
@@ -416,9 +454,40 @@ service cloud.firestore {
         request.resource.data.source is string;
       allow delete: if isAdmin();
     }
-    match /notices/{docId} {
+    // Notice board. Any signed-in user may READ (targeting is filtered
+    // client-side from one shared cached blob, so read must not depend on
+    // targetSubcourseIds — that would need a composite index). WRITES are
+    // admin-only AND schema-locked, same as Gorkhapatra: the field set is
+    // pinned to an allowlist and every field is type/size-checked, so no
+    // client — even a signed-in non-admin — can create unexpected, malformed
+    // or oversized documents. Deletes stay admin-only.
+    match /app_notices/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'title', 'kind', 'category', 'dateLabel', 'excerpt', 'blocks',
+          'downloadEnabled', 'downloadUrl', 'downloadLabel',
+          'targetSubcourseIds', 'notificationImageNumber',
+          'status', 'publishedAt', 'updatedAt'
+        ]) &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.title.size() <= 300 &&
+        (request.resource.data.kind == null || request.resource.data.kind in ['feature', 'update', 'maintenance', 'exam', 'welcome']) &&
+        (request.resource.data.category == null || (request.resource.data.category is string && request.resource.data.category.size() <= 60)) &&
+        (request.resource.data.dateLabel == null || (request.resource.data.dateLabel is string && request.resource.data.dateLabel.size() <= 60)) &&
+        request.resource.data.excerpt is string &&
+        request.resource.data.excerpt.size() <= 400 &&
+        request.resource.data.blocks is list &&
+        request.resource.data.blocks.size() <= 200 &&
+        request.resource.data.downloadEnabled is bool &&
+        (request.resource.data.downloadUrl == null || (request.resource.data.downloadUrl is string && request.resource.data.downloadUrl.size() <= 2000)) &&
+        (request.resource.data.downloadLabel == null || (request.resource.data.downloadLabel is string && request.resource.data.downloadLabel.size() <= 60)) &&
+        (request.resource.data.targetSubcourseIds == null || request.resource.data.targetSubcourseIds is list) &&
+        (request.resource.data.notificationImageNumber == null || request.resource.data.notificationImageNumber is number) &&
+        request.resource.data.status in ['published', 'hidden'] &&
+        request.resource.data.publishedAt is timestamp;
+      allow delete: if isAdmin();
     }
     match /achievements/{docId} {
       allow read: if isSignedIn();
@@ -781,6 +850,118 @@ service cloud.firestore {
           request.resource.data.snapshot is map));
       allow update: if isOwner(userId) && docId == 'summary';
       allow delete: if isAdmin();
+    }
+
+    // ===== Main Leaderboard =====
+    // Private per-user aggregate: one document per enrolled subcourse, holding
+    // the full source-by-source breakdown. Owner-only, which is exactly why the
+    // public mirror below has to exist.
+    match /users/{userId}/app_mainleaderboard/{docId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // Written by the client on publish, so create and update are both needed;
+      // the score is derived from this user's own records either way.
+      allow create, update: if isOwner(userId) &&
+        request.resource.data.percent is number &&
+        request.resource.data.points is number &&
+        request.resource.data.percent >= 0 &&
+        request.resource.data.percent <= 100 &&
+        request.resource.data.points >= 0;
+      allow delete: if isAdmin();
+    }
+
+    // Foreground time and activity counters — the "app focus" signal, and the
+    // tiebreak when two users finish on the same points and percentage.
+    match /users/{userId}/app_usage/{docId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // Read mode, theory mode, GK, PM, Constitution and past questions all write
+    // here — one collection with a `source` field instead of six collections.
+    match /users/{userId}/app_activity_progress/{docId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) &&
+        request.resource.data.source is string &&
+        request.resource.data.refId is string;
+      allow delete: if isAdmin();
+    }
+
+    // Public ranking mirror — ONE row per user per subcourse, which is what the
+    // leaderboard screen queries. Any signed-in user may read it (that is the
+    // point of a leaderboard), but a row may only ever be written by the user it
+    // belongs to. Unlike app_exam_rankings this permits update, because the
+    // document id is stable per user+subcourse and each publish overwrites in
+    // place rather than appending a new row.
+    match /app_main_leaderboard/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.percent is number &&
+        request.resource.data.points is number &&
+        request.resource.data.usageSeconds is number &&
+        request.resource.data.activityCount is number &&
+        request.resource.data.percent >= 0 &&
+        request.resource.data.percent <= 100 &&
+        request.resource.data.points >= 0 &&
+        request.resource.data.usageSeconds >= 0 &&
+        request.resource.data.activityCount >= 0;
+      // The existing row must already belong to the caller, and the uid must not
+      // change — so one user can never overwrite another's position.
+      allow update: if isSignedIn() &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.percent is number &&
+        request.resource.data.points is number &&
+        request.resource.data.usageSeconds is number &&
+        request.resource.data.activityCount is number &&
+        request.resource.data.percent >= 0 &&
+        request.resource.data.percent <= 100 &&
+        request.resource.data.points >= 0 &&
+        request.resource.data.usageSeconds >= 0 &&
+        request.resource.data.activityCount >= 0;
+      allow delete: if isAdmin();
+    }
+
+    // ===== Analytics =====
+    // Private per-user trend history, one document per subcourse. There is NO
+    // public mirror here, unlike the leaderboard above: this screen only ever
+    // shows a user their own data, so nothing is queried across users and
+    // owner-only read is the whole access model.
+    //
+    // The `days` map is validated by size rather than by shape. Its keys are
+    // dates, so they cannot be enumerated in a rule, and the service prunes to
+    // 180 entries — the ceiling here is a backstop against a runaway client
+    // inflating the document, not a schema check.
+    match /users/{userId}/app_analytics/{docId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) &&
+        request.resource.data.subcourseId is string &&
+        request.resource.data.percent is number &&
+        request.resource.data.points is number &&
+        request.resource.data.percent >= 0 &&
+        request.resource.data.percent <= 100 &&
+        request.resource.data.points >= 0 &&
+        request.resource.data.days is map &&
+        request.resource.data.days.size() <= 200;
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ===== Content totals (coverage denominator) =====
+    // ONE document per subcourse counting how much content the app contains:
+    // practice questions, theory items, exam sets, GK/PM questions, read-mode
+    // questions and daily-test models. The profile progress ring divides a
+    // user's covered items by these numbers, which is why every signed-in user
+    // must be able to read them.
+    //
+    // Writes are admin-only and happen from the admin site, which ships the
+    // counter update as an atomic increment transform inside the same commit as
+    // the content write itself. Nothing here is user data — a client that could
+    // write it could only distort its own percentage, but admin-only keeps the
+    // number trustworthy across the leaderboard too.
+    match /app_content_totals/{subcourseId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // Default deny-all: any collection not explicitly listed above is closed.

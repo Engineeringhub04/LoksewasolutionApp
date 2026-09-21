@@ -21,7 +21,7 @@ import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { AppDialog } from '@/src/components/feedback/AppDialog';
 import { DiscussionActionMenu, type DiscussionActionMenuItem } from '@/src/components/discussion/DiscussionActionMenu';
@@ -35,7 +35,7 @@ export default function DiscussionFeedScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(() => fetchDiscussions(), []);
+  const { data, loading, refreshing, error, settled, refetch, refresh } = useAsyncData(() => fetchDiscussions(), []);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [likeDeltas, setLikeDeltas] = useState<Record<string, number>>({});
   const [query, setQuery] = useState('');
@@ -237,10 +237,14 @@ export default function DiscussionFeedScreen() {
 
       </LinearGradient>
 
-      <PageLoaderOverlay visible={loading} label={t('discussion.loading')} />
-      {error ? (
+      {/* Header stays; the body is REPLACED by the glow-ring until the first
+          fetch settles — empty-state and stale flash behind the old overlay are
+          gone. Pull-to-refresh keeps the list on screen. */}
+      {!settled && !error ? (
+        <Preloading tinted={false} label={t('discussion.loading')} hint={t('loadHints.discussion')} />
+      ) : error ? (
         <DataNotFound onRetry={refetch} />
-      ) : filteredPosts.length === 0 && !loading ? (
+      ) : filteredPosts.length === 0 ? (
         <EmptyState
           icon="chatbubbles-outline"
           title={query ? t('discussion.noSearchResults') : t('discussion.empty')}

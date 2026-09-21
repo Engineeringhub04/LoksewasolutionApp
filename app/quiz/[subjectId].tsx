@@ -14,7 +14,9 @@ import { ProgressBar } from '@/src/components/misc/ProgressBar';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { ErrorState } from '@/src/components/feedback/ErrorState';
-import { Skeleton } from '@/src/components/feedback/Skeleton';
+import { Preloading } from '@/src/components/Preloading';
+import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
+import { ReportButton } from '@/src/components/report/ReportButton';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
 
 function bilingual(english: string | undefined, nepali: string | undefined): string {
@@ -34,7 +36,7 @@ export default function QuizPracticeScreen() {
   const courseId = courseInfo?.courseId ?? profile?.courseId ?? DEFAULT_LEARNING_COURSE_ID;
   const subcourseId = courseInfo?.subcourseId ?? profile?.subcourseId ?? DEFAULT_LEARNING_SUBCOURSE_ID;
 
-  const { data: questions, loading, error, refetch } = useAsyncData(
+  const { data: questions, settled, error, refetch } = useAsyncData(
     () => fetchQuestionsBySubject(subjectId, 50, courseId, subcourseId),
     [courseId, subcourseId, subjectId],
   );
@@ -70,14 +72,13 @@ export default function QuizPracticeScreen() {
     }
   };
 
-  if (loading) {
+  // First-load gate only — once the first fetch has settled, quiz/summary/empty
+  // modes below are never re-hidden by a refresh or refetch.
+  if (!settled) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <TopAppBar title={t('quiz.summary')} />
-        <View style={{ padding: spacing.screenPadding, gap: spacing.sm }}>
-          <Skeleton height={24} width="60%" />
-          <Skeleton height={48} /><Skeleton height={48} /><Skeleton height={48} />
-        </View>
+        <Preloading tinted={false} label={t('common.loading')} hint={t('loadHints.common')} />
       </View>
     );
   }
@@ -119,7 +120,43 @@ export default function QuizPracticeScreen() {
         <ProgressBar progress={(index + 1) / questions.length} />
       </View>
       <View style={{ padding: spacing.screenPadding, gap: spacing.md, flex: 1 }}>
-        <Text variant="h3" weight="semiBold">{bilingual(current?.text, current?.textNe)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+          <Text variant="h3" weight="semiBold" style={{ flex: 1 }}>{bilingual(current?.text, current?.textNe)}</Text>
+          {current ? (
+            <>
+              <BookmarkButton
+                context="quiz"
+                kind="question"
+                refId={`${subjectId}:${current.id}`}
+                title={bilingual(current.text, current.textNe)}
+                preview={bilingual(current.explanation, current.explanationNe)}
+                sourceLabel={t('bookmarks.ctx.quiz')}
+                courseId={courseId}
+                subcourseId={subcourseId}
+                size={20}
+                payload={{
+                  question: bilingual(current.text, current.textNe),
+                  options: current.options,
+                  answerIndex: current.correctIndex,
+                  explanation: bilingual(current.explanation, current.explanationNe),
+                }}
+              />
+              <ReportButton
+                size={20}
+                target={() => ({
+                  source: 'question',
+                  targetType: 'question',
+                  id: `${subjectId}:${current.id}`,
+                  contextLabel: t('bookmarks.ctx.quiz'),
+                  title: bilingual(current.text, current.textNe),
+                  options: current.options,
+                  answerIndex: current.correctIndex,
+                  categoryGroup: 'question',
+                })}
+              />
+            </>
+          ) : null}
+        </View>
         {current?.options.map((option, i) => {
           const isSelected = selected === i;
           const isCorrect = i === current.correctIndex;

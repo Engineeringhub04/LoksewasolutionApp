@@ -2,9 +2,15 @@
 // slides underneath it. Continue with Email fades fields in/out. Terms checkbox
 // gates the auth actions (red + shake + vibrate when skipped). Submit stays
 // disabled until required fields are valid. Buttons are centered lower.
-import React, { useRef, useState } from 'react';
+//
+// One account = one device: both sign-in paths end in finishSignIn(), which asks
+// whether another phone is holding this account and, if so, parks here on the
+// takeover dialog instead of navigating. The check can only run once Firebase has
+// authenticated us — the rules will not show a user their own session document
+// before that — so "Cancel" has real work to do: it signs the account back out.
+import React, { useEffect, useRef, useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet, Keyboard, Vibration } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import Animated, { useSharedValue, withTiming, withSequence, useAnimatedStyle, FadeIn, FadeOut } from 'react-native-reanimated';
@@ -12,18 +18,30 @@ import { loginWithEmail, signInWithGoogleIdTokenResult } from '@/src/core/fireba
 import { isFirebaseConfigured } from '@/src/core/firebase/env';
 import { useGoogleAuthRequest } from '@/src/core/firebase/googleAuth';
 import { hasUserCourseSetup } from '@/src/core/firebase/services/courses';
+import { consumeEvictionNotice, type EvictionNotice } from '@/src/core/firebase/services/deviceSession';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { GoogleIcon } from '@/src/components/misc/GoogleIcon';
 import { AuthScreenLayout } from '@/src/components/misc/AuthScreenLayout';
+import { DeviceTakeoverDialog, useDeviceTakeover } from '@/src/components/auth/DeviceTakeover';
+import { DeviceEvictionDialog } from '@/src/components/auth/DeviceEvictionDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 const TERMS_URL = 'https://www.kbr.com.np/terms';
 const PRIVACY_URL = 'https://www.kbr.com.np/privacy';
 
+/**
+ * How long the "you were signed out" notice waits after this screen mounts.
+ *
+ * Comfortably past the native stack's slide (~350 ms), because the point is not
+ * to delay the message but to make sure it lands on a screen that has stopped
+ * moving. A dialog that fades in over a sliding splash screen reads as a glitch;
+ * the same dialog a third of a second later reads as an explanation.
+ */
+const EVICTION_NOTICE_SETTLE_MS = 480;
+
 export default function LoginScreen() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showEmailFields, setShowEmailFields] = useState(false);
@@ -32,6 +50,41 @@ export default function LoginScreen() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const redirectingAfterGoogleRef = useRef(false);
+  // One account = one device. Both sign-in paths hand off to this instead of
+  // navigating themselves; it navigates, or raises the takeover dialog.
+  const { finishSignIn, dialogProps } = useDeviceTakeover();
+  // The other direction of the same rule: this phone LOST the account while the
+  // app was closed. The splash screen found out, signed out and routed here, and
+  // left the reason behind for this screen to print — otherwise the user is
+  // staring at a login form they never asked for.
+  //
+  // Reading the notice deletes it, which is what makes this appear exactly once:
+  // a later launch, or a second visit to this screen, finds nothing to show.
+  //
+  // CLAIMED ON MOUNT, SHOWN AFTER THE TRANSITION.
+  //
+  // Those are deliberately two different moments. Storage is read immediately,
+  // because whoever reads it first owns the notice and the read must not be lost
+  // if the user navigates away. But raising the dialog immediately put it on
+  // screen while the splash screen was still sliding out — the user saw a
+  // sign-out popup floating over the launch animation, before the login form
+  // they were being sent to had even arrived. So the dialog waits out the stack
+  // transition and opens onto a login screen that is finished moving.
+  const [evictionNotice, setEvictionNotice] = useState<EvictionNotice | null>(null);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void consumeEvictionNotice().then((notice) => {
+      if (!active || !notice) return;
+      timer = setTimeout(() => {
+        if (active) setEvictionNotice(notice);
+      }, EVICTION_NOTICE_SETTLE_MS);
+    });
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
   const shake = useSharedValue(0);
   const termsShake = useSharedValue(0);
   const [, , promptGoogleAuth] = useGoogleAuthRequest();
@@ -83,14 +136,19 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const user = await loginWithEmail(email, password);
-      const hasCourse = await hasUserCourseSetup(user.uid).catch(() => false);
-      setLoading(false);
-      router.replace(hasCourse ? '/(tabs)' : '/course-setup');
-      showToast('Login successful', 'success');
+      // Course-setup check and the device-claim check are independent reads —
+      // start both now instead of paying them back-to-back.
+      const hasCoursePromise = hasUserCourseSetup(user.uid).catch(() => false);
+      const hasCourse = await hasCoursePromise;
+      // Spinner stays up THROUGH finishSignIn (device-claim read + write +
+      // navigation). Dropping it earlier read as a freeze: button back to
+      // normal for a second before the screen changed.
+      await finishSignIn(user.uid, hasCourse ? '/(tabs)' : '/course-setup', 'Login successful');
     } catch {
-      setLoading(false);
       triggerShake();
       showToast('Invalid email or password. Please try again.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,10 +161,10 @@ export default function LoginScreen() {
     try {
       const result = await promptGoogleAuth();
       if (result?.type === 'success' && result.params?.id_token) {
-        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token, { allowCreate: false });
-        redirectingAfterGoogleRef.current = true;
-        router.replace(isNewUser ? '/course-setup' : '/(tabs)');
-        showToast('Login successful', 'success');
+        const { user, isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token, { allowCreate: false });
+        // Keep the overlay only if we actually left the screen; a takeover
+        // question needs the spinner gone so the dialog is not read through it.
+        redirectingAfterGoogleRef.current = await finishSignIn(user.uid, isNewUser ? '/course-setup' : '/(tabs)', 'Login successful');
         return;
       }
       if (result?.type === 'cancel' || result?.type === 'dismiss') return;
@@ -222,6 +280,13 @@ export default function LoginScreen() {
         </Animated.View>
       </AuthScreenLayout>
       <PageLoaderOverlay visible={googleLoading} label="Signing in with Google..." />
+      <DeviceTakeoverDialog {...dialogProps} />
+      <DeviceEvictionDialog
+        visible={evictionNotice !== null}
+        mode="notice"
+        deviceName={evictionNotice?.deviceName}
+        onConfirm={() => setEvictionNotice(null)}
+      />
     </KeyboardAvoidingView>
   );
 }

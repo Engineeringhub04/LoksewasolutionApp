@@ -3,7 +3,7 @@
 // the Day, Subjects, Quick Links, Additional Features (3x3), Recent Notices,
 // App Guide (3x3), About Developer.
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppState, ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { AppState, Platform, ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -15,7 +15,6 @@ import { useNotificationStore } from '@/src/core/store/notificationStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
 import { useTranslation } from '@/src/core/i18n';
 import { DEFAULT_LEARNING_COURSE_ID, DEFAULT_LEARNING_SUBCOURSE_ID } from '@/src/core/firebase/services/learning';
-import { APP_NOTICES } from '@/src/core/data/notices';
 import { Text } from '@/src/components/misc/Text';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,7 +29,8 @@ import { GridButton } from '@/src/components/home/GridButton';
 import { Grid3 } from '@/src/components/home/Grid3';
 import { DeveloperCard } from '@/src/components/home/DeveloperCard';
 import { PremiumNoticeCard } from '@/src/components/home/PremiumNoticeCard';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
+import { InlineRefreshIndicator } from '@/src/components/feedback/InlineRefreshIndicator';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 
@@ -40,6 +40,16 @@ interface LinkItem {
   label: string;
   route: string;
   color?: string;
+}
+
+/** Notice cards show a compact date label derived from the publish instant. */
+function formatNoticeDate(millis: number | null): string {
+  if (!millis) return '';
+  try {
+    return new Date(millis).toLocaleDateString('ne-NP', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 // Quick Links
@@ -73,9 +83,17 @@ const appGuide: LinkItem[] = [
   { key: 'report', icon: 'flag-outline', label: 'Report Problem', route: '/settings/report-problem' },
   { key: 'leaderboard', icon: 'trophy-outline', label: 'Leaderboard', route: '/leaderboard' },
   { key: 'bookmark', icon: 'bookmark-outline', label: 'Bookmarks', route: '/bookmarks' },
-  { key: 'achievements', icon: 'ribbon-outline', label: 'Achievements', route: '/achievements' },
+  // Points at the placeholder on purpose: app/achievements.tsx still exists, but
+  // badges/levels aren't built yet, so the real screen would show an empty page.
+  { key: 'achievements', icon: 'ribbon-outline', label: 'Achievements', route: '/under-construction?page=Achievements' },
+  // Same screen as Profile → Analytics. It lived only in Profile, which is an odd
+  // place to hide the one page that answers "how am I doing?".
+  { key: 'analytics', icon: 'stats-chart-outline', label: 'Analytics', route: '/analytics' },
   { key: 'help', icon: 'help-buoy-outline', label: 'Help Center', route: '/settings/help-center' },
-  { key: 'notifications', icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
+  // The Notifications tile was removed: the header already has a bell with an
+  // unread badge, so this was a second door to the same room — and dropping it
+  // keeps the grid at a clean 3x3.
+  //
   // Replaced the old 'Settings' tile: that screen was a duplicate of what
   // Profile already offers (language/theme/logout/delete), so it was removed.
   // Same destination as Profile → Subscription Details.
@@ -89,7 +107,7 @@ const GUIDE_ACCENT = '#059669';
 
 export default function HomeScreen() {
   const { colors, spacing, effective, setMode } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const insets = useSafeAreaInsets();
@@ -114,8 +132,10 @@ export default function HomeScreen() {
     uid: user?.uid ?? null,
     courseId: enrolledCourseId,
     subcourseId: enrolledSubcourseId,
+    // Part of the key on purpose: an admin's inbox also carries incoming reports.
+    isAdmin: storeProfile?.isAdmin === true,
   };
-  const homeDataDeps = [user?.uid, enrolledCourseId, enrolledSubcourseId];
+  const homeDataDeps = [user?.uid, enrolledCourseId, enrolledSubcourseId, storeProfile?.isAdmin === true];
   // On a direct login, Home can mount before the background profile warm-up
   // finishes. Wait for that session's final course scope before starting any
   // Home request; otherwise the default scope and final scope fetch twice.
@@ -142,6 +162,11 @@ export default function HomeScreen() {
   );
   const subjectDetails = useAsyncData(
     (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.subjectDetails),
+    homeDataDeps,
+    { enabled: homeDataEnabled },
+  );
+  const notices = useAsyncData(
+    (isRefresh) => prefetchHomeData(homeDataKey, isRefresh === true).then((snapshot) => snapshot.notices),
     homeDataDeps,
     { enabled: homeDataEnabled },
   );
@@ -172,31 +197,27 @@ export default function HomeScreen() {
     developers.refreshing ||
     notifications.refreshing ||
     qotdPrefetch.refreshing ||
-    subjectDetails.refreshing;
-  const [showRefreshLoader, setShowRefreshLoader] = useState(false);
-  // Keep the native pull-to-refresh spinner visible briefly before placing the
-  // same opaque centered loader used by other pages over the refreshed content.
-  // It stays visible for exactly the real duration of the shared fetch.
-  useEffect(() => {
-    if (!refreshing) {
-      setShowRefreshLoader(false);
-      return;
-    }
-    const timer = setTimeout(() => setShowRefreshLoader(true), 280);
-    return () => clearTimeout(timer);
-  }, [refreshing]);
-  // Always keep Home content blank until the current authenticated session's
-  // shared request has settled. A cached snapshot may exist, but showing it
-  // underneath a loader makes stale content appear before the new render is
-  // ready. The tab bar remains mounted while the centered loader is visible.
+    subjectDetails.refreshing ||
+    notices.refreshing;
+  // The first-load gate for the body: every Home field joins the SAME shared
+  // snapshot request, so they settle together. `settled`, not `loading` — a
+  // pull-to-refresh re-fires `loading` and the finished page must stay up.
+  // Deliberately NOT gated on `homeDataEnabled` alone: an anonymous session
+  // never enables the hooks, and Home's static pieces should still render.
   const initialLoading = Boolean(user?.uid) && (
     !homeDataEnabled ||
-    banners.loading ||
-    developers.loading ||
-    notifications.loading ||
-    qotdPrefetch.loading ||
-    subjectDetails.loading
+    !banners.settled ||
+    !developers.settled ||
+    !notifications.settled ||
+    !qotdPrefetch.settled ||
+    !subjectDetails.settled ||
+    !notices.settled
   );
+  // `ready` is what swaps the body in. Same as `initialLoading` inverted — but
+  // expressed directly so the JSX reads as "is the page ready", and an error in
+  // any hook still counts as settled (useAsyncData flips `settled` on error too),
+  // so a failed fetch can never hang the page on the glow-ring.
+  const ready = !initialLoading;
   const onRefresh = () => {
     // Every field hook joins the same forced Home snapshot request. The overlay
     // therefore covers only the actual fetch duration, not a fixed timeout.
@@ -205,6 +226,7 @@ export default function HomeScreen() {
     void notifications.refresh();
     void qotdPrefetch.refresh();
     void subjectDetails.refresh();
+    void notices.refresh();
     // Keep the shared store fresh too, so Profile sees the same data.
     if (user?.uid) void useProfileStore.getState().load(user.uid, { refresh: true });
   };
@@ -219,7 +241,9 @@ export default function HomeScreen() {
     if (notifications.data) useNotificationStore.getState().setFromList(notifications.data);
   }, [notifications.data]);
   const homeSubjects = useMemo(() => (subjectDetails.data ?? []).slice(0, 6), [subjectDetails.data]);
-  const recentNotices = useMemo(() => APP_NOTICES.slice(0, 3), []);
+  // Firestore-backed Recent Notices — the same service the full Notices page
+  // reads, already subcourse-filtered by the snapshot, cached on both sides.
+  const recentNotices = useMemo(() => (notices.data ?? []).slice(0, 3), [notices.data]);
 
   const toggleTheme = () => setMode(effective === 'dark' ? 'light' : 'dark');
 
@@ -246,6 +270,7 @@ export default function HomeScreen() {
       // saved in Edit Profile shows up here immediately — no refresh needed.
       displayName={storeProfile?.name || user?.displayName || null}
       photoURL={storeProfile?.photoURL ?? user?.photoURL}
+      pro={activePro}
       notificationCount={badgeCount}
       isDark={effective === 'dark'}
       onToggleTheme={toggleTheme}
@@ -263,17 +288,30 @@ export default function HomeScreen() {
         paddingBottom: getGlassTabBarContentPadding(insets.bottom),
       }}
       refreshControl={
-        // progressViewOffset is essential here: the header is a FIXED overlay, so
-        // without it the spinner renders behind the header and is invisible.
+        // iOS: the fixed header hides the native spinner, so `refreshing` is
+        // suppressed there and the visible progress is the inline row below.
+        // Android: the native spinner renders fine (it draws below the header
+        // on this platform), so the DEFAULT behaviour stays — the user asked
+        // for exactly that.
         <AppRefreshControl
-          refreshing={refreshing}
+          refreshing={Platform.OS === 'ios' ? false : refreshing}
           onRefresh={onRefresh}
-          progressViewOffset={HOME_HEADER_MAX_HEIGHT}
+          progressViewOffset={Platform.OS === 'android' ? HOME_HEADER_MAX_HEIGHT : undefined}
         />
       }
       onScroll={onScroll}
       scrollEventThrottle={16}
     >
+      {!ready ? (
+        // The fixed header stays; the body is replaced by the glow-ring until
+        // the shared Home snapshot lands once. What used to flash behind the
+        // old overlay was a page of half-rendered sections.
+        <Preloading tinted={false} label="Loading Home..." hint={t("loadHints.home")} />
+      ) : (
+      <>
+      {/* Pull-to-refresh progress for a fixed-header screen — see
+          InlineRefreshIndicator for why the native spinner can't do this job. */}
+      <InlineRefreshIndicator visible={refreshing} language={language} />
       {/* Banner Carousel */}
       <View style={{ marginTop: spacing.md }}>
         {banners.error ? null : banners.data && banners.data.length > 0 ? (
@@ -361,20 +399,31 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Recent Notices */}
-      <View style={{ paddingHorizontal: spacing.screenPadding, marginBottom: spacing.lg }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-          <Text variant="h3" weight="bold">Recent Notices</Text>
-          <Pressable onPress={() => router.push('/notices')}>
-            <Text variant="bodySmall" style={{ color: colors.primary }}>View All</Text>
+      {/* Recent Notices — heading row reuses the same sectionHeaderRow +
+          viewAllPill recipe as Subjects above, so the two "see all" links on
+          Home stop looking like two different components. */}
+      <View style={{ marginBottom: spacing.lg }}>
+        <View style={styles.sectionHeaderRow}>
+          <Text variant="h3" weight="bold">{t('home.recentNotices')}</Text>
+          <Pressable onPress={() => router.push('/notices')} style={[styles.viewAllPill, { backgroundColor: colors.surfaceAlt }]}>
+            <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('subjects.seeAll')}</Text>
           </Pressable>
         </View>
         {recentNotices.length === 0 ? (
-          <EmptyState title="No notices yet" />
+          <View style={{ paddingHorizontal: spacing.screenPadding }}>
+            <EmptyState title={t('notices.empty')} />
+          </View>
         ) : (
-          <View style={{ gap: spacing.sm }}>
+          <View style={{ paddingHorizontal: spacing.screenPadding, gap: spacing.sm }}>
             {recentNotices.map((n) => (
-              <PremiumNoticeCard key={n.id} title={n.title} date={n.date} onPress={() => router.push(`/notice/${n.id}`)} />
+              <PremiumNoticeCard
+                key={n.id}
+                title={n.title}
+                date={n.dateLabel?.trim() || formatNoticeDate(n.publishedAt?.toMillis?.() ?? null)}
+                kind={n.kind ?? undefined}
+                description={n.excerpt}
+                onPress={() => router.push(`/notice/${n.id}`)}
+              />
             ))}
           </View>
         )}
@@ -407,14 +456,9 @@ export default function HomeScreen() {
           <EmptyState icon="person-circle-outline" title="Developer info coming soon" />
         )}
       </View>
+      </>
+      )}
     </Animated.ScrollView>
-    {/* Keep Home blank until the current request has settled; the tab bar
-        remains mounted while this theme-aware loader covers stale content. */}
-    <PageLoaderOverlay
-      visible={initialLoading || showRefreshLoader}
-      label="Loading Home..."
-      opaque
-    />
     </View>
   );
 }

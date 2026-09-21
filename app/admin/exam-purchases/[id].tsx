@@ -15,6 +15,7 @@ import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { RejectReasonDialog } from '@/src/components/admin/RejectReasonDialog';
 
@@ -23,7 +24,7 @@ export default function AdminExamPurchaseDetailScreen() {
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const reviewer = useAuthStore((state) => state.user);
-  const { data: record, loading, error, refetch } = useAsyncData(async () => id ? fetchExamPurchaseById(id) : null, [id]);
+  const { data: record, loading, settled, error, refetch } = useAsyncData(async () => id ? fetchExamPurchaseById(id) : null, [id]);
   const { data: userProfile } = useAsyncData(() => record?.uid ? fetchUserProfile(record.uid) : Promise.resolve(null), [record?.uid]);
   const [adminMessage, setAdminMessage] = useState('');
   const [rejectReason, setRejectReason] = useState('');
@@ -72,7 +73,7 @@ export default function AdminExamPurchaseDetailScreen() {
   return (
     <>
       <SubpageScrollScreen title={t('subscription.examDetails')}>
-        {loading ? null : error || !record ? <DataNotFound onRetry={refetch} /> : (
+        {!settled ? <Preloading tinted={false} label={t('subscription.loading')} hint={t('loadHints.purchases')} /> : error || !record ? <DataNotFound onRetry={refetch} /> : (
           <>
             <View style={[styles.status, { backgroundColor: `${statusTag.color}14`, borderColor: statusTag.color, borderRadius: radius.lg, padding: spacing.md }]}>
               <View style={styles.row}><Ionicons name={statusTag.icon} size={22} color={statusTag.color} /><Text variant="bodyLarge" weight="bold" style={{ color: statusTag.color }}>{statusTag.label}</Text></View>
@@ -109,7 +110,7 @@ export default function AdminExamPurchaseDetailScreen() {
           </>
         )}
       </SubpageScrollScreen>
-      <PageLoaderOverlay visible={loading || busy} label={t('subscription.loading')} />
+      <PageLoaderOverlay visible={busy} label={t('subscription.loading')} />
 
       <ConfirmDialog visible={showApprove} title={t('subscription.adminApprove')} message={t('subscription.adminApproveConfirm')} onConfirm={approve} onCancel={() => setShowApprove(false)} />
       <RejectReasonDialog

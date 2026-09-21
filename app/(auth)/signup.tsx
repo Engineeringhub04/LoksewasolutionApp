@@ -2,6 +2,10 @@
 // Continue with Email fades fields in/out. Terms checkbox gates the auth actions
 // (red + shake + vibrate when skipped). Create Account stays disabled until the
 // required fields are valid. Buttons are centered lower on the screen.
+//
+// The single-device gate lives here too, not only on Login: "Continue with
+// Google" on this screen signs into an EXISTING account whenever one already
+// matches that Google address, which would otherwise be a way around it.
 import React, { useRef, useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, Pressable, ActivityIndicator, StyleSheet, Keyboard, Vibration } from 'react-native';
 import { Link, useRouter } from 'expo-router';
@@ -16,6 +20,7 @@ import { Text } from '@/src/components/misc/Text';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { GoogleIcon } from '@/src/components/misc/GoogleIcon';
 import { AuthScreenLayout } from '@/src/components/misc/AuthScreenLayout';
+import { DeviceTakeoverDialog, useDeviceTakeover } from '@/src/components/auth/DeviceTakeover';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 
 const TERMS_URL = 'https://www.kbr.com.np/terms';
@@ -32,6 +37,9 @@ export default function SignupScreen() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const redirectingAfterGoogleRef = useRef(false);
+  // One account = one device. Both paths hand off to this instead of navigating
+  // themselves; it navigates, or raises the takeover dialog.
+  const { finishSignIn, dialogProps } = useDeviceTakeover();
   const shake = useSharedValue(0);
   const termsShake = useSharedValue(0);
   const [, , promptGoogleAuth] = useGoogleAuthRequest();
@@ -84,15 +92,19 @@ export default function SignupScreen() {
     }
     setLoading(true);
     try {
-      await registerWithEmail(name.trim(), email, password);
-      setLoading(false);
-      router.replace('/course-setup');
-      showToast('Account created successfully', 'success');
+      // A brand-new account is never claimed by anyone, so this cannot raise the
+      // dialog — it is here to WRITE the claim, so the account is owned by this
+      // phone from its very first minute.
+      const user = await registerWithEmail(name.trim(), email, password);
+      // Spinner stays up through the claim write + navigation (see login.tsx) —
+      // dropping it early read as a frozen button.
+      await finishSignIn(user.uid, '/course-setup', 'Account created successfully');
     } catch (e: unknown) {
-      setLoading(false);
       const code = (e as { code?: string })?.code;
       if (code === 'auth/email-already-in-use') showToast('This email is already registered', 'error');
       else showToast('Something went wrong. Please try again.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -105,10 +117,14 @@ export default function SignupScreen() {
     try {
       const result = await promptGoogleAuth();
       if (result?.type === 'success' && result.params?.id_token) {
-        const { isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token, { allowCreate: true });
-        redirectingAfterGoogleRef.current = true;
-        router.replace(isNewUser ? '/course-setup' : '/(tabs)');
-        showToast('Google account signed in successfully', 'success');
+        const { user, isNewUser } = await signInWithGoogleIdTokenResult(result.params.id_token, { allowCreate: true });
+        // Keep the overlay only if we actually left the screen; a takeover
+        // question needs the spinner gone so the dialog is not read through it.
+        redirectingAfterGoogleRef.current = await finishSignIn(
+          user.uid,
+          isNewUser ? '/course-setup' : '/(tabs)',
+          'Google account signed in successfully',
+        );
         return;
       }
       if (result?.type === 'cancel' || result?.type === 'dismiss') return;
@@ -225,6 +241,7 @@ export default function SignupScreen() {
         </Animated.View>
       </AuthScreenLayout>
       <PageLoaderOverlay visible={googleLoading} label="Signing in with Google..." />
+      <DeviceTakeoverDialog {...dialogProps} />
     </KeyboardAvoidingView>
   );
 }

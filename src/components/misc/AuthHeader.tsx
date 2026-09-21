@@ -1,6 +1,7 @@
 // Shared curved header for auth screens (Login/Signup/Forgot/Reset Password).
 // Blue gradient matching Subcourse cards, with professional layout, terms/privacy
-// checkbox, and stable button spacing. Logo sits inside a white circle.
+// checkbox, and stable button spacing. Logo sits inside a rounded squircle tile
+// (never a circle) so it matches the launcher/app icon.
 import React from 'react';
 import { Image, View, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +30,7 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
       {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
 
       <View style={styles.content}>
-        <View style={styles.logoCircle}>
+        <View style={styles.logoTile}>
           <Image
             source={AppConfig.identity.logoAsset}
             style={styles.logoImage}
@@ -55,24 +56,22 @@ const styles = StyleSheet.create({
   backBtn: { position: 'absolute', top: 54, left: 16, zIndex: 10, padding: 6 },
   rightSlot: { position: 'absolute', top: 54, right: 16, zIndex: 10 },
   content: { alignItems: 'center', gap: 8, paddingHorizontal: 32, marginTop: 4 },
-  logoCircle: {
+  logoTile: {
     width: 82,
     height: 82,
-    borderRadius: 41,
+    borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#000030',
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
     shadowColor: '#1E40AF',
     shadowOpacity: 0.5,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
   },
-  logoImage: { width: 76, height: 76 },
+  logoImage: { width: 82, height: 82 },
   title: { color: '#FFF', fontSize: 26, textAlign: 'center' },
   subtitle: { color: 'rgba(255,255,255,0.88)', fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

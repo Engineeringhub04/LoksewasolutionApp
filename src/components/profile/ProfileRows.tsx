@@ -111,34 +111,10 @@ export function MenuRow({ icon, label, onPress, destructive, trailingText }: Men
   );
 }
 
-/**
- * Three-up stats strip. Values come from users/{uid}.stats and are all zero
- * for now — the aggregation that would populate them doesn't exist yet, so
- * they're shown as 0 rather than fabricated.
- */
-export function StatsStrip({ testsTaken, streak, points }: { testsTaken: number; streak: number; points: number }) {
-  const { colors, spacing, radius } = useTheme();
-  const items = [
-    { icon: 'document-text-outline' as const, label: 'Tests', value: testsTaken },
-    { icon: 'flame-outline' as const, label: 'Streak', value: streak },
-    { icon: 'star-outline' as const, label: 'Points', value: points },
-  ];
-
-  return (
-    <View style={[styles.statsRow, { backgroundColor: colors.surface, borderRadius: radius.lg, borderColor: colors.border, padding: spacing.md }]}>
-      {items.map((item, index) => (
-        <React.Fragment key={item.label}>
-          {index > 0 ? <View style={[styles.statsDivider, { backgroundColor: colors.divider }]} /> : null}
-          <View style={styles.statItem}>
-            <Ionicons name={item.icon} size={18} color={colors.primary} />
-            <Text variant="h3" weight="bold">{item.value}</Text>
-            <Text variant="caption" secondary>{item.label}</Text>
-          </View>
-        </React.Fragment>
-      ))}
-    </View>
-  );
-}
+// StatsStrip used to live here. It read users/{uid}.stats, which nothing ever
+// wrote, so it permanently displayed three zeroes. Replaced 2026-09-14 by
+// ProfileStatsCard, which reads the real whole-app aggregate from
+// mainLeaderboard/{uid}/{subcourseId}.
 
 const styles = StyleSheet.create({
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -149,7 +125,4 @@ const styles = StyleSheet.create({
   iconBox: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   trailingText: { maxWidth: 120 },
   pressed: { opacity: 0.65 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
-  statItem: { flex: 1, alignItems: 'center', gap: 2 },
-  statsDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 4 },
 });

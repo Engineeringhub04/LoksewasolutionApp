@@ -4,7 +4,8 @@
 // during BOTH the initial load and any pull-to-refresh — not just once.
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 

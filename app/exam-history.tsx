@@ -13,7 +13,7 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { ResultCard } from '@/src/components/cards/ResultCard';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 
 export default function ExamHistoryScreen() {
   const { colors, spacing } = useTheme();
@@ -21,7 +21,7 @@ export default function ExamHistoryScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const { data, loading, refreshing, error, refetch, refresh } = useAsyncData(async () => {
+  const { data, loading, settled, refreshing, error, refetch, refresh } = useAsyncData(async () => {
     if (!user) return [];
     return fetchAttemptHistory(user.uid);
   }, [user?.uid]);
@@ -32,8 +32,9 @@ export default function ExamHistoryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('history.title')} />
-      <PageLoaderOverlay visible={loading || refreshing} label="Loading Exam History..." />
-      {loading ? null : error ? (
+      {!settled ? (
+        <Preloading tinted={false} label="Loading Exam History..." hint={t("loadHints.examHistory")} />
+      ) : error ? (
         <DataNotFound onRetry={refetch} />
       ) : !data || data.length === 0 ? (
         <EmptyState title={t('history.empty')} ctaLabel={t('history.startMockTest')} onCtaPress={() => router.push('/(tabs)/exam')} />
