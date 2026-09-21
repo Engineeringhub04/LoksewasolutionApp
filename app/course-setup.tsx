@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
-import { driftEnter } from '@/src/core/nav/driftEnter';
+import { useDriftScreen } from '@/src/core/nav/driftEnter';
 import { fetchCourses, fetchSubcourses, saveUserCourseSetup, fetchUserCourseInfo, type Course, type Subcourse } from '@/src/core/firebase/services/courses';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
@@ -30,6 +30,7 @@ export default function CourseSetupScreen() {
   // "update" mode = opened from Home (user already has a course); shows a back
   // button and "Update" wording instead of the mandatory first-time setup flow.
   const isUpdateMode = params.mode === 'update';
+  const { driftStyle, exitThen } = useDriftScreen();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [subcourses, setSubcourses] = useState<Subcourse[]>([]);
@@ -189,14 +190,13 @@ export default function CourseSetupScreen() {
 
   return (
     <Animated.View
-      entering={driftEnter}
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, driftStyle, { backgroundColor: colors.background }]}
     >
       {/* Blue Curved Header */}
       <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
           {isUpdateMode ? (
-            <Pressable onPress={() => router.back()} style={styles.headerIconBox} accessibilityLabel="Back">
+            <Pressable onPress={() => exitThen(() => router.back())} style={styles.headerIconBox} accessibilityLabel="Back">
               <Ionicons name="arrow-back" size={20} color="#FFF" />
             </Pressable>
           ) : (

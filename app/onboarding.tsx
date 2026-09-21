@@ -109,6 +109,7 @@ function firestoreToSlide(doc: OnboardingSlide): SlideData {
 // MAIN COMPONENT
 // ====================================================================
 export default function OnboardingScreen() {
+  console.log('[ONBOARDING] render');
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

@@ -245,30 +245,19 @@ function RootStack() {
       <Stack
         screenOptions={{
           headerShown: false,
-          // TRANSITION = the reference-project look (react-navigation-custom-
-          // transition): a quick FADE with a barely-there drift — open 260ms,
-          // close slightly quicker, a soft ease. That project achieves it with
-          // @react-navigation/stack's cardStyleInterpolator (JS stack); our
-          // expo-router runs the NATIVE stack, which has no interpolator hook —
-          // but its `fade` animation is visually the same family (cross-fade,
-          // no big slide), so we match the duration and keep the feel.
-          //
-          // WHY THE OLD WHITE-FLASH WORRY IS (MOSTLY) GONE: the fade alpha-
-          // blends two screen layers, and whatever sits underneath shows
-          // through mid-fade. That underneath colour is now painted at the OS
-          // level via SystemUI.setBackgroundColorAsync (rootPaint below) and
-          // via contentStyle, so mid-fade shows the app background, not white.
-          // NOTE: this is only fully true in a REAL build — Expo Go's shared
-          // shell can still flash. Test on the local release APK, not Expo Go.
-          //
-          // The perf discipline stays: freezeOnBlur + the JS-thread holds in
-          // useAsyncData / Preloading keep the fade's frame budget free.
+          // TRANSITION — 'default' (platform zoom) left the OLD SCREEN stuck
+          // on top after router.replace (splash never handed off to tabs on
+          // BOTH platforms — splash-stuck bug). 'fade_from_right' CRASHES
+          // Expo Go on Android. 'fade' = the reference-project look (quick
+          // cross-fade, no slide) and is crash-free — CURRENT CHOICE.
+          // 'fade' covers the gap between the old screen unmounting and the new
+          // screen's drift starting (drift begins at opacity 0 — with 'none'
+          // that gap read as a white flash between pages). The JS-stack reference
+          // animates the OLD page itself on push; native-stack cannot, so this
+          // cross-fade stands in for it. The drift (src/core/nav/driftEnter.ts)
+          // plays on top of this.
           animation: 'fade',
-          // Reference project: OPEN_DURATION 260 / CLOSE_DURATION 240 with
-          // Easing.bezier(0.2, 0, 0, 1). native-stack takes one number, so we
-          // use 260 for both directions (close reads faster anyway because the
-          // old screen is already familiar).
-          animationDuration: 260,
+          animationDuration: 250,
           animationTypeForReplace: 'push',
           // Without this the screen you just pushed away stays fully mounted and
           // keeps re-rendering: zustand subscriptions, interval timers, AppState
@@ -295,25 +284,14 @@ function RootStack() {
           name="(tabs)"
           options={{
             // The tab shell overrides only its INNER tab-switching animation
-            // (a fade, in app/(tabs)/_layout.tsx). Entering or leaving the shell
-            // itself is a normal page transition and matches the reference-
-            // project fade (see the long note in screenOptions above).
-            animation: 'fade',
-            animationDuration: 260,
+            // (a fade, in app/(tabs)/_layout.tsx). Entering or leaving the
+            // shell itself uses the app-wide transition.
+            animation: 'ios_from_right',
             animationTypeForReplace: 'push',
             contentStyle: { backgroundColor: colors.background },
           }}
         />
-        <Stack.Screen
-          name="course-setup"
-          options={{
-            // Reference-project look for this screen. NOTE: 'fade_from_right'
-            // was tried here and CRASHED in Expo Go on Android (both push and
-            // pop) — do not reintroduce it. Plain 'fade' is the safe value.
-            animation: 'fade',
-            animationDuration: 260,
-          }}
-        />
+        <Stack.Screen name="course-setup" />
         <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
       </Stack>

@@ -106,6 +106,7 @@ const FEATURE_ACCENT = '#7C3AED';
 const GUIDE_ACCENT = '#059669';
 
 export default function HomeScreen() {
+  console.log('[TABS] Home render');
   const { colors, spacing, effective, setMode } = useTheme();
   const { t, language } = useTranslation();
   const router = useRouter();

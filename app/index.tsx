@@ -161,6 +161,13 @@ export default function SplashScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
+  // DEBUG: if this fires, the splash screen unmounted after routing (good).
+  // If it never fires while [TABS] Home render shows, the splash screen is
+  // still mounted in the stack ABOVE the tabs — a navigation problem.
+  useEffect(() => {
+    return () => console.log('[SPLASH] screen UNMOUNTED');
+  }, []);
+
   // Pre-cache onboarding network images in the background. This must never delay
   // the Splash -> Welcome/authenticated app transition.
   useEffect(() => {
@@ -177,6 +184,7 @@ export default function SplashScreen() {
   // without issuing the same requests again after navigation.
   useEffect(() => {
     if (routedRef.current || initializing || !hydrated) return;
+    console.log('[SPLASH] effect fired', { initializing, hydrated, user: !!user });
 
     const startedAt = Date.now();
     const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -185,6 +193,7 @@ export default function SplashScreen() {
       if (routedRef.current) return;
       // Force-update check intentionally removed for now (was causing a false-positive
       // block on some Android devices unrelated to any real version mismatch.
+      console.log('[SPLASH] decide() started');
       const configPromise = fetchRemoteConfig();
       let homeReady: Promise<unknown> = Promise.resolve();
       // Set when this phone has lost the account to another device. It changes
@@ -203,7 +212,9 @@ export default function SplashScreen() {
         // Doing it before the prefetch is not just tidiness: warming Home costs a
         // dozen reads, and spending them on a session that will not survive the
         // next three seconds is pure waste.
+        console.log('[SPLASH] verifying device session…');
         const session = await verifyDeviceSession(user.uid);
+        console.log('[SPLASH] session verdict:', session.verdict);
         if (session.verdict === 'evicted') {
           evicted = true;
           // Claim the routing decision now. logout() empties the auth store,
@@ -220,7 +231,9 @@ export default function SplashScreen() {
       if (user && !evicted) {
         // Root layout also warms Profile. profileStore shares any in-flight request,
         // so this does not create duplicate profile/course reads during launch.
+        console.log('[SPLASH] loading profile…');
         await useProfileStore.getState().load(user.uid);
+        console.log('[SPLASH] profile loaded');
         const profileState = useProfileStore.getState();
         const courseId = profileState.courseInfo?.courseId
           ?? profileState.profile?.courseId
@@ -237,12 +250,35 @@ export default function SplashScreen() {
         }).catch(() => undefined);
       }
 
-      const [config] = await Promise.all([configPromise, homeReady]);
+      // HARD DEADLINE — the splash must never wait forever. Every promise
+      // below is a Firestore/network call with no timeout of its own; on a
+      // slow or flaky connection one of them could hang for minutes and the
+      // app would stay parked on the splash screen (reported as "splash ma
+      // loader matra dekhincha, page ma jadaina"). 7s is long enough for a
+      // normal launch (they usually finish in 1-3s) and short enough that a
+      // hang costs the user seconds, not minutes. Racing with a resolving
+      // fallback means the app still routes when a call hangs; whatever data
+      // was missed simply loads after navigation, as every other screen does.
+      const RACE_TIMEOUT_MS = 7000;
+      const deadline = new Promise<undefined>((resolve) =>
+        setTimeout(() => resolve(undefined), RACE_TIMEOUT_MS),
+      );
+      const raced = await Promise.race([
+        Promise.all([configPromise, homeReady]).then(([config]) => config),
+        deadline,
+      ]);
+      console.log('[SPLASH] race done, timedOut:', raced === undefined);
+      // If the race timed out, config is undefined — use a minimal safe config
+      // object so routing can still proceed (maintenance gating just falls
+      // through; the real config is re-fetched by whichever screen needs it).
+      const config = raced ?? { maintenanceMode: false } as never;
+
       const remaining = MIN_SPLASH_MS - (Date.now() - startedAt);
       // Waited out even on the eviction path, so a displaced phone still gets the
       // ordinary three-second launch instead of snapping to a login screen the
       // user did not ask for.
       if (remaining > 0) await sleep(remaining);
+      console.log('[SPLASH] min-splash done, routing now…');
       if (!evicted) {
         if (routedRef.current) return;
         routedRef.current = true;
@@ -256,18 +292,19 @@ export default function SplashScreen() {
       // the current view controller (iOS), and an unhandled rejection at this
       // point would abandon `decide()` halfway — leaving the app parked on the
       // splash screen forever instead of merely skipping a cosmetic step.
-      await NativeSplashScreen.hideAsync().catch(() => undefined);
+      await NativeSplashScreen.hideAsync().then(() => console.log('[SPLASH] native splash hidden')).catch((e) => console.log('[SPLASH] native splash hide FAILED:', e));
 
-      if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
+      if (config.maintenanceMode) { console.log('[SPLASH] → maintenance'); router.replace('/blocking/maintenance'); return; }
       // Ahead of the connectivity gate on purpose: the sign-out already happened,
       // so there is no session left to send anywhere else.
-      if (evicted) { router.replace('/(auth)/login'); return; }
+      if (evicted) { console.log('[SPLASH] → login (evicted)'); router.replace('/(auth)/login'); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
-      if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
-      if (user) { router.replace('/(tabs)'); return; }
+      if (networkChecked && !isOnline && !user) { console.log('[SPLASH] → no-internet'); router.replace('/blocking/no-internet'); return; }
+      if (user) { console.log('[SPLASH] → tabs'); setTimeout(() => { console.log('[SPLASH] tabs nav executed'); }, 0); router.replace('/(tabs)'); return; }
+      console.log('[SPLASH] → onboarding');
       router.replace('/onboarding');
     };
-    void decide();
+    void decide().catch((e) => console.log('[SPLASH] decide() CRASHED:', e));
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
   // The brand mark is now the app icon itself — a square (1:1) deep-navy tile
