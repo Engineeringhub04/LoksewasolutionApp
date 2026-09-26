@@ -46,6 +46,11 @@ import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 import { Preloading } from '@/src/components/Preloading';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 
@@ -251,7 +256,9 @@ export default function ExamScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* ===== Stable header ===== */}
       <LinearGradient
-        colors={['#1D4ED8', '#2563EB', '#3B82F6']}
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <View style={styles.headerTopRow}>

@@ -19,6 +19,17 @@ import { Text } from '@/src/components/misc/Text';
 import { useTheme } from '@/src/core/theme';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
+/**
+ * App-wide header gradient — deep navy diagonal, matching the syllabus
+ * "Active Course" card. Every page header (tabs, sub-pages, quiz screens)
+ * uses this so the app reads as one family.
+ */
+export const HEADER_GRADIENT_COLORS = ['#2563EB', '#1D4ED8', '#0B1F5B'] as const;
+export const HEADER_GRADIENT_START = { x: 0, y: 0 } as const;
+export const HEADER_GRADIENT_END = { x: 1, y: 1 } as const;
+/** Solid fallback painted under the gradient so a header can never render colourless. */
+export const HEADER_FALLBACK_COLOR = '#1D4ED8';
+
 export interface SubpageHeaderProps {
   title: string;
   showBack?: boolean;
@@ -47,7 +58,7 @@ export function SubpageHeader({
   // several subpages missing it. Pass showThemeToggle={false} explicitly
   // (or provide a custom rightSlot) to opt out.
   showThemeToggle = true,
-  gradientColors = ['#1D4ED8', '#2563EB', '#3B82F6'],
+  gradientColors = HEADER_GRADIENT_COLORS,
 }: SubpageHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -62,7 +73,12 @@ export function SubpageHeader({
     ));
 
   return (
-    <LinearGradient colors={gradientColors} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <LinearGradient
+      colors={gradientColors}
+      start={HEADER_GRADIENT_START}
+      end={HEADER_GRADIENT_END}
+      style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: HEADER_FALLBACK_COLOR }]}
+    >
       <View style={styles.row}>
         {showBack ? (
           <Pressable onPress={onBackPress ?? (() => router.back())} style={styles.iconBox} accessibilityLabel="Back">

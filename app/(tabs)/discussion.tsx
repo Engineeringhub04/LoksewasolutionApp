@@ -21,6 +21,11 @@ import { DiscussionPostCard } from '@/src/components/cards/DiscussionPostCard';
 import { FAB } from '@/src/components/buttons/FAB';
 import { EmptyState } from '@/src/components/feedback/EmptyState';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 import { Preloading } from '@/src/components/Preloading';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { AppDialog } from '@/src/components/feedback/AppDialog';
@@ -186,7 +191,9 @@ export default function DiscussionFeedScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <LinearGradient
-        colors={['#172554', '#1D4ED8', '#2563EB']}
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
         style={[styles.header, { paddingTop: insets.top + spacing.sm }]}
       >
         <View style={styles.headerTopRow}>

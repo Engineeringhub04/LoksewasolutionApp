@@ -29,6 +29,11 @@ import {
 import { hasActivePremium } from '@/src/core/firebase/services/profile';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { BookmarkButton } from '@/src/components/bookmarks/BookmarkButton';
 import { ReportButton } from '@/src/components/report/ReportButton';
@@ -256,7 +261,12 @@ export default function QuizScreen() {
       <Stack.Screen options={{ gestureEnabled: false }} />
 
       {/* Header */}
-      <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
         <Pressable onPress={() => setShowLeaveConfirm(true)} style={styles.headerIcon} accessibilityLabel="Leave exam">
           <Ionicons name="arrow-back" size={20} color="#FFF" />
         </Pressable>
