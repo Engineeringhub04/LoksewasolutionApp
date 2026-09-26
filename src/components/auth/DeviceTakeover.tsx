@@ -10,7 +10,8 @@
 // the question they are already signed in. That is why Cancel signs back out
 // instead of simply closing a dialog — declining has to actually undo something.
 import React, { useCallback, useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { pushAndClearHistory } from '@/src/core/nav/pushAndClearHistory';
 
 import { logout } from '@/src/core/firebase/auth';
 import {
@@ -52,6 +53,7 @@ export interface DeviceTakeover {
 
 export function useDeviceTakeover(): DeviceTakeover {
   const router = useRouter();
+  const navigation = useNavigation();
   const [conflict, setConflict] = useState<DeviceSessionConflict | null>(null);
   const [busy, setBusy] = useState(false);
   const pendingRef = useRef<PendingSignIn | null>(null);
@@ -68,11 +70,14 @@ export function useDeviceTakeover(): DeviceTakeover {
       // meaningless, so it must not be waiting here the next time this screen
       // mounts. Fire-and-forget: it is hygiene, not part of the sign-in.
       void clearEvictionNotice();
-      router.replace(next);
+      // push (not replace) so the slide animation plays; history is cleared
+      // right after so back never returns to the login screen.
+      const routeName = next === '/(tabs)' ? '(tabs)' : 'course-setup';
+      pushAndClearHistory(router, navigation, next, routeName);
       showToast(successMessage, 'success');
       return true;
     },
-    [router],
+    [router, navigation],
   );
 
   const onConfirm = useCallback(async () => {
