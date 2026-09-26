@@ -287,9 +287,13 @@ export default function HomeScreen() {
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
+        // flexGrow lets the preloader's own flex:1 fill the screen so it sits
+        // DEAD CENTRE while loading (without it the ring hugged the top).
+        // Harmless once the real (long) content is in.
+        flexGrow: 1,
         // No header while loading, so no header-sized gap — just the status
         // bar inset, with the preloader centred in the free space.
-        paddingTop: ready ? HOME_HEADER_MAX_HEIGHT : insets.top + 24,
+        paddingTop: ready ? HOME_HEADER_MAX_HEIGHT : insets.top,
         paddingBottom: getGlassTabBarContentPadding(insets.bottom),
       }}
       refreshControl={
