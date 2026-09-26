@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
+import { BlankStack } from 'react-native-screen-transitions/expo-router';
+import { slideOptions } from '@/src/core/nav/slideTransition';
 import { Platform, StyleSheet, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import * as NativeSplashScreen from 'expo-splash-screen';
@@ -242,59 +244,35 @@ function RootStack() {
         default screenOptions fixes this for every current AND future route
         in one place, instead of needing to remember to list each one.
       */}
-      <Stack
+
+<BlankStack
         screenOptions={{
           headerShown: false,
-          // TRANSITION — 'default' (platform zoom) left the OLD SCREEN stuck
-          // on top after router.replace (splash never handed off to tabs on
-          // BOTH platforms — splash-stuck bug). 'fade_from_right' CRASHES
-          // Expo Go on Android. 'fade' = the reference-project look (quick
-          // cross-fade, no slide) and is crash-free — CURRENT CHOICE.
-          // 'fade' covers the gap between the old screen unmounting and the new
-          // screen's drift starting (drift begins at opacity 0 — with 'none'
-          // that gap read as a white flash between pages). The JS-stack reference
-          // animates the OLD page itself on push; native-stack cannot, so this
-          // cross-fade stands in for it. The drift (src/core/nav/driftEnter.ts)
-          // plays on top of this.
-          animation: 'fade',
-          animationDuration: 250,
-          animationTypeForReplace: 'push',
-          // Without this the screen you just pushed away stays fully mounted and
-          // keeps re-rendering: zustand subscriptions, interval timers, AppState
-          // listeners and Reanimated loops all stay live. For the ~300ms the
-          // slide is playing the JS thread is doing TWO screens' work, which is
-          // exactly when it can least afford to. Freezing the blurred screen is
-          // what makes the animation's frame budget actually available.
-          freezeOnBlur: true,
+          // Slide-from-right page transition (src/core/nav/slideTransition.ts).
+          ...slideOptions,
           // Reserve the Android system-navigation area for every regular route,
-          // so scroll content cannot render underneath the system buttons/gesture
-          // handle. Splash and the tab shell override this below because they
-          // manage their own bottom layout.
+          // so scroll content cannot render underneath the system buttons.
           contentStyle: {
             backgroundColor: rootPaint,
             paddingBottom: systemBottomInset,
           },
         }}
       >
-        <Stack.Screen
+        <BlankStack.Screen
           name="index"
           options={{ contentStyle: { backgroundColor: colors.background } }}
         />
-        <Stack.Screen
+        <BlankStack.Screen
           name="(tabs)"
-          options={{
-            // The tab shell overrides only its INNER tab-switching animation
-            // (a fade, in app/(tabs)/_layout.tsx). Entering or leaving the
-            // shell itself uses the app-wide transition.
-            animation: 'ios_from_right',
-            animationTypeForReplace: 'push',
-            contentStyle: { backgroundColor: colors.background },
-          }}
+          options={{ contentStyle: { backgroundColor: colors.background } }}
         />
-        <Stack.Screen name="course-setup" />
-        <Stack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
-      </Stack>
+        <BlankStack.Screen name="course-setup" />
+        <BlankStack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
+        <BlankStack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
+      </BlankStack>
+      
+
+      
       {showNonTabSystemBackdrop ? (
         <View
           pointerEvents="none"

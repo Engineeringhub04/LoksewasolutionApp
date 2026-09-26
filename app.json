@@ -105,7 +105,11 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#DE6E00"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

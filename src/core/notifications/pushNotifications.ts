@@ -15,9 +15,18 @@
 // Expo Go on SDK 54 does not support remote push, so registration is a no-op in
 // that environment — nothing here throws, it just skips.
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
+import type * as NotificationsModule from 'expo-notifications';
 import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+const isExpoGo =
+  Constants.appOwnership === 'expo' ||
+  (Constants as unknown as { executionEnvironment?: string }).executionEnvironment === 'storeClient';
+
+const Notifications: typeof NotificationsModule | null = isExpoGo
+  ? null
+  : require('expo-notifications');
+
+
 
 import { AppConfig } from '@/src/core/config/appConfig';
 import { Collections } from '@/src/core/firebase/collections';
@@ -31,19 +40,21 @@ const ANDROID_CHANNEL_ID = 'default';
 // Foreground presentation: when a push arrives while the app is open we still
 // want the banner + list entry + a subtle badge/sound, matching user expectation
 // on both platforms.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 let registered = false;
 
 async function ensureAndroidChannel(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || !Notifications) return;
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: 'General',
     importance: Notifications.AndroidImportance.HIGH,
@@ -232,7 +243,17 @@ export interface NotificationListeners {
  * lands on the same screen as tapping the inbox row.
  */
 export function attachNotificationListeners({ onResponse, onReceived }: NotificationListeners): () => void {
+  if (!Notifications) {
+    if (__DEV__) {
+      console.log('[push] Expo Go — notification listeners skipped.');
+    }
+    return () => {};
+  }
+
   const readPayload = (data: unknown): PushPayload => {
+
+
+    
     const fields = (data ?? {}) as { deepLink?: unknown; type?: unknown };
     return {
       deepLink: typeof fields.deepLink === 'string' ? fields.deepLink : null,

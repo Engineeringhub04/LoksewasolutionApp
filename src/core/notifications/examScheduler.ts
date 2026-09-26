@@ -2,7 +2,16 @@
 // GitHub push automation. Keeping a second local scheduler would double-notify
 // devices that opened the Exam page before start time, so this module now only
 // removes legacy local schedules created by earlier app versions.
-import * as Notifications from 'expo-notifications';
+import type * as NotificationsModule from 'expo-notifications';
+import Constants from 'expo-constants';
+
+const isExpoGo =
+  Constants.appOwnership === 'expo' ||
+  (Constants as unknown as { executionEnvironment?: string }).executionEnvironment === 'storeClient';
+
+const Notifications: typeof NotificationsModule | null = isExpoGo
+  ? null
+  : require('expo-notifications');
 import type { ExamSet } from '@/src/core/firebase/services/examHub';
 
 const LEGACY_KIND = 'exam-set-live';
@@ -25,8 +34,11 @@ export async function syncExamSetNotifications(
 
 /** Removes every legacy locally-scheduled exam-start notification. */
 export async function clearExamSetNotifications(): Promise<void> {
+  if (!Notifications) return;
+
   try {
     const existing = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+
     for (const request of existing) {
       if (isLegacyExamNotification(request)) {
         await Notifications.cancelScheduledNotificationAsync(request.identifier).catch(() => {});
