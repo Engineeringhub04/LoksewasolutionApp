@@ -76,7 +76,7 @@ function getResetLinkParams(url: string) {
 
 function RootStack() {
   const router = useRouter();
-  const { colors, effective } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const systemBottomInset = Platform.OS === 'android' ? Math.max(0, insets.bottom) : 0;
@@ -287,7 +287,10 @@ function RootStack() {
         busy={evictionBusy}
         onConfirm={acknowledgeEviction}
       />
-      <StatusBar style={effective === 'dark' ? 'light' : 'dark'} />
+      {/* Status bar is ALWAYS light: every screen's top chrome (all page
+          headers, auth headers, splash) is dark navy in both themes, so dark
+          status-bar content would be invisible on it. */}
+      <StatusBar style="light" />
     </View>
   );
 }
