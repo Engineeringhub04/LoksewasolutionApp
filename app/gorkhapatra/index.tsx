@@ -3,7 +3,7 @@
 // a natively-rendered detail screen (not a webview). Newest first, with
 // cursor-based "load more" pagination on publishedAt.
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
@@ -93,6 +93,77 @@ export default function GorkhapatraScreen() {
   const openPost = (post: GorkhapatraPost) =>
     router.push({ pathname: '/gorkhapatra/[slug]', params: { slug: post.slug } } as never);
 
+  const renderItem = useCallback(
+    ({ item: post }: { item: GorkhapatraPost }) => (
+      <GorkhapatraCard
+        post={post}
+        onPress={() => openPost(post)}
+        questionSetLabel={t('gorkhapatra.questionSet')}
+        readLabel={t('gorkhapatra.read')}
+      />
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t]
+  );
+
+  const listHeader = (
+    <>
+      <View style={[styles.intro, { backgroundColor: effective === 'dark' ? 'rgba(124,58,237,0.16)' : '#F3EEFF' }]}>
+        <View style={styles.introIcon}><Ionicons name="reader" size={22} color={ACCENT} /></View>
+        <View style={{ flex: 1 }}>
+          <Text variant="bodyLarge" weight="bold">{t('gorkhapatra.title')}</Text>
+          <Text variant="bodySmall" secondary style={{ marginTop: 2 }}>{t('gorkhapatra.intro')}</Text>
+        </View>
+      </View>
+
+      {/* Source notice: all posts are collected from the official Gorkhapatra
+          Loksewa site. Bilingual (switches with the language toggle); the
+          site name is an inline tappable link. */}
+      {(() => {
+        const parts = t('gorkhapatra.sourceBanner').split('{{link}}');
+        return (
+          <View style={[styles.sourceNotice, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Ionicons name="link-outline" size={16} color={ACCENT} style={{ marginTop: 1 }} />
+            <Text variant="bodySmall" secondary style={{ flex: 1, lineHeight: 22 }}>
+              {parts[0]}
+              <Text
+                variant="bodySmall"
+                weight="bold"
+                color={ACCENT}
+                onPress={() => void openExternalUrl(OFFICIAL_URL)}
+              >
+                {t('gorkhapatra.title')}
+              </Text>
+              {parts[1] ?? ''}
+            </Text>
+          </View>
+        );
+      })()}
+    </>
+  );
+
+  // FlatList virtualizes off-screen rows (the old ScrollView kept every page
+  // mounted, so the tree grew heavier the longer the user scrolled).
+  const listFooter =
+    posts.length > 0 ? (
+      loadingMore ? (
+        <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} />
+      ) : reachedEnd ? (
+        <Text variant="caption" secondary style={styles.footerNote}>{t('gorkhapatra.noMore')}</Text>
+      ) : (
+        <Pressable
+          onPress={() => void loadMore()}
+          style={({ pressed }) => [
+            styles.loadMore,
+            { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('gorkhapatra.loadMore')}</Text>
+          <Ionicons name="chevron-down" size={16} color={colors.primary} />
+        </Pressable>
+      )
+    ) : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar title={t('gorkhapatra.title')} actions={headerActions} />
@@ -102,82 +173,29 @@ export default function GorkhapatraScreen() {
       ) : page1.error && !page1.data ? (
         <DataNotFound onRetry={page1.refetch} />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2, gap: spacing.md }}
+        <FlatList
+          data={posts}
+          keyExtractor={(post) => post.id}
+          renderItem={renderItem}
+          ListHeaderComponent={listHeader}
+          ListHeaderComponentStyle={{ gap: spacing.md, marginBottom: spacing.md }}
+          ListEmptyComponent={
+            !page1.loading ? (
+              <EmptyState icon="reader-outline" title={t('gorkhapatra.empty')} />
+            ) : null
+          }
+          ListFooterComponent={listFooter}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+          contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: spacing.xxl * 2 }}
           refreshControl={<AppRefreshControl refreshing={page1.refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Intro banner — sets context that this is auto-updated Loksewa content. */}
-          <View style={[styles.intro, { backgroundColor: effective === 'dark' ? 'rgba(124,58,237,0.16)' : '#F3EEFF' }]}>
-            <View style={styles.introIcon}><Ionicons name="reader" size={22} color={ACCENT} /></View>
-            <View style={{ flex: 1 }}>
-              <Text variant="bodyLarge" weight="bold">{t('gorkhapatra.title')}</Text>
-              <Text variant="bodySmall" secondary style={{ marginTop: 2 }}>{t('gorkhapatra.intro')}</Text>
-            </View>
-          </View>
-
-          {/* Source notice: all posts are collected from the official Gorkhapatra
-              Loksewa site. Bilingual (switches with the language toggle); the
-              site name is an inline tappable link. */}
-          {(() => {
-            const parts = t('gorkhapatra.sourceBanner').split('{{link}}');
-            return (
-              <View style={[styles.sourceNotice, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                <Ionicons name="link-outline" size={16} color={ACCENT} style={{ marginTop: 1 }} />
-                <Text variant="bodySmall" secondary style={{ flex: 1, lineHeight: 22 }}>
-                  {parts[0]}
-                  <Text
-                    variant="bodySmall"
-                    weight="bold"
-                    color={ACCENT}
-                    onPress={() => void openExternalUrl(OFFICIAL_URL)}
-                  >
-                    {t('gorkhapatra.title')}
-                  </Text>
-                  {parts[1] ?? ''}
-                </Text>
-              </View>
-            );
-          })()}
-
-          {posts.length === 0 && !page1.loading ? (
-            <EmptyState icon="reader-outline" title={t('gorkhapatra.empty')} />
-          ) : (
-            // Same rhythm the notifications inbox uses between its rows, so the
-            // two lists read as one design language.
-            <View style={{ gap: spacing.sm }}>
-              {posts.map((post) => (
-                <GorkhapatraCard
-                  key={post.id}
-                  post={post}
-                  onPress={() => openPost(post)}
-                  questionSetLabel={t('gorkhapatra.questionSet')}
-                  readLabel={t('gorkhapatra.read')}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Pagination footer */}
-          {posts.length > 0 ? (
-            loadingMore ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} />
-            ) : reachedEnd ? (
-              <Text variant="caption" secondary style={styles.footerNote}>{t('gorkhapatra.noMore')}</Text>
-            ) : (
-              <Pressable
-                onPress={() => void loadMore()}
-                style={({ pressed }) => [
-                  styles.loadMore,
-                  { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.85 : 1 },
-                ]}
-              >
-                <Text variant="bodySmall" weight="semiBold" style={{ color: colors.primary }}>{t('gorkhapatra.loadMore')}</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.primary} />
-              </Pressable>
-            )
-          ) : null}
-        </ScrollView>
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.5}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
+        />
       )}
     </View>
   );

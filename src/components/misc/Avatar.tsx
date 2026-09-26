@@ -6,7 +6,8 @@
 // component. The `pro` and `tickBorderColor` props are kept for API
 // compatibility (call sites still pass them) but are no-ops here.
 import React from 'react';
-import { View, Image } from 'react-native';
+import { View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
 
@@ -32,7 +33,7 @@ export function Avatar({ uri, name, size = 44 }: AvatarProps) {
   const { colors } = useTheme();
 
   const face = uri ? (
-    <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+    <ExpoImage source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" cachePolicy="memory-disk" />
   ) : (
     <View
       style={{

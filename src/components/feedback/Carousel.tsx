@@ -1,6 +1,7 @@
 // Auto-scrolling banner carousel (PRD §16.2): swipeable, auto-advances, pauses on interaction.
 import React, { useRef, useState, useEffect } from 'react';
-import { View, FlatList, Image, useWindowDimensions, type ViewToken } from 'react-native';
+import { View, FlatList, useWindowDimensions, type ViewToken } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useTheme } from '@/src/core/theme';
 
 export interface CarouselItem {
@@ -55,10 +56,11 @@ export function Carousel({ items, autoAdvanceMs = 4000 }: CarouselProps) {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
         renderItem={({ item }) => (
-          <Image
+          <ExpoImage
             source={{ uri: item.imageUri }}
             style={{ width: itemWidth, height: 140, borderRadius: radius.md }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
           />
         )}
       />

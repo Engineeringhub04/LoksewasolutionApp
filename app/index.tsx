@@ -22,7 +22,7 @@ import { logout } from '@/src/core/firebase/auth';
 import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 import { useProfileStore } from '@/src/core/store/profileStore';
 
-const MIN_SPLASH_MS = 3000;
+const MIN_SPLASH_MS = 1200;
 const DECORATION_COLOR = '#76A9FF';
 
 type BackgroundIconKind = 'book' | 'bank' | 'target' | 'chart' | 'bookshelf' | 'graduation';
@@ -165,7 +165,7 @@ export default function SplashScreen() {
   // If it never fires while [TABS] Home render shows, the splash screen is
   // still mounted in the stack ABOVE the tabs — a navigation problem.
   useEffect(() => {
-    return () => console.log('[SPLASH] screen UNMOUNTED');
+    return () => {};
   }, []);
 
   // Pre-cache onboarding network images in the background. This must never delay
@@ -184,7 +184,6 @@ export default function SplashScreen() {
   // without issuing the same requests again after navigation.
   useEffect(() => {
     if (routedRef.current || initializing || !hydrated) return;
-    console.log('[SPLASH] effect fired', { initializing, hydrated, user: !!user });
 
     const startedAt = Date.now();
     const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -193,7 +192,6 @@ export default function SplashScreen() {
       if (routedRef.current) return;
       // Force-update check intentionally removed for now (was causing a false-positive
       // block on some Android devices unrelated to any real version mismatch.
-      console.log('[SPLASH] decide() started');
       const configPromise = fetchRemoteConfig();
       let homeReady: Promise<unknown> = Promise.resolve();
       // Set when this phone has lost the account to another device. It changes
@@ -212,9 +210,7 @@ export default function SplashScreen() {
         // Doing it before the prefetch is not just tidiness: warming Home costs a
         // dozen reads, and spending them on a session that will not survive the
         // next three seconds is pure waste.
-        console.log('[SPLASH] verifying device session…');
         const session = await verifyDeviceSession(user.uid);
-        console.log('[SPLASH] session verdict:', session.verdict);
         if (session.verdict === 'evicted') {
           evicted = true;
           // Claim the routing decision now. logout() empties the auth store,
@@ -231,9 +227,7 @@ export default function SplashScreen() {
       if (user && !evicted) {
         // Root layout also warms Profile. profileStore shares any in-flight request,
         // so this does not create duplicate profile/course reads during launch.
-        console.log('[SPLASH] loading profile…');
         await useProfileStore.getState().load(user.uid);
-        console.log('[SPLASH] profile loaded');
         const profileState = useProfileStore.getState();
         const courseId = profileState.courseInfo?.courseId
           ?? profileState.profile?.courseId
@@ -267,7 +261,6 @@ export default function SplashScreen() {
         Promise.all([configPromise, homeReady]).then(([config]) => config),
         deadline,
       ]);
-      console.log('[SPLASH] race done, timedOut:', raced === undefined);
       // If the race timed out, config is undefined — use a minimal safe config
       // object so routing can still proceed (maintenance gating just falls
       // through; the real config is re-fetched by whichever screen needs it).
@@ -278,7 +271,6 @@ export default function SplashScreen() {
       // ordinary three-second launch instead of snapping to a login screen the
       // user did not ask for.
       if (remaining > 0) await sleep(remaining);
-      console.log('[SPLASH] min-splash done, routing now…');
       if (!evicted) {
         if (routedRef.current) return;
         routedRef.current = true;
@@ -292,19 +284,18 @@ export default function SplashScreen() {
       // the current view controller (iOS), and an unhandled rejection at this
       // point would abandon `decide()` halfway — leaving the app parked on the
       // splash screen forever instead of merely skipping a cosmetic step.
-      await NativeSplashScreen.hideAsync().then(() => console.log('[SPLASH] native splash hidden')).catch((e) => console.log('[SPLASH] native splash hide FAILED:', e));
+      await NativeSplashScreen.hideAsync().catch(() => {});
 
-      if (config.maintenanceMode) { console.log('[SPLASH] → maintenance'); router.replace('/blocking/maintenance'); return; }
+      if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
       // Ahead of the connectivity gate on purpose: the sign-out already happened,
       // so there is no session left to send anywhere else.
-      if (evicted) { console.log('[SPLASH] → login (evicted)'); router.replace('/(auth)/login'); return; }
+      if (evicted) { router.replace('/(auth)/login'); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
-      if (networkChecked && !isOnline && !user) { console.log('[SPLASH] → no-internet'); router.replace('/blocking/no-internet'); return; }
-      if (user) { console.log('[SPLASH] → tabs'); setTimeout(() => { console.log('[SPLASH] tabs nav executed'); }, 0); router.replace('/(tabs)'); return; }
-      console.log('[SPLASH] → onboarding');
+      if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
+      if (user) { router.replace('/(tabs)'); return; }
       router.replace('/onboarding');
     };
-    void decide().catch((e) => console.log('[SPLASH] decide() CRASHED:', e));
+    void decide().catch(() => {});
   }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
   // The brand mark is now the app icon itself — a square (1:1) deep-navy tile
