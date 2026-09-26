@@ -260,10 +260,12 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-    {/* Header — a FIXED overlay, NOT a child of the ScrollView. It never
-        scrolls away; only its own height/content morphs based on scrollY.
-        The ScrollView below is pushed down by headerSpacerHeight so content
-        starts right underneath it and scrolls normally from there. */}
+    {/* The header stays HIDDEN until the page is ready: it renders profile
+        data (name, course) that isn't loaded yet, so showing it early is what
+        made Splash -> Home look glitchy. Only the bottom tabs (drawn by the
+        tab layout) stay visible, the body shows the preloader, then header +
+        real data arrive together in one step. */}
+    {ready ? (
     <HomeHeader
       scrollY={scrollY}
       // Sourced from the shared profile store first, so a photo/name change
@@ -280,11 +282,14 @@ export default function HomeScreen() {
       subcourseName={storeCourseInfo?.subcourseName ?? null}
       onCoursePress={() => router.push('/course-setup?mode=update')}
     />
+    ) : null}
 
     <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
-        paddingTop: HOME_HEADER_MAX_HEIGHT,
+        // No header while loading, so no header-sized gap — just the status
+        // bar inset, with the preloader centred in the free space.
+        paddingTop: ready ? HOME_HEADER_MAX_HEIGHT : insets.top + 24,
         paddingBottom: getGlassTabBarContentPadding(insets.bottom),
       }}
       refreshControl={

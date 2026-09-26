@@ -29,7 +29,7 @@ import {
 import { Text } from '@/src/components/misc/Text';
 import { ProgressRing } from '@/src/components/misc/ProgressRing';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 
 function verdict(percent: number, passed: boolean) {
@@ -144,12 +144,11 @@ export default function DailyTestSummaryScreen() {
   };
 
   if (modelData.loading) {
+    // New preloading: no header while loading, the glow-ring sits in the
+    // content area — then header + result arrive together in one step.
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Your Result" showBack onBackPress={goToLanding} />
-        <View style={{ flex: 1 }}>
-          <PageLoaderOverlay visible label="Preparing your result…" />
-        </View>
+        <Preloading tinted={false} label="Preparing your result…" />
       </View>
     );
   }

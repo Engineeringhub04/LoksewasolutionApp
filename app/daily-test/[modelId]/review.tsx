@@ -35,7 +35,7 @@ import {
 } from '@/src/core/firebase/services/dailyTest';
 import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 
 /** -1 means "not answered". */
@@ -319,12 +319,11 @@ export default function DailyTestReviewScreen() {
   }, [model, breakdown, colors, radius, spacing, timeTaken]);
 
   if (modelData.loading) {
+    // New preloading: no header while loading, the glow-ring sits in the
+    // content area — then header + answers arrive together in one step.
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Review Answers" />
-        <View style={{ flex: 1 }}>
-          <PageLoaderOverlay visible label="Loading your answers…" />
-        </View>
+        <Preloading tinted={false} label="Loading your answers…" />
       </View>
     );
   }

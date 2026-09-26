@@ -8,19 +8,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * WHY THIS EXISTS — the biggest cause of the "page opens, white/frozen frame,
  * then it appears" jank on low-end Android. A screen's first render fires its
  * data fetch immediately, and that Firestore read + JSON parse lands on the JS
- * thread during the exact ~260ms the page transition needs. The transition
- * can't composite, so Android shows a frozen frame mid-transition.
+ * thread during the exact moment the page transition needs. The transition
+ * can't composite, so the button feels slow and Android shows a frozen frame
+ * mid-transition.
  *
- * The fix: hold the FIRST fetch by this floor so the loader is never a
- * single-frame flash and the transition plays clean. Only the initial mount
- * fetch is held. Pull-to-refresh and param-change refetches run immediately —
- * the user is already looking at the page then.
- *
- * Want a longer clean-animation window (a deliberate 2s preloader)? Raise this
- * to 2000. It only delays the first paint of data; cached pages will show the
- * loader for that whole time, so keep it modest unless that is the intent.
+ * The fix: hold the FIRST fetch for a full 2s. The page transition plays
+ * clean, the preloader paints instantly with ZERO backend load, and only then
+ * does the fetch start — so it is always "2s preloader + data loading", never
+ * a fight between animation and network. Only the initial mount fetch is held.
+ * Pull-to-refresh and param-change refetches run immediately — the user is
+ * already looking at the page then.
  */
-const FIRST_LOAD_HOLD_MS = 120;
+const FIRST_LOAD_HOLD_MS = 2000;
 
 interface UseAsyncDataResult<T> {
   data: T | null;
