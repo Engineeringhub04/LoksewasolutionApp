@@ -6,16 +6,29 @@
 //
 // Reachable from the summary and from an attempt in the details screen, and gated
 // on the same unlock rule in both cases.
-import React, { useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+//
+// PERFORMANCE NOTES (low-end devices, e.g. itel Vision 3):
+// - FlatList, not ScrollView: only the visible question cards are mounted.
+//   Rendering all 50+ questions at once used to mount hundreds of views on
+//   open, which stalled the screen transition.
+// - NO entering animations on the cards. 50 staggered FadeInDowns used to fire
+//   at the exact moment the slide transition played; the two fought for the UI
+//   thread and the open/close animation looked stuck ("aadkiyeko"). The page
+//   transition IS the animation — the content is already painted when it arrives.
+// - QuestionCard is memoized so scrolling never re-renders off-screen cards.
+import React, { memo, useMemo, useState } from 'react';
+import { View, FlatList, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { FadeInDown } from 'react-native-reanimated';
-import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
-import { fetchExamSet, scoreAttempt, areResultsUnlocked } from '@/src/core/firebase/services/examHub';
+import {
+  fetchExamSet,
+  scoreAttempt,
+  areResultsUnlocked,
+  type ExamQuestion,
+} from '@/src/core/firebase/services/examHub';
 import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
@@ -23,6 +36,102 @@ import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 
 const CORRECT = '#16A34A';
 const WRONG = '#DC2626';
+
+interface QuestionCardProps {
+  question: ExamQuestion;
+  index: number;
+  chosen: number;
+}
+
+const QuestionCard = memo(function QuestionCard({ question, index, chosen }: QuestionCardProps) {
+  const { colors, radius, spacing } = useTheme();
+  const skipped = chosen < 0;
+  const gotItRight = chosen === question.correctIndex;
+
+  return (
+    <View
+      style={[
+        styles.questionCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRadius: radius.lg,
+          padding: spacing.md,
+          marginBottom: spacing.md,
+        },
+      ]}
+    >
+      <View style={styles.questionHead}>
+        <View style={[styles.qNumber, { backgroundColor: `${colors.primary}17` }]}>
+          <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{index + 1}</Text>
+        </View>
+        <Text variant="body" weight="semiBold" style={{ flex: 1, lineHeight: 22 }}>{question.question}</Text>
+        <Ionicons
+          name={skipped ? 'remove-circle' : gotItRight ? 'checkmark-circle' : 'close-circle'}
+          size={20}
+          color={skipped ? colors.textSecondary : gotItRight ? CORRECT : WRONG}
+        />
+      </View>
+
+      {question.options.map((option, optionIndex) => {
+        const isCorrectOption = optionIndex === question.correctIndex;
+        const isUserPick = optionIndex === chosen;
+        // The right option is always highlighted green, even when the
+        // user skipped — that is the point of a review.
+        const tone = isCorrectOption ? CORRECT : isUserPick ? WRONG : null;
+
+        return (
+          <View
+            key={optionIndex}
+            style={[
+              styles.option,
+              {
+                borderRadius: radius.md,
+                borderColor: tone ?? colors.border,
+                backgroundColor: tone ? `${tone}12` : colors.surfaceAlt,
+              },
+            ]}
+          >
+            <View style={[styles.optionBullet, { borderColor: tone ?? colors.border, backgroundColor: tone ?? 'transparent' }]}>
+              <Text variant="caption" weight="bold" style={{ color: tone ? '#FFF' : colors.textSecondary }}>
+                {String.fromCharCode(65 + optionIndex)}
+              </Text>
+            </View>
+            <Text variant="bodySmall" style={{ flex: 1 }}>{option}</Text>
+
+            {isCorrectOption ? (
+              <View style={[styles.tag, { backgroundColor: CORRECT }]}>
+                <Text variant="caption" weight="bold" style={styles.tagText}>Correct</Text>
+              </View>
+            ) : null}
+            {isUserPick && !isCorrectOption ? (
+              <View style={[styles.tag, { backgroundColor: WRONG }]}>
+                <Text variant="caption" weight="bold" style={styles.tagText}>Wrong</Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+
+      {skipped ? (
+        <View style={[styles.skippedNote, { backgroundColor: colors.surfaceAlt, borderRadius: radius.sm }]}>
+          <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+          <Text variant="caption" secondary>You skipped this question</Text>
+        </View>
+      ) : null}
+
+      {question.explanation ? (
+        <View style={[styles.explanation, { backgroundColor: `${colors.info}12`, borderRadius: radius.md }]}>
+          <View style={styles.explanationHead}>
+            <Ionicons name="bulb-outline" size={15} color={colors.info} />
+            <Text variant="caption" weight="bold" style={{ color: colors.info }}>Explanation</Text>
+          </View>
+          <Text variant="bodySmall" secondary style={{ lineHeight: 20 }}>{question.explanation}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
 
 export default function ExamReviewScreen() {
   const { setId, answers: answersParam, attemptLabel, attemptDate } = useLocalSearchParams<{
@@ -53,6 +162,48 @@ export default function ExamReviewScreen() {
     () => (set ? scoreAttempt(set.questions, answers, set.passPercent) : null),
     [set, answers]
   );
+
+  const renderQuestion = useMemo(
+    () =>
+      ({ item, index }: { item: ExamQuestion; index: number }) => (
+        <QuestionCard question={item} index={index} chosen={answers[index] ?? -1} />
+      ),
+    [answers]
+  );
+
+  const listHeader = useMemo(() => {
+    if (!set || !breakdown) return null;
+    const stats: { label: string; value: string; color: string }[] = [
+      { label: 'Total', value: String(set.questions.length), color: colors.textPrimary },
+      { label: 'Correct', value: String(breakdown.correct), color: CORRECT },
+      { label: 'Incorrect', value: String(breakdown.incorrect), color: WRONG },
+      { label: 'Skipped', value: String(breakdown.skipped), color: colors.textSecondary },
+      { label: 'Score', value: `${breakdown.percent}%`, color: colors.primary },
+    ];
+    return (
+      <View style={{ marginBottom: spacing.md }}>
+        <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
+          <Text variant="bodyLarge" weight="bold" numberOfLines={2}>{set.title}</Text>
+          {attemptLabel || attemptDate ? (
+            <Text variant="caption" secondary>
+              {[attemptLabel, attemptDate].filter(Boolean).join(' · ')}
+            </Text>
+          ) : null}
+          <View style={styles.statsRow}>
+            {stats.map((stat) => (
+              <View key={stat.label} style={styles.statItem}>
+                <Text variant="body" weight="bold" style={{ color: stat.color }}>{stat.value}</Text>
+                <Text variant="caption" secondary>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <Text variant="bodyLarge" weight="bold" style={{ marginTop: spacing.md }}>
+          Question Answer Details
+        </Text>
+      </View>
+    );
+  }, [set, breakdown, colors, radius, spacing, attemptLabel, attemptDate]);
 
   if (examSet.loading) {
     return (
@@ -85,124 +236,25 @@ export default function ExamReviewScreen() {
     );
   }
 
-  const stats: { label: string; value: string; color: string }[] = [
-    { label: 'Total', value: String(set.questions.length), color: colors.textPrimary },
-    { label: 'Correct', value: String(breakdown.correct), color: CORRECT },
-    { label: 'Incorrect', value: String(breakdown.incorrect), color: WRONG },
-    { label: 'Skipped', value: String(breakdown.skipped), color: colors.textSecondary },
-    { label: 'Score', value: `${breakdown.percent}%`, color: colors.primary },
-  ];
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SubpageHeader title="Review Answers" />
 
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }}
-      >
-        {/* Attempt stats */}
-        <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}>
-          <Text variant="bodyLarge" weight="bold" numberOfLines={2}>{set.title}</Text>
-          {attemptLabel || attemptDate ? (
-            <Text variant="caption" secondary>
-              {[attemptLabel, attemptDate].filter(Boolean).join(' · ')}
-            </Text>
-          ) : null}
-          <View style={styles.statsRow}>
-            {stats.map((stat) => (
-              <View key={stat.label} style={styles.statItem}>
-                <Text variant="body" weight="bold" style={{ color: stat.color }}>{stat.value}</Text>
-                <Text variant="caption" secondary>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <Text variant="bodyLarge" weight="bold">Question Answer Details</Text>
-
-        {set.questions.map((question, index) => {
-          const chosen = answers[index] ?? -1;
-          const skipped = chosen < 0;
-          const gotItRight = chosen === question.correctIndex;
-
-          return (
-            <Animated.View
-              key={index}
-              entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(260)}
-              style={[styles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md }]}
-            >
-              <View style={styles.questionHead}>
-                <View style={[styles.qNumber, { backgroundColor: `${colors.primary}17` }]}>
-                  <Text variant="caption" weight="bold" style={{ color: colors.primary }}>{index + 1}</Text>
-                </View>
-                <Text variant="body" weight="semiBold" style={{ flex: 1, lineHeight: 22 }}>{question.question}</Text>
-                <Ionicons
-                  name={skipped ? 'remove-circle' : gotItRight ? 'checkmark-circle' : 'close-circle'}
-                  size={20}
-                  color={skipped ? colors.textSecondary : gotItRight ? CORRECT : WRONG}
-                />
-              </View>
-
-              {question.options.map((option, optionIndex) => {
-                const isCorrectOption = optionIndex === question.correctIndex;
-                const isUserPick = optionIndex === chosen;
-                // The right option is always highlighted green, even when the
-                // user skipped — that is the point of a review.
-                const tone = isCorrectOption ? CORRECT : isUserPick ? WRONG : null;
-
-                return (
-                  <View
-                    key={optionIndex}
-                    style={[
-                      styles.option,
-                      {
-                        borderRadius: radius.md,
-                        borderColor: tone ?? colors.border,
-                        backgroundColor: tone ? `${tone}12` : colors.surfaceAlt,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.optionBullet, { borderColor: tone ?? colors.border, backgroundColor: tone ?? 'transparent' }]}>
-                      <Text variant="caption" weight="bold" style={{ color: tone ? '#FFF' : colors.textSecondary }}>
-                        {String.fromCharCode(65 + optionIndex)}
-                      </Text>
-                    </View>
-                    <Text variant="bodySmall" style={{ flex: 1 }}>{option}</Text>
-
-                    {isCorrectOption ? (
-                      <View style={[styles.tag, { backgroundColor: CORRECT }]}>
-                        <Text variant="caption" weight="bold" style={styles.tagText}>Correct</Text>
-                      </View>
-                    ) : null}
-                    {isUserPick && !isCorrectOption ? (
-                      <View style={[styles.tag, { backgroundColor: WRONG }]}>
-                        <Text variant="caption" weight="bold" style={styles.tagText}>Wrong</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                );
-              })}
-
-              {skipped ? (
-                <View style={[styles.skippedNote, { backgroundColor: colors.surfaceAlt, borderRadius: radius.sm }]}>
-                  <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
-                  <Text variant="caption" secondary>You skipped this question</Text>
-                </View>
-              ) : null}
-
-              {question.explanation ? (
-                <View style={[styles.explanation, { backgroundColor: `${colors.info}12`, borderRadius: radius.md }]}>
-                  <View style={styles.explanationHead}>
-                    <Ionicons name="bulb-outline" size={15} color={colors.info} />
-                    <Text variant="caption" weight="bold" style={{ color: colors.info }}>Explanation</Text>
-                  </View>
-                  <Text variant="bodySmall" secondary style={{ lineHeight: 20 }}>{question.explanation}</Text>
-                </View>
-              ) : null}
-            </Animated.View>
-          );
-        })}
-      </ScrollView>
+      <FlatList
+        data={set.questions}
+        keyExtractor={(_, index) => `q-${index}`}
+        renderItem={renderQuestion}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={{
+          padding: spacing.screenPadding,
+          paddingBottom: insets.bottom + spacing.xxl,
+        }}
+        // Keep the first paint light: mount a few cards, then fill in.
+        initialNumToRender={5}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+      />
     </View>
   );
 }

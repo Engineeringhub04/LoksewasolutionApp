@@ -106,7 +106,7 @@ export default function ExamSummaryScreen() {
   if (examSet.error || !set || !breakdown) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Result" showBack={false} />
+        <SubpageHeader title="Result" />
         <DataNotFound title="Result unavailable" onRetry={() => router.replace('/(tabs)/exam')} />
       </View>
     );
@@ -149,9 +149,9 @@ export default function ExamSummaryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* No back button: the quiz is gone from the stack, so Back would be a
-          dead end. The actions below are the way out. */}
-      <SubpageHeader title="Your Result" showBack={false} />
+      {/* Back goes to the exam detail screen: the quiz was replaced (not
+          pushed), so the detail screen is still underneath — not a dead end. */}
+      <SubpageHeader title="Your Result" />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.screenPadding, paddingBottom: insets.bottom + spacing.xxl, gap: spacing.md }}
