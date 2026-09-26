@@ -38,12 +38,20 @@ export function pushAndClearHistory(
   // Push animates with the slide transition.
   router.push(path);
 
-  // After the spring animation completes (~350ms), wipe the back stack.
-  // The user is already on the new screen, so the instant reset is invisible.
+  // After the animation fully completes, wipe the back stack. The user is
+  // already on the new screen, so the instant reset is invisible.
+  //
+  // WHY 800ms AND NOT 400ms: on low-end devices (e.g. itel Vision 3) the
+  // spring transition can still be running at 400ms because dropped frames
+  // stretch its real-time duration. Resetting MID-transition tears the
+  // transition state apart and leaves the new screen frozen part-way
+  // translated (half the screen grey, content shifted sideways) — the
+  // "chakurai" glitch. 800ms is safely past the spring's settle time even
+  // with heavy jank.
   setTimeout(() => {
     navigation.reset({
       index: 0,
       routes: [{ name: routeName }],
     });
-  }, 400);
+  }, 800);
 }

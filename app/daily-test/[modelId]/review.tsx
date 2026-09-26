@@ -10,13 +10,19 @@
 // No extra Firestore reads: the answer sheet arrives in the route params (from
 // the Summary, which got it from the quiz or from the on-device history entry),
 // and the model is re-read from the same low-read subcourse query.
-import React, { useMemo } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+//
+// PERFORMANCE NOTES (low-end devices, e.g. itel Vision 3):
+// - FlatList, not ScrollView: only the visible question cards are mounted.
+// - NO entering animations on the cards. Staggered FadeInDowns used to fire at
+//   the exact moment the slide transition played; the two fought for the UI
+//   thread and the open/close animation looked stuck. The page transition IS
+//   the animation — the content is already painted when it arrives.
+// - QuestionCard is memoized so scrolling never re-renders off-screen cards.
+import React, { memo, useMemo } from 'react';
+import { View, FlatList, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { FadeInDown } from 'react-native-reanimated';
-import Animated from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
 import { useProfileStore } from '@/src/core/store/profileStore';
 import { useAsyncData } from '@/src/core/hooks/useAsyncData';
@@ -25,6 +31,7 @@ import {
   formatDailyTestDuration,
   scoreDailyTest,
   type DailyTestModel,
+  type DailyTestQuestion,
 } from '@/src/core/firebase/services/dailyTest';
 import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
@@ -36,6 +43,137 @@ const UNANSWERED = -1;
 
 const CORRECT = '#16A34A';
 const WRONG = '#DC2626';
+
+interface QuestionCardProps {
+  q: DailyTestQuestion;
+  qi: number;
+  chosen: number;
+}
+
+const QuestionCard = memo(function QuestionCard({ q, qi, chosen }: QuestionCardProps) {
+  const { colors, radius } = useTheme();
+  const skipped = chosen === UNANSWERED;
+  const gotIt = chosen === q.correctIndex;
+  const tone = skipped ? colors.warning : gotIt ? CORRECT : WRONG;
+
+  return (
+    <View
+      style={[
+        styles.reviewCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          marginBottom: 12,
+        },
+      ]}
+    >
+      {/* Verdict header */}
+      <View style={styles.reviewHead}>
+        <View style={[styles.qBadge, { backgroundColor: `${tone}16` }]}>
+          <Text variant="caption" weight="bold" style={{ color: tone }}>
+            Q{qi + 1}
+          </Text>
+        </View>
+        <View style={[styles.verdictTag, { backgroundColor: `${tone}14` }]}>
+          <Ionicons
+            name={skipped ? 'remove-circle' : gotIt ? 'checkmark-circle' : 'close-circle'}
+            size={13}
+            color={tone}
+          />
+          <Text variant="caption" weight="bold" style={{ color: tone }}>
+            {skipped ? 'Skipped' : gotIt ? 'Correct' : 'Wrong'}
+          </Text>
+        </View>
+        {q.category ? (
+          <Text variant="caption" secondary numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
+            {q.category}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text variant="body" weight="semiBold" style={{ marginTop: 10, lineHeight: 23 }}>
+        {q.question}
+      </Text>
+
+      <View style={{ gap: 8, marginTop: 12 }}>
+        {q.options.map((option, oi) => {
+          const isCorrect = oi === q.correctIndex;
+          const isChosen = oi === chosen;
+          const optionTone = isCorrect ? CORRECT : isChosen ? WRONG : colors.border;
+          return (
+            <View
+              key={oi}
+              style={[
+                styles.reviewOption,
+                {
+                  borderColor: optionTone,
+                  backgroundColor: isCorrect
+                    ? `${CORRECT}12`
+                    : isChosen
+                      ? `${WRONG}12`
+                      : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                variant="bodySmall"
+                weight="bold"
+                style={{ color: colors.textSecondary, width: 18 }}
+              >
+                {String.fromCharCode(65 + oi)}
+              </Text>
+              <Text variant="bodySmall" style={{ flex: 1 }}>
+                {option}
+              </Text>
+
+              {/* Label each option's role so it's unambiguous even when
+                  the user's pick WAS the correct one. */}
+              {isCorrect ? (
+                <View style={[styles.optionTag, { backgroundColor: `${CORRECT}20` }]}>
+                  <Text variant="caption" weight="bold" style={{ color: CORRECT }}>
+                    {isChosen ? 'Your answer · Correct' : 'Correct answer'}
+                  </Text>
+                </View>
+              ) : isChosen ? (
+                <View style={[styles.optionTag, { backgroundColor: `${WRONG}20` }]}>
+                  <Text variant="caption" weight="bold" style={{ color: WRONG }}>
+                    Your answer
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      {skipped ? (
+        <View style={[styles.skippedNote, { backgroundColor: `${colors.warning}12` }]}>
+          <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+          <Text variant="caption" style={{ color: colors.warning, flex: 1 }}>
+            You did not answer this question, so it scored zero.
+          </Text>
+        </View>
+      ) : null}
+
+      {q.explanation ? (
+        <View
+          style={[
+            styles.explainBox,
+            { backgroundColor: `${colors.info}10`, borderRadius: radius.sm },
+          ]}
+        >
+          <Text variant="caption" weight="bold" style={{ color: colors.info, marginBottom: 3 }}>
+            EXPLANATION
+          </Text>
+          <Text variant="bodySmall" secondary style={{ lineHeight: 20 }}>
+            {q.explanation}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
 
 export default function DailyTestReviewScreen() {
   const {
@@ -82,60 +220,38 @@ export default function DailyTestReviewScreen() {
     [model, answers],
   );
 
-  if (modelData.loading) {
+  const renderQuestion = useMemo(
+    () =>
+      ({ item, index }: { item: DailyTestQuestion; index: number }) => (
+        <QuestionCard q={item} qi={index} chosen={answers[index] ?? UNANSWERED} />
+      ),
+    [answers],
+  );
+
+  const listHeader = useMemo(() => {
+    if (!model || !breakdown) return null;
+    const elapsed = Number(timeTaken ?? 0);
+    const passTone = breakdown.passed ? CORRECT : WRONG;
+    const stats: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] =
+      [
+        { icon: 'checkmark-circle', label: 'Correct', value: String(breakdown.correct), color: CORRECT },
+        { icon: 'close-circle', label: 'Wrong', value: String(breakdown.incorrect), color: WRONG },
+        {
+          icon: 'remove-circle',
+          label: 'Skipped',
+          value: String(breakdown.skipped),
+          color: colors.textSecondary,
+        },
+        {
+          icon: 'time',
+          label: 'Time',
+          value: formatDailyTestDuration(elapsed),
+          color: '#2563EB',
+        },
+      ];
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Review Answers" />
-        <View style={{ flex: 1 }}>
-          <PageLoaderOverlay visible label="Loading your answers…" />
-        </View>
-      </View>
-    );
-  }
-
-  if (modelData.error || !model || !breakdown) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SubpageHeader title="Review Answers" />
-        <DataNotFound title="Answers unavailable" onRetry={() => router.back()} />
-      </View>
-    );
-  }
-
-  const elapsed = Number(timeTaken ?? 0);
-  const passTone = breakdown.passed ? CORRECT : WRONG;
-
-  const stats: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] =
-    [
-      { icon: 'checkmark-circle', label: 'Correct', value: String(breakdown.correct), color: CORRECT },
-      { icon: 'close-circle', label: 'Wrong', value: String(breakdown.incorrect), color: WRONG },
-      {
-        icon: 'remove-circle',
-        label: 'Skipped',
-        value: String(breakdown.skipped),
-        color: colors.textSecondary,
-      },
-      {
-        icon: 'time',
-        label: 'Time',
-        value: formatDailyTestDuration(elapsed),
-        color: '#2563EB',
-      },
-    ];
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SubpageHeader title="Review Answers" />
-
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.screenPadding,
-          paddingBottom: insets.bottom + spacing.xxl,
-          gap: spacing.md,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* User stats card — static on purpose; only the answer cards animate. */}
+      <View style={{ marginBottom: 12 }}>
+        {/* User stats card — static on purpose; only the page transition animates. */}
         <View
           style={[
             styles.statsCard,
@@ -198,134 +314,50 @@ export default function DailyTestReviewScreen() {
             </Text>
           </View>
         </View>
+      </View>
+    );
+  }, [model, breakdown, colors, radius, spacing, timeTaken]);
 
-        {/* Per-question detail */}
-        {model.questions.map((q, qi) => {
-          const chosen = answers[qi] ?? UNANSWERED;
-          const skipped = chosen === UNANSWERED;
-          const gotIt = chosen === q.correctIndex;
-          const tone = skipped ? colors.warning : gotIt ? CORRECT : WRONG;
+  if (modelData.loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SubpageHeader title="Review Answers" />
+        <View style={{ flex: 1 }}>
+          <PageLoaderOverlay visible label="Loading your answers…" />
+        </View>
+      </View>
+    );
+  }
 
-          return (
-            <Animated.View
-              key={qi}
-              entering={FadeInDown.delay(Math.min(qi, 8) * 60).springify()}
-              style={[
-                styles.reviewCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radius.md,
-                },
-              ]}
-            >
-              {/* Verdict header */}
-              <View style={styles.reviewHead}>
-                <View style={[styles.qBadge, { backgroundColor: `${tone}16` }]}>
-                  <Text variant="caption" weight="bold" style={{ color: tone }}>
-                    Q{qi + 1}
-                  </Text>
-                </View>
-                <View style={[styles.verdictTag, { backgroundColor: `${tone}14` }]}>
-                  <Ionicons
-                    name={skipped ? 'remove-circle' : gotIt ? 'checkmark-circle' : 'close-circle'}
-                    size={13}
-                    color={tone}
-                  />
-                  <Text variant="caption" weight="bold" style={{ color: tone }}>
-                    {skipped ? 'Skipped' : gotIt ? 'Correct' : 'Wrong'}
-                  </Text>
-                </View>
-                {q.category ? (
-                  <Text variant="caption" secondary numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
-                    {q.category}
-                  </Text>
-                ) : null}
-              </View>
+  if (modelData.error || !model || !breakdown) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SubpageHeader title="Review Answers" />
+        <DataNotFound title="Answers unavailable" onRetry={() => router.back()} />
+      </View>
+    );
+  }
 
-              <Text variant="body" weight="semiBold" style={{ marginTop: 10, lineHeight: 23 }}>
-                {q.question}
-              </Text>
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SubpageHeader title="Review Answers" />
 
-              <View style={{ gap: 8, marginTop: 12 }}>
-                {q.options.map((option, oi) => {
-                  const isCorrect = oi === q.correctIndex;
-                  const isChosen = oi === chosen;
-                  const optionTone = isCorrect ? CORRECT : isChosen ? WRONG : colors.border;
-                  return (
-                    <View
-                      key={oi}
-                      style={[
-                        styles.reviewOption,
-                        {
-                          borderColor: optionTone,
-                          backgroundColor: isCorrect
-                            ? `${CORRECT}12`
-                            : isChosen
-                              ? `${WRONG}12`
-                              : 'transparent',
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="bodySmall"
-                        weight="bold"
-                        style={{ color: colors.textSecondary, width: 18 }}
-                      >
-                        {String.fromCharCode(65 + oi)}
-                      </Text>
-                      <Text variant="bodySmall" style={{ flex: 1 }}>
-                        {option}
-                      </Text>
-
-                      {/* Label each option's role so it's unambiguous even when
-                          the user's pick WAS the correct one. */}
-                      {isCorrect ? (
-                        <View style={[styles.optionTag, { backgroundColor: `${CORRECT}20` }]}>
-                          <Text variant="caption" weight="bold" style={{ color: CORRECT }}>
-                            {isChosen ? 'Your answer · Correct' : 'Correct answer'}
-                          </Text>
-                        </View>
-                      ) : isChosen ? (
-                        <View style={[styles.optionTag, { backgroundColor: `${WRONG}20` }]}>
-                          <Text variant="caption" weight="bold" style={{ color: WRONG }}>
-                            Your answer
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </View>
-
-              {skipped ? (
-                <View style={[styles.skippedNote, { backgroundColor: `${colors.warning}12` }]}>
-                  <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
-                  <Text variant="caption" style={{ color: colors.warning, flex: 1 }}>
-                    You did not answer this question, so it scored zero.
-                  </Text>
-                </View>
-              ) : null}
-
-              {q.explanation ? (
-                <View
-                  style={[
-                    styles.explainBox,
-                    { backgroundColor: `${colors.info}10`, borderRadius: radius.sm },
-                  ]}
-                >
-                  <Text variant="caption" weight="bold" style={{ color: colors.info, marginBottom: 3 }}>
-                    EXPLANATION
-                  </Text>
-                  <Text variant="bodySmall" secondary style={{ lineHeight: 20 }}>
-                    {q.explanation}
-                  </Text>
-                </View>
-              ) : null}
-            </Animated.View>
-          );
-        })}
-      </ScrollView>
+      <FlatList
+        data={model.questions}
+        keyExtractor={(_, index) => `q-${index}`}
+        renderItem={renderQuestion}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={{
+          padding: spacing.screenPadding,
+          paddingBottom: insets.bottom + spacing.xxl,
+        }}
+        showsVerticalScrollIndicator={false}
+        // Keep the first paint light: mount a few cards, then fill in.
+        initialNumToRender={5}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+      />
     </View>
   );
 }
