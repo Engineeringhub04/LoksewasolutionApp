@@ -33,6 +33,12 @@ import { Text } from '@/src/components/misc/Text';
 import { ProfileAvatar } from '@/src/components/profile/ProfileAvatar';
 import { NameWithTick } from '@/src/components/misc/NameWithTick';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+  HEADER_FALLBACK_COLOR,
+} from '@/src/components/nav/SubpageHeader';
 
 const COLLAPSE_DISTANCE = 150;
 
@@ -122,7 +128,12 @@ export function ProfileHeader({
 
   return (
     <Animated.View style={[styles.header, styles.fixedOverlay, containerStyle]}>
-      <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={StyleSheet.absoluteFillObject} />
+      <LinearGradient
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
+        style={[StyleSheet.absoluteFill, { backgroundColor: HEADER_FALLBACK_COLOR }]}
+      />
 
       {/* ===== EXPANDED (at rest) ===== */}
       <Animated.View
@@ -260,7 +271,11 @@ export function ProfileHeader({
 }
 
 const styles = StyleSheet.create({
-  header: { overflow: 'hidden' },
+  header: {
+    overflow: 'hidden',
+    // Solid fallback under the gradient — the header can never render colourless.
+    backgroundColor: HEADER_FALLBACK_COLOR,
+  },
   fixedOverlay: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
 
   // Expanded

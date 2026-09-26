@@ -33,6 +33,12 @@ import { NameWithTick } from '@/src/components/misc/NameWithTick';
 import { PulsingBadge } from '@/src/components/misc/PulsingBadge';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 import { CourseInfoCard } from '@/src/components/home/CourseInfoCard';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+  HEADER_FALLBACK_COLOR,
+} from '@/src/components/nav/SubpageHeader';
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -149,7 +155,12 @@ export function HomeHeader({
 
   return (
     <Animated.View style={[styles.header, styles.fixedOverlay, containerStyle]}>
-      <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={StyleSheet.absoluteFillObject} />
+      <LinearGradient
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
+        style={[StyleSheet.absoluteFill, { backgroundColor: HEADER_FALLBACK_COLOR }]}
+      />
 
       {/* ===== EXPANDED (at rest) ===== */}
       <Animated.View
@@ -230,6 +241,8 @@ export function HomeHeader({
 const styles = StyleSheet.create({
   header: {
     overflow: 'hidden',
+    // Solid fallback under the gradient — the header can never render colourless.
+    backgroundColor: HEADER_FALLBACK_COLOR,
   },
   // Rendered as a sibling of the ScrollView (not its child), pinned to the
   // top of the screen — this is what makes it truly fixed: it never scrolls

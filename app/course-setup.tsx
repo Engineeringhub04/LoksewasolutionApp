@@ -19,6 +19,11 @@ import { useAuthStore } from '@/src/core/store/authStore';
 import { showToast } from '@/src/core/store/toastStore';
 import { useTheme } from '@/src/core/theme';
 import { Text } from '@/src/components/misc/Text';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 import { ThemeToggleButton } from '@/src/components/misc/ThemeToggleButton';
 
 export default function CourseSetupScreen() {
@@ -193,7 +198,12 @@ export default function CourseSetupScreen() {
       style={[styles.container, driftStyle, { backgroundColor: colors.background }]}
     >
       {/* Blue Curved Header */}
-      <LinearGradient colors={['#1D4ED8', '#2563EB', '#3B82F6']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <LinearGradient
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
+        style={[styles.header, { paddingTop: insets.top + 12 }]}
+      >
         <Animated.View entering={FadeIn.duration(400)} style={styles.headerRow}>
           {isUpdateMode ? (
             <Pressable onPress={() => exitThen(() => router.back())} style={styles.headerIconBox} accessibilityLabel="Back">

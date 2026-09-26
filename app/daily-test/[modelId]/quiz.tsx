@@ -60,6 +60,11 @@ import { addDailyTestActivity } from '@/src/core/services/dailyTestActivity';
 import { markDailyTestCompleted } from '@/src/core/store/dailyTestCompletionStore';
 import { showToast } from '@/src/core/store/toastStore';
 import { Text } from '@/src/components/misc/Text';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 import { ConfirmDialog } from '@/src/components/feedback/ConfirmDialog';
 import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { BlurLoaderOverlay } from '@/src/components/feedback/BlurLoaderOverlay';
@@ -450,7 +455,9 @@ export default function DailyTestQuizScreen() {
 
       {/* Header — back on the left, theme toggle on the right. */}
       <LinearGradient
-        colors={['#1D4ED8', '#2563EB', '#3B82F6']}
+        colors={HEADER_GRADIENT_COLORS}
+        start={HEADER_GRADIENT_START}
+        end={HEADER_GRADIENT_END}
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <Pressable
