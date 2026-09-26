@@ -31,7 +31,7 @@ import {
 } from '@/src/core/firebase/services/examHub';
 import { Text } from '@/src/components/misc/Text';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
-import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
+import { Preloading } from '@/src/components/Preloading';
 import { DataNotFound } from '@/src/components/feedback/DataNotFound';
 
 const CORRECT = '#16A34A';
@@ -206,9 +206,11 @@ export default function ExamReviewScreen() {
   }, [set, breakdown, colors, radius, spacing, attemptLabel, attemptDate]);
 
   if (examSet.loading) {
+    // New preloading: no header while loading, the glow-ring sits in the
+    // content area — then header + answers arrive together in one step.
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <PageLoaderOverlay visible label="Loading Answers…" />
+        <Preloading tinted={false} label="Loading Answers…" />
       </View>
     );
   }
