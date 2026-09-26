@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { BlankStack } from 'react-native-screen-transitions/expo-router';
 import { slideOptions } from '@/src/core/nav/slideTransition';
@@ -6,7 +6,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
@@ -199,6 +199,25 @@ function RootStack() {
     }
   }, [userUid]);
 
+  // Memoized so the object identity is stable across renders — an inline
+  // screenOptions object would be a NEW reference every render, which makes
+  // BlankStack do a state update during the render phase ("Can't perform a
+  // React state update on a component that hasn't mounted yet").
+  const rootScreenOptions = useMemo(
+    () => ({
+      headerShown: false,
+      // Slide-from-right page transition (src/core/nav/slideTransition.ts).
+      ...slideOptions,
+      // Reserve the Android system-navigation area for every regular route,
+      // so scroll content cannot render underneath the system buttons.
+      contentStyle: {
+        backgroundColor: rootPaint,
+        paddingBottom: systemBottomInset,
+      },
+    }),
+    [rootPaint, systemBottomInset]
+  );
+
   // One analytics snapshot per Kathmandu day the app is opened.
   //
   // The trend charts are built by differencing cumulative snapshots, so a day
@@ -245,19 +264,7 @@ function RootStack() {
         in one place, instead of needing to remember to list each one.
       */}
 
-<BlankStack
-        screenOptions={{
-          headerShown: false,
-          // Slide-from-right page transition (src/core/nav/slideTransition.ts).
-          ...slideOptions,
-          // Reserve the Android system-navigation area for every regular route,
-          // so scroll content cannot render underneath the system buttons.
-          contentStyle: {
-            backgroundColor: rootPaint,
-            paddingBottom: systemBottomInset,
-          },
-        }}
-      >
+<BlankStack screenOptions={rootScreenOptions}>
         <BlankStack.Screen
           name="index"
           options={{ contentStyle: { backgroundColor: colors.background } }}
@@ -266,6 +273,7 @@ function RootStack() {
           name="(tabs)"
           options={{ contentStyle: { backgroundColor: colors.background } }}
         />
+        <BlankStack.Screen name="onboarding" />
         <BlankStack.Screen name="course-setup" />
         <BlankStack.Screen name="blocking/no-internet" options={{ gestureEnabled: false }} />
         <BlankStack.Screen name="blocking/maintenance" options={{ gestureEnabled: false }} />
@@ -287,10 +295,14 @@ function RootStack() {
         busy={evictionBusy}
         onConfirm={acknowledgeEviction}
       />
-      {/* Status bar is ALWAYS light: every screen's top chrome (all page
+      {/* Status bar is ALWAYS light-content: every screen's top chrome (all page
           headers, auth headers, splash) is dark navy in both themes, so dark
-          status-bar content would be invisible on it. */}
-      <StatusBar style="light" />
+          status-bar icons would be invisible on it.
+          translucent + transparent background (Android): the header gradients
+          draw UNDER the status bar instead of a solid black bar — the status
+          bar shows the header's own colors. All headers already pad for
+          insets.top, so content never hides under it. */}
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
     </View>
   );
 }

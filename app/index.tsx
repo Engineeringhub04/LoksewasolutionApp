@@ -4,7 +4,8 @@
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Image as NativeImage, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { pushAndClearHistory } from '@/src/core/nav/pushAndClearHistory';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -154,6 +155,7 @@ function SplashDecorations() {
 
 export default function SplashScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { isOnline, isChecked: networkChecked } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
@@ -190,6 +192,17 @@ export default function SplashScreen() {
 
     const decide = async () => {
       if (routedRef.current) return;
+      // Network calls on the splash must NEVER hang forever. The 7s race
+      // below only covers config/homeReady — but verifyDeviceSession and
+      // profileStore.load run BEFORE it, and on a flaky connection either
+      // can hang for minutes, parking the app on the splash loader. Wrap
+      // them so the splash always moves on.
+      const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+        Promise.race([
+          promise,
+          new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+        ]);
+      const SPLASH_CALL_TIMEOUT_MS = 7000;
       // Force-update check intentionally removed for now (was causing a false-positive
       // block on some Android devices unrelated to any real version mismatch.
       const configPromise = fetchRemoteConfig();
@@ -210,7 +223,13 @@ export default function SplashScreen() {
         // Doing it before the prefetch is not just tidiness: warming Home costs a
         // dozen reads, and spending them on a session that will not survive the
         // next three seconds is pure waste.
-        const session = await verifyDeviceSession(user.uid);
+        const session = await withTimeout(
+          verifyDeviceSession(user.uid),
+          SPLASH_CALL_TIMEOUT_MS,
+          // On timeout, skip the check (don't evict). The guard re-verifies
+          // after launch, so a real eviction is still caught — just not here.
+          { verdict: 'skipped', deviceName: null } as const,
+        );
         if (session.verdict === 'evicted') {
           evicted = true;
           // Claim the routing decision now. logout() empties the auth store,
@@ -227,7 +246,11 @@ export default function SplashScreen() {
       if (user && !evicted) {
         // Root layout also warms Profile. profileStore shares any in-flight request,
         // so this does not create duplicate profile/course reads during launch.
-        await useProfileStore.getState().load(user.uid);
+        await withTimeout(
+          useProfileStore.getState().load(user.uid),
+          SPLASH_CALL_TIMEOUT_MS,
+          undefined,
+        );
         const profileState = useProfileStore.getState();
         const courseId = profileState.courseInfo?.courseId
           ?? profileState.profile?.courseId
@@ -286,17 +309,17 @@ export default function SplashScreen() {
       // splash screen forever instead of merely skipping a cosmetic step.
       await NativeSplashScreen.hideAsync().catch(() => {});
 
-      if (config.maintenanceMode) { router.replace('/blocking/maintenance'); return; }
+      if (config.maintenanceMode) { pushAndClearHistory(router, navigation, '/blocking/maintenance', 'blocking/maintenance'); return; }
       // Ahead of the connectivity gate on purpose: the sign-out already happened,
       // so there is no session left to send anywhere else.
-      if (evicted) { router.replace('/(auth)/login'); return; }
+      if (evicted) { pushAndClearHistory(router, navigation, '/(auth)/login', '(auth)/login'); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
-      if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet'); return; }
-      if (user) { router.replace('/(tabs)'); return; }
-      router.replace('/onboarding');
+      if (networkChecked && !isOnline && !user) { pushAndClearHistory(router, navigation, '/blocking/no-internet', 'blocking/no-internet'); return; }
+      if (user) { pushAndClearHistory(router, navigation, '/(tabs)', '(tabs)'); return; }
+      pushAndClearHistory(router, navigation, '/onboarding', 'onboarding');
     };
     void decide().catch(() => {});
-  }, [initializing, hydrated, isOnline, networkChecked, user, router]);
+  }, [initializing, hydrated, isOnline, networkChecked, user, router, navigation]);
 
   // The brand mark is now the app icon itself — a square (1:1) deep-navy tile
   // with the amber "LS". Render it as a rounded SQUARE (squircle, ≈22.4% corner)

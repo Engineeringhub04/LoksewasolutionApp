@@ -10,8 +10,9 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import { useNavigation, useRouter } from 'expo-router';
+import { pushAndClearHistory } from '@/src/core/nav/pushAndClearHistory';
+import { StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -110,6 +111,7 @@ function firestoreToSlide(doc: OnboardingSlide): SlideData {
 // ====================================================================
 export default function OnboardingScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   const [slides, setSlides] = useState<SlideData[]>(HARDCODED_SLIDES);
@@ -136,7 +138,7 @@ export default function OnboardingScreen() {
     if (urls.length > 0) Image.prefetch(urls).catch(() => {});
   }, [slides]);
 
-  const navigateToLogin = () => router.replace('/(auth)/login');
+  const navigateToLogin = () => pushAndClearHistory(router, navigation, '/(auth)/login', '(auth)/login');
 
   const goNext = () => {
     if (currentIndex < slides.length - 1) {
@@ -185,7 +187,7 @@ export default function OnboardingScreen() {
 
   return (
     <Animated.View style={[styles.container, backgroundStyle]}>
-      <StatusBar style="light" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Top Bar: Skip */}
       <Animated.View entering={FadeInDown.delay(200).duration(400)} style={[styles.topBar, { paddingTop: insets.top + 12 }]}>

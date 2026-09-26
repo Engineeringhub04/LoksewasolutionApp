@@ -1,13 +1,17 @@
+import { Platform } from 'react-native';
 import { interpolate } from 'react-native-reanimated';
 import Transition, {
   type ScreenTransitionConfig,
 } from 'react-native-screen-transitions';
 
-// Rounded corner while the page is moving (same look as the tutorial video).
-const SLIDE_BORDER_RADIUS = 60;
-
+// Clean full-screen slide (Exametix-style): no rounded corners, no scale —
+// the page slides in from the right at full bleed, exactly like the native
+// iOS push. The screen underneath drifts left slightly (parallax), matching
+// the platform convention.
 export const slideOptions: ScreenTransitionConfig = {
-  gestureEnabled: true,
+  // Swipe-to-go-back is an iOS convention. On Android it feels wrong and can
+  // conflict with the system back gesture, so it's iOS-only.
+  gestureEnabled: Platform.OS === 'ios',
   gestureDirection: 'horizontal',
 
   transitionSpec: {
@@ -36,9 +40,6 @@ export const slideOptions: ScreenTransitionConfig = {
     return {
       content: {
         style: {
-          borderRadius: active.settled ? 0 : SLIDE_BORDER_RADIUS,
-          borderCurve: active.settled ? 'continuous' : 'circular',
-          overflow: 'hidden',
           transform: [{ translateX }],
         },
       },
