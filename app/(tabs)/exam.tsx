@@ -49,8 +49,11 @@ import { PageLoaderOverlay } from '@/src/components/feedback/PageLoaderOverlay';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
 import { getGlassTabBarContentPadding } from '@/src/components/nav/GlassTabBar';
 
-/** Cards re-evaluate their state on this cadence so countdowns tick. */
-const TICK_MS = 1000;
+/** Card states are re-evaluated on this cadence so hidden/countdown cards flip
+ * at the right time. Per-second countdown labels are owned by each ExamCard's
+ * own timer (see CountdownLabel) — the screen no longer re-renders every
+ * second. */
+const STATE_TICK_MS = 30_000;
 
 export default function ExamScreen() {
   const { colors, spacing, radius } = useTheme();
@@ -82,14 +85,18 @@ export default function ExamScreen() {
    */
   const [rulesMode, setRulesMode] = useState<'info' | 'start'>('info');
 
-  // Drives the countdown labels without re-fetching anything. Uses serverNow()
-  // (device clock corrected by the Firestore server-time skew) so winding the
-  // phone clock forward can't reveal a set before its real start time.
-  const [now, setNow] = useState(() => serverNow().getTime());
+  // Drives card-state transitions (hidden -> countdown -> ready) without
+  // re-fetching anything. Uses serverNow() (device clock corrected by the
+  // Firestore server-time skew) so winding the phone clock forward can't
+  // reveal a set before its real start time. The per-second mm:ss labels are
+  // rendered by each card's own CountdownLabel; when one hits zero it bumps
+  // timeVersion for an immediate state re-evaluation.
+  const [timeVersion, setTimeVersion] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setNow(serverNow().getTime()), TICK_MS);
+    const timer = setInterval(() => setTimeVersion((v) => v + 1), STATE_TICK_MS);
     return () => clearInterval(timer);
   }, []);
+  const handleCountdownExpired = useCallback(() => setTimeVersion((v) => v + 1), []);
 
   const provinces = useAsyncData(() => fetchProvinces(), []);
   const sections = useAsyncData(() => fetchExamSections(courseId, subcourseId), [courseId, subcourseId]);
@@ -192,6 +199,7 @@ export default function ExamScreen() {
 
   /** Cards more than 10 minutes away are filtered out entirely. */
   const visibleCards = useMemo(() => {
+    const now = serverNow().getTime();
     const attemptMap = attempts.data ?? {};
     return (sets.data ?? [])
       .map((set) => ({
@@ -205,7 +213,7 @@ export default function ExamScreen() {
         ),
       }))
       .filter((entry) => entry.state.kind !== 'hidden');
-  }, [sets.data, attempts.data, now, approvedExamIds, pendingExamIds, overallSubscriptionActive]);
+  }, [sets.data, attempts.data, timeVersion, approvedExamIds, pendingExamIds, overallSubscriptionActive]);
 
   const openRules = async (set: ExamSet, mode: 'info' | 'start') => {
     setRulesForSet(set);
@@ -380,7 +388,7 @@ export default function ExamScreen() {
             visibleCards.map((entry, index) => {
               const myAnswer = entry.set.contentType === 'pdf' ? myAnswers.data?.[entry.set.id] : undefined;
               return (
-                <Animated.View key={entry.set.id} entering={FadeInDown.delay(index * 60).duration(280)}>
+                <Animated.View key={entry.set.id} entering={FadeInDown.delay(Math.min(index, 8) * 60).duration(280)}>
                   <ExamCard
                     set={entry.set}
                     state={entry.state}
@@ -389,6 +397,7 @@ export default function ExamScreen() {
                     answerStatus={myAnswer?.status}
                     isPurchased={overallSubscriptionActive || approvedExamIds.includes(entry.set.id)}
                     hasAttempted={(attempts.data?.[entry.set.id]?.length ?? 0) > 0}
+                    onCountdownExpired={handleCountdownExpired}
                     onRulesPress={() => void openRules(entry.set, 'info')}
                     onPrimaryPress={() => {
                       if (entry.state.kind === 'locked') {

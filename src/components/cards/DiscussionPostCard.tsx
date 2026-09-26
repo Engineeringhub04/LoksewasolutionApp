@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Pressable, Image, Linking, StyleSheet } from 'react-native';
+import { View, Pressable, Linking, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, withSequence, withTiming, useAnimatedStyle } from 'react-native-reanimated';
 import { useTheme } from '@/src/core/theme';
@@ -149,7 +150,7 @@ export function DiscussionPostCard({
             accessibilityLabel={t('discussion.openImage')}
             style={({ pressed }) => [styles.mediaFrame, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderRadius: radius.md }, pressed && styles.pressed]}
           >
-            <Image source={{ uri: imageUrl }} style={styles.media} resizeMode="cover" />
+            <ExpoImage source={{ uri: imageUrl }} style={styles.media} contentFit="cover" cachePolicy="memory-disk" />
             <View style={styles.mediaLabel}><Ionicons name="scan-outline" size={13} color="#FFF" /><Text variant="caption" style={{ color: '#FFF' }}>{t('discussion.tapToZoom')}</Text></View>
           </Pressable>
         ) : null}

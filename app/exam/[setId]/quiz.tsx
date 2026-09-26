@@ -47,6 +47,50 @@ function formatClock(totalSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+/**
+ * One question-number button in the left rail. Memoized so answering a
+ * question (or the 1s exam timer ticking) only re-renders the two buttons
+ * whose state actually changed, not the whole rail.
+ */
+const RailButton = React.memo(function RailButton({
+  index,
+  isCurrent,
+  isAnswered,
+  onPress,
+  colors,
+  radius,
+}: {
+  index: number;
+  isCurrent: boolean;
+  isAnswered: boolean;
+  onPress: (index: number) => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+  radius: ReturnType<typeof useTheme>['radius'];
+}) {
+  return (
+    <Pressable
+      onPress={() => onPress(index)}
+      style={[
+        styles.railItem,
+        {
+          borderRadius: radius.sm,
+          backgroundColor: isCurrent ? colors.primary : isAnswered ? `${colors.success}22` : colors.surface,
+          borderColor: isCurrent ? colors.primary : isAnswered ? colors.success : colors.border,
+        },
+      ]}
+      accessibilityLabel={`Question ${index + 1}`}
+    >
+      <Text
+        variant="bodySmall"
+        weight="bold"
+        style={{ color: isCurrent ? '#FFF' : isAnswered ? colors.success : colors.textSecondary }}
+      >
+        {index + 1}
+      </Text>
+    </Pressable>
+  );
+});
+
 export default function QuizScreen() {
   const { setId } = useLocalSearchParams<{ setId: string }>();
   const { colors, radius, spacing, effective, setMode } = useTheme();
@@ -232,33 +276,17 @@ export default function QuizScreen() {
           contentContainerStyle={styles.railContent}
           showsVerticalScrollIndicator={false}
         >
-          {questions.map((_, index) => {
-            const isCurrent = index === current;
-            const isAnswered = answers[index] !== undefined && answers[index] !== UNANSWERED;
-            return (
-              <Pressable
-                key={index}
-                onPress={() => setCurrent(index)}
-                style={[
-                  styles.railItem,
-                  {
-                    borderRadius: radius.sm,
-                    backgroundColor: isCurrent ? colors.primary : isAnswered ? `${colors.success}22` : colors.surface,
-                    borderColor: isCurrent ? colors.primary : isAnswered ? colors.success : colors.border,
-                  },
-                ]}
-                accessibilityLabel={`Question ${index + 1}`}
-              >
-                <Text
-                  variant="bodySmall"
-                  weight="bold"
-                  style={{ color: isCurrent ? '#FFF' : isAnswered ? colors.success : colors.textSecondary }}
-                >
-                  {index + 1}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {questions.map((_, index) => (
+            <RailButton
+              key={index}
+              index={index}
+              isCurrent={index === current}
+              isAnswered={answers[index] !== undefined && answers[index] !== UNANSWERED}
+              onPress={setCurrent}
+              colors={colors}
+              radius={radius}
+            />
+          ))}
         </ScrollView>
 
         {/* Question + options */}

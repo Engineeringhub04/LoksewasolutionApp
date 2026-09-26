@@ -264,6 +264,10 @@ export default function DiscussionFeedScreen() {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={refresh} />}
           renderItem={renderPost}
           showsVerticalScrollIndicator={false}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
         />
       )}
 

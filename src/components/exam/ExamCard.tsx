@@ -10,12 +10,13 @@
 //   locked    -> "To Purchase" + a "Not Purchased" tag
 //
 // A card in the `hidden` state is filtered out by the screen and never rendered.
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/core/theme';
 import { useTranslation } from '@/src/core/i18n';
 import { Text } from '@/src/components/misc/Text';
+import { serverNow } from '@/src/core/firebase/firestoreRest';
 import type { ExamCardState, ExamSet } from '@/src/core/firebase/services/examHub';
 import type { AnswerStatus } from '@/src/core/firebase/services/examAnswers';
 
@@ -39,7 +40,39 @@ interface ExamCardProps {
   onRulesPress: () => void;
   onPrimaryPress: () => void;
   onRankingPress: () => void;
+  /** Called exactly once when a visible countdown reaches zero so the parent
+   * can re-evaluate card states (countdown -> ready) without a screen-wide
+   * 1-second re-render loop. */
+  onCountdownExpired?: () => void;
 }
+
+/**
+ * Ticks the mm:ss countdown label once per second inside the card that owns
+ * it, so the exam list screen doesn't have to re-render every second.
+ */
+const CountdownLabel = React.memo(function CountdownLabel({
+  targetTimeMs,
+  onExpired,
+}: {
+  targetTimeMs: number;
+  onExpired?: () => void;
+}) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, targetTimeMs - serverNow().getTime()));
+  const expiredRef = useRef(false);
+  useEffect(() => {
+    expiredRef.current = false;
+    const timer = setInterval(() => {
+      const left = Math.max(0, targetTimeMs - serverNow().getTime());
+      setRemaining(left);
+      if (left <= 0 && !expiredRef.current) {
+        expiredRef.current = true;
+        onExpired?.();
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [targetTimeMs, onExpired]);
+  return <>{formatCountdown(remaining)}</>;
+});
 
 function formatCountdown(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -70,6 +103,7 @@ export function ExamCard({
   onRulesPress,
   onPrimaryPress,
   onRankingPress,
+  onCountdownExpired,
 }: ExamCardProps) {
   const { colors, radius, spacing } = useTheme();
   const { t } = useTranslation();
@@ -243,7 +277,13 @@ export function ExamCard({
           ]}
         >
           <Ionicons name={primary.icon} size={16} color="#FFF" />
-          <Text variant="bodySmall" weight="bold" style={{ color: '#FFF' }}>{primary.label}</Text>
+          <Text variant="bodySmall" weight="bold" style={{ color: '#FFF' }}>
+            {state.kind === 'countdown' && set.startTime ? (
+              <CountdownLabel targetTimeMs={set.startTime.getTime()} onExpired={onCountdownExpired} />
+            ) : (
+              primary.label
+            )}
+          </Text>
         </Pressable>
       </View>
 
