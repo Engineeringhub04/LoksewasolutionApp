@@ -9,6 +9,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/src/components/misc/Text';
 import { AppConfig } from '@/src/core/config/appConfig';
+import {
+  HEADER_GRADIENT_COLORS,
+  HEADER_GRADIENT_START,
+  HEADER_GRADIENT_END,
+} from '@/src/components/nav/SubpageHeader';
 
 interface AuthHeaderProps {
   title: string;
@@ -21,7 +26,12 @@ export function AuthHeader({ title, subtitle, onBack, rightSlot }: AuthHeaderPro
   const insets = useSafeAreaInsets();
 
   return (
-    <LinearGradient colors={['#2563EB', '#1D4ED8', '#1E40AF']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+    <LinearGradient
+      colors={HEADER_GRADIENT_COLORS}
+      start={HEADER_GRADIENT_START}
+      end={HEADER_GRADIENT_END}
+      style={[styles.header, { paddingTop: insets.top + 16 }]}
+    >
       {onBack ? (
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
