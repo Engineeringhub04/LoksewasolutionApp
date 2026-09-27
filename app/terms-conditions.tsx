@@ -13,6 +13,7 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { HeroBand, SectionCard, StatusPill, type Tone } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 const TERMS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: string; body: string }[] = [
   {
@@ -66,10 +67,11 @@ const TERMS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: string; 
 ];
 
 export default function TermsConditionsScreen() {
+  const ready = usePagePreloader();
   const { t } = useTranslation();
 
   return (
-    <SubpageScrollScreen title={t('profile.termsConditions')}>
+    <SubpageScrollScreen title={t('profile.termsConditions')} loading={!ready}>
       <HeroBand
         icon="document-text"
         title={t('profile.termsConditions')}

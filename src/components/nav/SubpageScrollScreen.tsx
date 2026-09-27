@@ -15,6 +15,7 @@ import { ScrollView, View, KeyboardAvoidingView, Platform, type StyleProp, type 
 import { useTheme } from '@/src/core/theme';
 import { SubpageHeader } from '@/src/components/nav/SubpageHeader';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { Preloading } from '@/src/components/Preloading';
 
 interface SubpageScrollScreenProps {
   title: string;
@@ -31,6 +32,15 @@ interface SubpageScrollScreenProps {
    */
   headerActions?: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  /**
+   * Static-page preloading: when true, the header stays visible and the
+   * glow-ring sits centered in the content area — the children swap in when
+   * it flips false. Pair with usePagePreloader() so database-free pages get
+   * the same 2s window as data pages.
+   */
+  loading?: boolean;
+  /** Label under the glow-ring while `loading` is true. */
+  loadingLabel?: string;
 }
 
 export function SubpageScrollScreen({
@@ -42,6 +52,8 @@ export function SubpageScrollScreen({
   footer,
   headerActions,
   contentContainerStyle,
+  loading,
+  loadingLabel,
 }: SubpageScrollScreenProps) {
   const { colors, spacing } = useTheme();
 
@@ -61,6 +73,18 @@ export function SubpageScrollScreen({
   }, [onRefresh]);
 
   const isRefreshing = onRefresh ? Boolean(refreshing) : selfRefreshing;
+
+  // Static-page preloading: header stays up, glow-ring centered in the content
+  // area. The children mount only when loading flips false, so the page
+  // transition never fights the content render.
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SubpageHeader title={title} onBackPress={onBackPress} headerActions={headerActions} />
+        <Preloading tinted={false} label={loadingLabel ?? 'Loading…'} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

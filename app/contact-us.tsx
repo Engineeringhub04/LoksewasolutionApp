@@ -19,8 +19,10 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
 import { HeroBand, SectionCard, ActionRow, StatusPill, QuotePanel, type Tone } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 export default function ContactUsScreen() {
+  const ready = usePagePreloader();
   const { colors, spacing, effective } = useTheme();
   const { t } = useTranslation();
   const { isOffline } = useNetworkStatus();
@@ -76,7 +78,7 @@ export default function ContactUsScreen() {
   };
 
   return (
-    <SubpageScrollScreen title={t('profile.contactUs')}>
+    <SubpageScrollScreen title={t('profile.contactUs')} loading={!ready}>
       <HeroBand
         icon="chatbubbles"
         title={t('profile.contactUs')}

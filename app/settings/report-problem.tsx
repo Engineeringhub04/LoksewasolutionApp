@@ -38,6 +38,7 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 type CategoryValue = 'bug' | 'content' | 'payment' | 'other';
 
@@ -58,6 +59,7 @@ const CATEGORIES: CategoryDef[] = [
 ];
 
 export default function ReportProblemScreen() {
+  const ready = usePagePreloader();
   const { colors, spacing, radius } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -106,7 +108,7 @@ export default function ReportProblemScreen() {
 
   if (isOffline) {
     return (
-      <SubpageScrollScreen title={t('help.reportTitle')}>
+      <SubpageScrollScreen title={t('help.reportTitle')} loading={!ready}>
         <View style={[styles.offline, { backgroundColor: `${colors.warning}14`, borderRadius: radius.lg, padding: spacing.md }]}>
           <Ionicons name="cloud-offline" size={24} color={colors.warning} />
           <Text variant="bodySmall" style={{ flex: 1, color: colors.warning }}>{t('help.offlineBlocked')}</Text>
@@ -116,7 +118,7 @@ export default function ReportProblemScreen() {
   }
 
   return (
-    <SubpageScrollScreen title={t('help.reportTitle')}>
+    <SubpageScrollScreen title={t('help.reportTitle')} loading={!ready}>
       {/* Intro banner — same hero pattern the Report Question screen uses, so the
           two report flows feel like siblings. */}
       <Animated.View

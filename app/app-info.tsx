@@ -18,6 +18,7 @@ import { AppConfig } from '@/src/core/config/appConfig';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { SectionCard, ActionRow, StatusPill, useTones, type Tone } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 const HIGHLIGHTS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: string; body: string }[] = [
   { icon: 'library-outline', tone: 'primary', title: 'Complete syllabus', body: 'Subject-wise notes and chapters mapped to the Loksewa syllabus.' },
@@ -28,6 +29,7 @@ const HIGHLIGHTS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: str
 ];
 
 export default function AppInfoScreen() {
+  const ready = usePagePreloader();
   const { colors, spacing, radius, effective } = useTheme();
   const { t } = useTranslation();
   const tones = useTones();
@@ -59,7 +61,7 @@ export default function AppInfoScreen() {
   ];
 
   return (
-    <SubpageScrollScreen title={t('profile.appInfo')}>
+    <SubpageScrollScreen title={t('profile.appInfo')} loading={!ready}>
       {/* Identity — the logo sits on the same tone-to-transparent wash HeroBand
           uses, so this one bespoke block still belongs to the kit's family. */}
       <LinearGradient

@@ -319,10 +319,11 @@ export default function DailyTestReviewScreen() {
   }, [model, breakdown, colors, radius, spacing, timeTaken]);
 
   if (modelData.loading) {
-    // New preloading: no header while loading, the glow-ring sits in the
-    // content area — then header + answers arrive together in one step.
+    // Header stays visible while loading; the glow-ring sits centered in the
+    // content area below it — then the answers swap in under the same header.
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SubpageHeader title="Review Answers" />
         <Preloading tinted={false} label="Loading your answers…" />
       </View>
     );

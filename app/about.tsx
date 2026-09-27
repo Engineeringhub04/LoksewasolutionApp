@@ -9,7 +9,9 @@ import { TopAppBar } from '@/src/components/nav/TopAppBar';
 import { Text } from '@/src/components/misc/Text';
 import { IconButton } from '@/src/components/buttons/IconButton';
 import { useManualRefresh } from '@/src/core/hooks/useManualRefresh';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 import { AppRefreshControl } from '@/src/components/feedback/AppRefreshControl';
+import { Preloading } from '@/src/components/Preloading';
 
 const socialLinks: { icon: keyof typeof Ionicons.glyphMap; url: string }[] = [
   { icon: 'logo-facebook', url: AppConfig.links.facebook },
@@ -22,6 +24,16 @@ export default function AboutScreen() {
   const { colors, spacing } = useTheme();
   const { refreshing, onRefresh } = useManualRefresh();
   const { t } = useTranslation();
+  const ready = usePagePreloader();
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <TopAppBar title={t('about.title')} />
+        <Preloading tinted={false} label={t('about.title')} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
