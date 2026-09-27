@@ -43,7 +43,6 @@ export function BlurLoaderOverlay({
       <BlurView
         intensity={intensity}
         tint={effective === 'dark' ? 'dark' : 'light'}
-        blurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
 
