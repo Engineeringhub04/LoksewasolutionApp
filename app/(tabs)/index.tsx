@@ -285,7 +285,10 @@ export default function HomeScreen() {
     ) : null}
 
     <Animated.ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      // While loading the body wears the splash's dark navy — not the theme's
+      // (white in light mode) background — so Splash → Home feels like one
+      // continuous branded moment instead of a stark white flash.
+      style={{ flex: 1, backgroundColor: ready ? colors.background : '#03145C' }}
       contentContainerStyle={{
         // flexGrow lets the preloader's own flex:1 fill the screen so it sits
         // DEAD CENTRE while loading (without it the ring hugged the top).
@@ -315,7 +318,7 @@ export default function HomeScreen() {
         // The fixed header stays; the body is replaced by the glow-ring until
         // the shared Home snapshot lands once. What used to flash behind the
         // old overlay was a page of half-rendered sections.
-        <Preloading tinted={false} label="Loading Home..." hint={t("loadHints.home")} />
+        <Preloading tinted={true} label="Loading Home..." hint={t("loadHints.home")} />
       ) : (
       <>
       {/* Pull-to-refresh progress for a fixed-header screen — see
