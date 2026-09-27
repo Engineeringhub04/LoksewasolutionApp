@@ -55,18 +55,23 @@ export function pushAndClearHistory(
     settled = true;
     // Reuse the pushed route's key so React Navigation keeps the SAME screen
     // instance — no unmount/remount, no preloader restart, no stuck offset.
-    // Falls back to a fresh route if the state is unexpected.
+    // If the current route is NOT the target (user navigated away, or the
+    // state is unexpected), do NOT reset at all — a reset with a fresh key
+    // would unmount the live screen and leave a white flash/blank page.
+    // Leaving the back history intact is far better than a white screen.
     let keepKey: string | undefined;
     try {
       const state = navigation.getState();
       const current = state.routes[state.index];
-      if (current && current.name === routeName) keepKey = current.key;
+      if (!current || current.name !== routeName) return;
+      keepKey = current.key;
     } catch {
-      // getState unavailable — fresh route still clears history correctly.
+      // getState unavailable — skip the reset rather than risk a blank page.
+      return;
     }
     navigation.reset({
       index: 0,
-      routes: keepKey ? [{ name: routeName, key: keepKey }] : [{ name: routeName }],
+      routes: [{ name: routeName, key: keepKey }],
     });
   };
 
@@ -80,15 +85,16 @@ export function pushAndClearHistory(
   // closes ("rokinxa ani closed hunx"). The `transitionEnd` event fires
   // exactly once when the animation completes, so the reset always lands
   // after the last frame, on every device, at every frame rate.
+  //
+  // NO SAFETY-NET TIMER: an earlier version had a 2.5s setTimeout fallback.
+  // On some devices the timer fired while the home screen's 2s preloader was
+  // still up, and the reset — even with the same key — interrupted the
+  // preloader-to-content swap, leaving a permanent white screen. If
+  // `transitionEnd` ever fails to fire, the back history simply isn't cleared
+  // (pressing back returns to Splash, which forwards again) — far better
+  // than a white screen.
   const unsubscribe = navigation.addListener('transitionEnd', () => {
     unsubscribe();
     doReset();
   });
-
-  // Safety net: if the event never fires (interrupted transition, backgrounded
-  // app), reset anyway well after any animation could still be running.
-  setTimeout(() => {
-    unsubscribe();
-    doReset();
-  }, 2500);
 }
