@@ -2,11 +2,11 @@
 // instead of hiding the page under an opaque sheet. Used when submitting a Daily
 // Test: the quiz stays faintly visible behind the blur while the result saves.
 //
-// expo-blur's Android implementation is opt-in (it needs
-// `blurMethod="dimezisBlurView"`), and it renders nothing at all on
-// some devices — so a translucent scrim is layered underneath as well. That way
-// the "lightly dimmed, faded background" reads correctly on every platform, with
-// real blur on top wherever the OS can do it.
+// expo-blur's real Android blur needs a BlurTargetView configured via the
+// `blurTarget` prop, which our overlay structure doesn't provide — so BlurView
+// renders as a plain tint here. A translucent scrim is layered underneath as
+// well. That way the "lightly dimmed, faded background" reads correctly on
+// every platform, with real blur on top wherever the OS can do it.
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -43,7 +43,6 @@ export function BlurLoaderOverlay({
       <BlurView
         intensity={intensity}
         tint={effective === 'dark' ? 'dark' : 'light'}
-        blurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
 

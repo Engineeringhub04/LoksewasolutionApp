@@ -5,10 +5,8 @@ import {
   LayoutAnimation,
   Modal,
   Pressable,
-  Platform,
   ScrollView,
   StyleSheet,
-  UIManager,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -63,10 +61,6 @@ type UnitTrack = {
   chapters: DisplayChapter[];
   direct: boolean;
 };
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 function StaggeredReveal({ children, index, animationKey }: { children: React.ReactNode; index: number; animationKey: string }) {
   const opacity = React.useRef(new Animated.Value(0)).current;
