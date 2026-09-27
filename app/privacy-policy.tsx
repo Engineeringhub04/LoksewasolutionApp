@@ -16,6 +16,7 @@ import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { HeroBand, SectionCard, StatusPill, QuotePanel, type Tone } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 const SECTIONS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: string; body: string }[] = [
   {
@@ -51,11 +52,12 @@ const SECTIONS: { icon: keyof typeof Ionicons.glyphMap; tone: Tone; title: strin
 ];
 
 export default function PrivacyPolicyScreen() {
+  const ready = usePagePreloader();
   const { spacing } = useTheme();
   const { t } = useTranslation();
 
   return (
-    <SubpageScrollScreen title={t('profile.privacyPolicy')}>
+    <SubpageScrollScreen title={t('profile.privacyPolicy')} loading={!ready}>
       <HeroBand
         icon="shield-checkmark"
         title={t('profile.privacyPolicy')}

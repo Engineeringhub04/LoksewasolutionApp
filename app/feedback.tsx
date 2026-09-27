@@ -19,6 +19,7 @@ import { Text } from '@/src/components/misc/Text';
 import { Button } from '@/src/components/buttons/Button';
 import { TextField } from '@/src/components/inputs/TextField';
 import { HeroBand, SectionCard, StatusPill, QuotePanel, useTones, type Tone } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 const RATING_LABELS = ['', 'Very poor', 'Poor', 'Okay', 'Good', 'Excellent'];
 
@@ -30,6 +31,7 @@ function ratingTone(rating: number): Tone {
 }
 
 export default function FeedbackScreen() {
+  const ready = usePagePreloader();
   const { colors, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -61,7 +63,7 @@ export default function FeedbackScreen() {
   };
 
   return (
-    <SubpageScrollScreen title={t('profile.feedback')}>
+    <SubpageScrollScreen title={t('profile.feedback')} loading={!ready}>
       <HeroBand
         icon="heart"
         title={t('profile.feedback')}

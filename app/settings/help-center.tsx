@@ -27,6 +27,7 @@ import { AppConfig } from '@/src/core/config/appConfig';
 import { SubpageScrollScreen } from '@/src/components/nav/SubpageScrollScreen';
 import { SearchBar } from '@/src/components/inputs/SearchBar';
 import { Text } from '@/src/components/misc/Text';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 interface HelpTopic {
   key: string;
@@ -58,6 +59,7 @@ interface FaqItem {
 }
 
 export default function HelpCenterScreen() {
+  const ready = usePagePreloader();
   const { colors, radius, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -164,7 +166,7 @@ export default function HelpCenterScreen() {
   ];
 
   return (
-    <SubpageScrollScreen title={t('help.title')}>
+    <SubpageScrollScreen title={t('help.title')} loading={!ready}>
       {/* ===== Hero ===== */}
       <Animated.View
         entering={FadeInDown.duration(360)}

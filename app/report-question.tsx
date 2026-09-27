@@ -19,10 +19,12 @@ import { TextField } from '@/src/components/inputs/TextField';
 import { FloatingLabelField } from '@/src/components/inputs/FloatingLabelField';
 import { Dropdown } from '@/src/components/inputs/Dropdown';
 import { HeroBand, SectionCard, StatusPill, QuotePanel } from '@/src/components/premium';
+import { usePagePreloader } from '@/src/core/hooks/usePagePreloader';
 
 type Issue = 'wrong-answer' | 'typo' | 'duplicate' | 'unclear' | 'other';
 
 export default function ReportQuestionScreen() {
+  const ready = usePagePreloader();
   const { spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -64,7 +66,7 @@ export default function ReportQuestionScreen() {
   const filled = [questionRef.trim().length > 0, issue !== null, description.trim().length > 0].filter(Boolean).length;
 
   return (
-    <SubpageScrollScreen title={t('profile.reportQuestion')}>
+    <SubpageScrollScreen title={t('profile.reportQuestion')} loading={!ready}>
       <HeroBand
         icon="help-circle-outline"
         title={t('report.title')}
