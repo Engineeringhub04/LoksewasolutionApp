@@ -1,7 +1,7 @@
 // §11 Splash — first screen on launch; initializes app and routes correctly.
 // Logo shows immediately. Onboarding images pre-cache in the background without delaying navigation.
 // Uses the native bundled image renderer for the local logo so it has no remote-style transition.
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, Image as NativeImage, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useNavigation, useRouter } from 'expo-router';
@@ -22,6 +22,13 @@ import { markEvictionNotice, verifyDeviceSession } from '@/src/core/firebase/ser
 import { logout } from '@/src/core/firebase/auth';
 import { prefetchHomeData } from '@/src/core/services/homePrefetch';
 import { useProfileStore } from '@/src/core/store/profileStore';
+
+// Module-level routing guard — survives Splash remounts.
+// If a navigation reset remounts Splash (e.g. on devices where the
+// transition event misbehaves), the old useRef guard reset to false and
+// decide() ran again, pushing Home in a loop. A module variable persists
+// for the app session, so decide() only ever routes once.
+let splashHasRouted = false
 
 const MIN_SPLASH_MS = 1200;
 const DECORATION_COLOR = '#76A9FF';
@@ -159,7 +166,6 @@ export default function SplashScreen() {
   const { isOnline, isChecked: networkChecked } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
-  const routedRef = useRef(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -185,13 +191,13 @@ export default function SplashScreen() {
   // Home's complete first snapshot is prefetched here so Home can render it
   // without issuing the same requests again after navigation.
   useEffect(() => {
-    if (routedRef.current || initializing || !hydrated) return;
+    if (splashHasRouted || initializing || !hydrated) return;
 
     const startedAt = Date.now();
     const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
     const decide = async () => {
-      if (routedRef.current) return;
+      if (splashHasRouted) return;
       // Network calls on the splash must NEVER hang forever. The 7s race
       // below only covers config/homeReady — but verifyDeviceSession and
       // profileStore.load run BEFORE it, and on a flaky connection either
@@ -235,7 +241,7 @@ export default function SplashScreen() {
           // Claim the routing decision now. logout() empties the auth store,
           // which re-runs this effect with `user` null — without the flag that
           // re-run would race this one to the router and win with /onboarding.
-          routedRef.current = true;
+          splashHasRouted = true;
           // AsyncStorage because the notice has to survive both the sign-out
           // (which wipes every in-memory store) and the navigation after it.
           await markEvictionNotice(session.deviceName);
@@ -295,8 +301,8 @@ export default function SplashScreen() {
       // user did not ask for.
       if (remaining > 0) await sleep(remaining);
       if (!evicted) {
-        if (routedRef.current) return;
-        routedRef.current = true;
+        if (splashHasRouted) return;
+        splashHasRouted = true;
       }
 
       // Hide native splash exactly once, after decision is made. The fade is off
