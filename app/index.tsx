@@ -4,8 +4,7 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Image as NativeImage, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { useNavigation, useRouter } from 'expo-router';
-import { pushAndClearHistory } from '@/src/core/nav/pushAndClearHistory';
+import { useRouter } from 'expo-router';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,7 +161,6 @@ function SplashDecorations() {
 
 export default function SplashScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const { isOnline, isChecked: networkChecked } = useNetworkStatus();
   const { user, initializing } = useAuthStore();
   const { hydrated, hydrate } = useSettingsStore();
@@ -315,17 +313,25 @@ export default function SplashScreen() {
       // splash screen forever instead of merely skipping a cosmetic step.
       await NativeSplashScreen.hideAsync().catch(() => {});
 
-      if (config.maintenanceMode) { pushAndClearHistory(router, navigation, '/blocking/maintenance', 'blocking/maintenance'); return; }
+      // Use router.replace() (not pushAndClearHistory) for Splash routing.
+      // pushAndClearHistory's transitionEnd listener attaches to Splash's
+      // navigation object, but the push transition fires on the NEW screen's
+      // navigator — so the listener never fires, back history never clears,
+      // and back (or a system back event) lands on Splash. With the
+      // module-level guard, Splash then shows loading forever; without it,
+      // decide() re-runs and loops. replace() is instant and reliable —
+      // the launch transition needs no slide animation.
+      if (config.maintenanceMode) { router.replace('/blocking/maintenance' as never); return; }
       // Ahead of the connectivity gate on purpose: the sign-out already happened,
       // so there is no session left to send anywhere else.
-      if (evicted) { pushAndClearHistory(router, navigation, '/(auth)/login', '(auth)/login'); return; }
+      if (evicted) { router.replace('/(auth)/login' as never); return; }
       // Only block for connectivity once NetInfo has actually reported a status.
-      if (networkChecked && !isOnline && !user) { pushAndClearHistory(router, navigation, '/blocking/no-internet', 'blocking/no-internet'); return; }
-      if (user) { pushAndClearHistory(router, navigation, '/(tabs)', '(tabs)'); return; }
-      pushAndClearHistory(router, navigation, '/onboarding', 'onboarding');
+      if (networkChecked && !isOnline && !user) { router.replace('/blocking/no-internet' as never); return; }
+      if (user) { router.replace('/(tabs)' as never); return; }
+      router.replace('/onboarding' as never);
     };
     void decide().catch(() => {});
-  }, [initializing, hydrated, isOnline, networkChecked, user, router, navigation]);
+  }, [initializing, hydrated, isOnline, networkChecked, user, router]);
 
   // The brand mark is now the app icon itself — a square (1:1) deep-navy tile
   // with the amber "LS". Render it as a rounded SQUARE (squircle, ≈22.4% corner)
