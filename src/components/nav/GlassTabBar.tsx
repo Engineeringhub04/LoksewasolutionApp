@@ -81,7 +81,7 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
       <BlurView
         intensity={effective === 'dark' ? 48 : 62}
         tint={effective === 'dark' ? 'dark' : 'light'}
-        experimentalBlurMethod="dimezisBlurView"
+        blurMethod="dimezisBlurView"
         style={[
           styles.bar,
           {

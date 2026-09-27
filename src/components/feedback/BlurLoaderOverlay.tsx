@@ -2,8 +2,8 @@
 // instead of hiding the page under an opaque sheet. Used when submitting a Daily
 // Test: the quiz stays faintly visible behind the blur while the result saves.
 //
-// expo-blur's Android implementation is still opt-in on SDK 54 (it needs
-// `experimentalBlurMethod="dimezisBlurView"`), and it renders nothing at all on
+// expo-blur's Android implementation is opt-in (it needs
+// `blurMethod="dimezisBlurView"`), and it renders nothing at all on
 // some devices — so a translucent scrim is layered underneath as well. That way
 // the "lightly dimmed, faded background" reads correctly on every platform, with
 // real blur on top wherever the OS can do it.
@@ -43,7 +43,7 @@ export function BlurLoaderOverlay({
       <BlurView
         intensity={intensity}
         tint={effective === 'dark' ? 'dark' : 'light'}
-        experimentalBlurMethod="dimezisBlurView"
+        blurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
 
